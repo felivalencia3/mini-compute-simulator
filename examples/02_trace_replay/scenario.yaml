@@ -1,0 +1,29 @@
+# fleetsim example 02 — trace replay (DESIGN §10).
+#
+# Replays sample_trace.csv (a SYNTHETIC, hand-written sample in the
+# canonical trace schema — NOT real cluster data) through the same engine
+# and scheduler API as synthetic runs.  Job durations come from the trace;
+# each job's final_status is replayed VERBATIM (FAILED jobs fail, TIMEOUT
+# jobs time out) — the failure model is disabled so the trace is the only
+# source of outcomes.
+#
+# The `source` path is relative to this file.
+
+sim: {horizon: 1d, round: 60s, seed: 0}
+
+fleet:
+  metro: demo
+  clusters:
+    - name: h100-a
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [rack, node], counts: [1, 8]}  # 8 nodes, 64 chips
+
+# Verbatim replay: no simulated failures or drains on top of the trace.
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+workload:
+  kind: trace
+  source: sample_trace.csv
+
+scheduler: {name: fifo}
+outputs: {events: parquet, plots: false}

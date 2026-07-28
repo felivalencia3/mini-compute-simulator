@@ -1,2 +1,8 @@
 .DS_Store
 .claude/settings.local.json
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+out/
+.pytest_cache/

@@ -1,0 +1,64 @@
+# fleetsim example 01 — the minimal scenario (DESIGN §13, adjusted to v0.1).
+#
+# One metro, one cluster of 2,048 H100s (2 pods x 16 racks x 8 nodes x 8
+# chips), a trace-derived synthetic mix of pretraining gangs / fine-tunes /
+# evals, node failures + maintenance drains, and tiered-priority scheduling
+# with REQUEUE preemption.
+#
+# Adjustments vs the DESIGN §13 sketch (exactly what v0.1 implements):
+#   - pretrain chips are pow2[256, 512] (not 2048): `within: pod` is a HARD
+#     constraint in v0.1 and one pod holds 1,024 chips, so a 2,048-chip gang
+#     could never place.
+#   - traffic tuned to a UTILIZATION TARGET of rho ~ 0.9 (offered load /
+#     capacity, measured at this seed with the default 30% abort mix):
+#     high enough for real contention — so `fleetsim compare` of fifo vs
+#     tiered_priority shows a decision actually changing — while keeping
+#     the queue STABLE (rho < 1).  An overloaded system's backlog grows
+#     without bound and every queue metric diverges with horizon length.
+#     The pretrain duration tail is heavy (lognormal p90 = 30 d), so other
+#     seeds can land above 1 for a while — that is the tail, not the mean.
+#   - jobs abort at the DESIGN §5.1 default rate (abort_prob 0.3, Philly/
+#     Acme's 30-40% killed/failed); write `abort_prob: 0` to opt out.
+#   - `min_runtime: 2h` for pretrain and this `checkpoint_interval` are now
+#     per-class defaults; kept explicit here for readability.
+#   - `outputs: {events: parquet}` means the standard parquet outputs
+#     (jobs.parquet + timeseries.parquet); there is no per-event log in
+#     v0.1 (chrome-trace export is v0.5 and is rejected by validate).
+#   - distribution expressions are written in block context; inside YAML
+#     flow mappings {...} they would need quoting ("pow2[1, 8]").
+
+sim: {horizon: 14d, round: 60s, seed: 42}
+
+fleet:
+  metro: us-central
+  clusters:
+    - name: h100-main
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, rack, node], counts: [2, 16, 8]}  # 2,048 chips
+      failures: {mtbf_node_days: 42, repair_auto_min: [60, 180]}
+
+workload:
+  kind: synthetic
+  classes:
+    pretrain:
+      rate_per_week: 2
+      chips: pow2[256, 512]
+      duration: lognormal[median=10d, p90=30d]
+      tier: prod
+      checkpoint_interval: 1h
+      min_runtime: 2h
+      within: pod
+    finetune:
+      rate_per_day: 90
+      chips: pow2[8, 64]
+      duration: lognormal[median=4h, p90=24h]
+      tier: batch
+    eval:
+      rate_per_hour: 40
+      chips: pow2[1, 8]
+      duration: lognormal[median=2m, p90=30m]
+      tier: batch
+      diurnal: true
+
+scheduler: {name: tiered_priority, params: {preempt: requeue}}
+outputs: {events: parquet, plots: true}

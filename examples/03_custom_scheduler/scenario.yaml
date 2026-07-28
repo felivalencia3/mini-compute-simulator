@@ -1,0 +1,25 @@
+# fleetsim example 03 — scenario driving the out-of-tree plugin scheduler.
+# Requires `pip install -e .` in this directory first (the entry point is
+# how fleetsim resolves the name below).
+
+sim: {horizon: 6h, round: 60s, seed: 1}
+
+fleet:
+  metro: demo
+  clusters:
+    - name: mini
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [node], counts: [4]}  # 4 nodes, 32 chips
+
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+workload:
+  kind: synthetic
+  classes:
+    eval:
+      rate_per_hour: 30
+      chips: pow2[1, 8]
+      duration: lognormal[median=5m, p90=1h]
+
+scheduler: {name: smallest_first}
+outputs: {events: parquet, plots: false}

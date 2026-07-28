@@ -1,0 +1,1159 @@
+"""The discrete-event simulation engine (DESIGN §6, §8).
+
+:class:`Simulator` owns all mutable runtime state — the event queue, the
+job queue, per-job stint bookkeeping, failure/maintenance samplers — and
+drives the pluggable pieces: a :class:`~fleetsim.workload.base.JobSource`
+(pulled lazily), a :class:`~fleetsim.schedulers.base.Scheduler` (invoked
+via coalesced wakes), a :class:`~fleetsim.metrics.base.MetricsSink`
+(called at every state transition), and an :class:`AdmissionPolicy`
+(no-op pass-through in v1, the v0.2 quota seam).
+
+UNITS: all engine times are int microseconds; all ``*_s`` quantities are
+float seconds; "work" is measured in seconds-at-speed-1 (a job's total
+work is its ``true_duration_s``).
+
+WORK / CHECKPOINT MATH (pinned)
+-------------------------------
+While running, wall-clock progress rate is ``speed * eff`` where ``speed``
+is 1.0 in v1 (:meth:`Simulator.speed` is the v0.3 hook) and ``eff =
+interval / (interval + save)`` amortizes checkpoint-save overhead into the
+rate (``interval`` = ``checkpoint_interval_s``, ``save`` =
+``checkpoint_save_s``; ``interval`` of 0/None disables checkpointing and
+means ``eff = 1``).  The amortization only applies when the stint's
+REMAINING work exceeds one interval — a job that will finish before its
+first checkpoint boundary (e.g. a 2-minute eval under a 1 h interval)
+writes no checkpoints and pays no save tax (``eff = 1`` for that stint).
+On a stint start at ``t`` with remaining work ``W``: completion is
+scheduled at ``t + overhead + W/(speed*eff)`` where ``overhead`` is
+``restart_overhead_s`` on resumes (never the first start).
+On interruption after ``dt`` wall-seconds:
+``work = max(0, dt - overhead_this_stint) * speed * eff`` (capped at the
+remaining work); ``cum = kept + work``;
+``kept' = max(kept, floor(cum / interval) * interval)`` when checkpointing
+is enabled, else ``kept' = kept`` (which stays 0 — never-checkpointed jobs
+lose everything); ``lost += cum - kept'``; remaining work is
+``total - kept'``.  Progress never regresses.  EXCEPTION (drain grace,
+DESIGN §8): a resident preempted because its node's maintenance drain
+grace expired had the whole grace window to checkpoint, so its
+interruption banks the full ``cum`` (``kept' = min(cum, total)``) when
+checkpointing is enabled — an out-of-band checkpoint, not the floor.  A
+node FAILURE during the save window cancels the bank (floor semantics).
+
+ATTAINED SERVICE vs GOODPUT (pinned)
+------------------------------------
+``job.goodput_chip_s`` is surviving (checkpointed) work x chips only.
+``job.attained_service_chip_s`` is ALL service consumed — surviving plus
+lost work — x chips (the LAS/Tiresias input; a job that lost 9 h of
+GPU-time is not "brand new").  Overheads (restart, checkpoint save) count
+in neither.  ``JobView.attained_service_chip_s`` additionally includes
+the current stint's in-flight work.
+
+EVENT PAYLOAD CONVENTIONS
+-------------------------
+``JOB_ARRIVAL``: the :class:`~fleetsim.model.Job`.  ``JOB_COMPLETION`` /
+``PREEMPTION_DONE``: job id.  ``NODE_REPAIR``: node id.  ``NODE_FAILURE``:
+``None`` for a sampled failure (victim picked at fire time, next failure
+chained), or a node id to force that node down (tests; no chaining).
+``MAINTENANCE_DRAIN``: ``None`` sampled, node id forced, or
+``("grace", node_id)`` for a drain-grace expiry.  ``JOB_TIMEOUT``:
+``("lifetime", job_id)`` or ``("valid_until", job_id)``.
+
+DETERMINISM: a run is a pure function of (scenario, fleet, source,
+scheduler, seed).  RNG streams used: ``"failures"`` and ``"maintenance"``
+(one exponential gap per armed event at the STATIC fleet-wide maximum
+aggregate rate, then at fire time one thinning-accept uniform plus one
+victim-pick uniform — the draw pattern is exogenous, so paired A/B runs
+stay aligned even when the healthy set differs); ``"maintenance"``
+additionally draws each node's maintenance duration AT DRAIN START
+(workload-independent), never at the drain->MAINTENANCE transition;
+``"repair"`` (repair kind + delay); ``"failure_causes"`` (one uniform per
+realized node failure, DESIGN §8 cause mix).  Sampled events are thinned:
+accepted with probability ``current_rate / max_rate`` (exact for a
+piecewise-constant hazard, by memorylessness), so the failure hazard
+tracks the healthy set with no stale-rate bias.  Iteration order is
+sorted or insertion order everywhere.
+
+INVARIANTS
+----------
+- The scheduler is invoked at most once per timestamp, always after every
+  same-timestamp state change (event-type ranks), and sees tentative
+  reservations made through its own ``find_placement`` calls.
+- A job holds an allocation exactly while RUNNING or in a preemption
+  grace window; every transition calls the matching sink method.
+- Node failure is never terminal for a job in v1 — victims requeue with
+  their ORIGINAL ``submit_t`` and retry.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
+
+from ..config import FailureModelConfig, Scenario
+from ..fleet.tree import FleetTree, Placement
+from ..model import (
+    Allocation,
+    GangSpec,
+    Job,
+    JobStatus,
+    NodeState,
+    PreemptMode,
+    Tier,
+)
+from ..metrics.base import MetricsSink
+from ..schedulers.base import (
+    Action,
+    DomainView,
+    JobView,
+    Place,
+    PlacementPolicy,
+    Preempt,
+    Scheduler,
+)
+from ..units import DAY
+from ..workload.base import JobSource
+from .events import EventQueue, EventType
+from .rng import RngStreams
+
+__all__ = ["AdmissionPolicy", "PassThrough", "Simulator", "FAILURE_CAUSE_MIX"]
+
+_DAYS_PER_MONTH = 30.0  # maintenance "per node-month" denominator (pinned)
+
+#: DESIGN §8 default failure-cause mix for reporting (Llama-3 paper):
+#: ~60% GPU/HBM, ~10% network, ~13% software, remainder "other".  Sampled
+#: per realized node failure from the ``"failure_causes"`` stream and
+#: threaded to ``sink.node_failed(..., cause=...)``.
+FAILURE_CAUSE_MIX: tuple[tuple[str, float], ...] = (
+    ("gpu_hbm", 0.60),
+    ("network", 0.10),
+    ("software", 0.13),
+    ("other", 0.17),
+)
+
+_TERMINAL = frozenset(
+    {
+        JobStatus.COMPLETED,
+        JobStatus.FAILED,
+        JobStatus.CANCELED,
+        JobStatus.TIMEOUT,
+        JobStatus.NODE_FAIL,
+    }
+)
+
+
+def _s_to_us(seconds: float) -> int:
+    """Convert float seconds to int microseconds (round-half-even)."""
+    return int(round(seconds * 1_000_000))
+
+
+# ---------------------------------------------------------------------------
+# Admission (v1 no-op seam, DESIGN §5 / §11)
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class AdmissionPolicy(Protocol):
+    """Quota/admission pipeline stage, upstream of the queue."""
+
+    def admit(self, job: Job, t: int) -> bool: ...
+
+
+class PassThrough:
+    """v1 default: admit everything."""
+
+    def admit(self, job: Job, t: int) -> bool:
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Per-job runtime bookkeeping (engine-side; Job is slots=True and stays
+# declarative)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class _JobRt:
+    """Engine-side mutable state for one job.  All work quantities are in
+    seconds-at-speed-1; ``kept_work_s`` never regresses."""
+
+    job: Job
+    spec: GangSpec
+    total_work_s: float
+    kept_work_s: float = 0.0
+    lost_work_s: float = 0.0
+    bank_next_interrupt: bool = False  # drain-grace out-of-band checkpoint
+    started_ever: bool = False
+    first_start_us: int | None = None
+    stint_start_us: int = 0
+    stint_overhead_s: float = 0.0
+    stint_speed: float = 1.0
+    stint_eff: float = 1.0
+    n_failures: int = 0
+    allocation: Allocation | None = None
+    placed_chips: int = 0
+    placed_chip_type: str | None = None
+    completion_seq: int | None = None
+    preemption_seq: int | None = None
+    lifetime_seq: int | None = None
+    valid_until_seq: int | None = None
+
+    def stint_work_s(self, t_us: int) -> float:
+        """Work done so far in the current stint at wall time ``t_us``
+        (capped at the remaining work)."""
+        dt = (t_us - self.stint_start_us) / 1e6
+        work = max(0.0, dt - self.stint_overhead_s) * self.stint_speed * self.stint_eff
+        return min(work, self.total_work_s - self.kept_work_s)
+
+
+# ---------------------------------------------------------------------------
+# ClusterView adapter over live engine state
+# ---------------------------------------------------------------------------
+
+
+class _EngineView:
+    """Concrete :class:`~fleetsim.schedulers.base.ClusterView` for one wake.
+
+    Job views are computed fresh at construction.  ``find_placement``
+    tentatively applies found placements to the fleet tree so subsequent
+    searches in the same wake see remaining capacity; the engine confirms
+    or rolls back after ``schedule()`` returns.
+    """
+
+    __slots__ = ("_sim", "_now", "_pending", "_running", "tentative")
+
+    def __init__(self, sim: "Simulator", now: int):
+        self._sim = sim
+        self._now = now
+        self.tentative: dict[str, Placement] = {}
+        key = lambda jv: (jv.submit_time, jv.id)  # noqa: E731
+        self._pending: tuple[JobView, ...] = tuple(
+            sorted((sim._job_view(rt, now) for rt in sim._pending.values()), key=key)
+        )
+        self._running: tuple[JobView, ...] = tuple(
+            sorted((sim._job_view(rt, now) for rt in sim._running.values()), key=key)
+        )
+
+    @property
+    def now(self) -> int:
+        return self._now
+
+    def pending(self) -> tuple[JobView, ...]:
+        return self._pending
+
+    def running(self) -> tuple[JobView, ...]:
+        return self._running
+
+    def free_capacity(self, domain_id: str) -> int:
+        return self._sim.fleet.free_chips(domain_id)
+
+    def domains(self, level: str) -> tuple[DomainView, ...]:
+        fleet = self._sim.fleet
+        return tuple(
+            DomainView(
+                id=did,
+                level=level,
+                chip_type=fleet.domain(did).chip_type,
+                total_chips=fleet.total_chips(did),
+                free_chips=fleet.free_chips(did),
+                healthy_chips=fleet.healthy_chips(did),
+            )
+            for did in fleet.domains_at(level)
+        )
+
+    def search_first_fit(self, spec: GangSpec) -> Placement | None:
+        return self._sim.fleet.search_first_fit(spec)
+
+    def find_placement(
+        self, job: JobView, policy: PlacementPolicy
+    ) -> Placement | None:
+        cached = self.tentative.get(job.id)
+        if cached is not None:
+            return cached
+        if job.id not in self._sim._pending:
+            return None
+        placement = policy.place(job, self)
+        if placement is None:
+            return None
+        self._sim.fleet.apply(Allocation(job.id, [placement.to_gang_alloc()]))
+        self.tentative[job.id] = placement
+        return placement
+
+    def throughput(self, job: JobView, chip_type: str) -> float:
+        return 1.0  # Gavel-matrix hook, v0.4
+
+
+# ---------------------------------------------------------------------------
+# The engine
+# ---------------------------------------------------------------------------
+
+
+class Simulator:
+    """Event loop + state machine for one simulation run.
+
+    ``strict=True`` (the default) makes illegal scheduler intents raise
+    (DESIGN §7); ``strict=False`` skips them silently.  Regardless of
+    ``strict``, the following are always refused: MONITORING victims;
+    PROD-preempting-PROD (when ``Preempt.preemptor`` is named); and
+    anonymous Preempts (``preemptor=None``) against PROD victims — an
+    anonymous preemption may only target sub-PROD bands, so no scheduler
+    can evade the no-preemption-within-PROD guardrail by omitting the
+    preemptor.  ``Place`` actions are validated against the job's
+    :class:`~fleetsim.model.GangSpec`: chip count, pinned chip type, and
+    the hard ``within`` constraint (all leaves under ONE domain at that
+    level) must hold or the action is refused.
+
+    WAKE CADENCE: when the scheduler instance inherits the base-class
+    default ``wake_interval`` (i.e. neither the subclass nor the instance
+    set its own), the engine overwrites it with the scenario's
+    ``sim.round`` so the configured round actually drives the scheduling
+    cadence (DESIGN §6.1/§13).  A scheduler that declares its own
+    ``wake_interval`` (including ``None`` = event-triggered) keeps it.
+
+    ``rng`` overrides the seed-derived stream factory (e.g. to vary only
+    the ``"failures"`` stream between paired runs).
+    """
+
+    def __init__(
+        self,
+        scenario: Scenario,
+        fleet: FleetTree,
+        source: JobSource,
+        scheduler: Scheduler,
+        sink: MetricsSink,
+        admission: AdmissionPolicy | None = None,
+        *,
+        rng: RngStreams | None = None,
+        strict: bool = True,
+    ):
+        self.scenario = scenario
+        self.fleet = fleet
+        self.source = source
+        self.scheduler = scheduler
+        self.sink = sink
+        self.admission: AdmissionPolicy = (
+            admission if admission is not None else PassThrough()
+        )
+        self.rng = rng if rng is not None else RngStreams(scenario.sim.seed)
+        self.strict = bool(strict)
+        self.queue = EventQueue()
+        self.now: int = 0
+
+        self._round_us: int = scenario.sim.round_us
+        self._horizon_us: int = scenario.sim.horizon_us
+        if self._round_us <= 0:
+            raise ValueError(f"sim.round must be positive, got {self._round_us}")
+        self._wire_wake_interval()
+
+        self._jobs: dict[str, _JobRt] = {}
+        self._pending: dict[str, _JobRt] = {}  # insertion order; views sort
+        self._running: dict[str, _JobRt] = {}
+        self._graced: dict[str, _JobRt] = {}  # PREEMPTED, grace pending
+
+        self._dirty = False
+        self._wake_times: set[int] = set()
+        self._last_wake_us: int | None = None
+        self._failure_seq: int | None = None
+        self._maint_seq: int | None = None
+        self._maint_wait: set[str] = set()  # DRAINING past grace, owners pending
+        self._maint_duration: dict[str, float] = {}  # node -> duration (s)
+        self._leaf_model: dict[str, FailureModelConfig] = self._map_leaf_models()
+        # Static fleet-wide maximum aggregate rates (all leaves healthy);
+        # sampled events are thinned against these — exact by memorylessness.
+        self._failure_rate_max: float = sum(
+            self._failure_rate_us(lid) for lid in self.fleet.leaves()
+        )
+        self._maint_rate_max: float = sum(
+            self._maint_rate_us(lid) for lid in self.fleet.leaves()
+        )
+
+    def _wire_wake_interval(self) -> None:
+        """Point an un-overridden scheduler ``wake_interval`` at the
+        scenario's ``sim.round`` (see the class docstring)."""
+        sched = self.scheduler
+        if "wake_interval" in vars(sched):
+            return  # instance-level override wins
+        for klass in type(sched).__mro__:
+            if "wake_interval" in vars(klass):
+                if klass is Scheduler:  # inherited the base default only
+                    sched.wake_interval = self._round_us
+                return
+
+    # -- hooks ----------------------------------------------------------
+
+    def speed(self, job: Job, placement: Placement) -> float:
+        """Wall-clock progress multiplier for a placement.  1.0 in v1;
+        the v0.3 placement-quality penalty lands here."""
+        return 1.0
+
+    # -- setup ----------------------------------------------------------
+
+    def _map_leaf_models(self) -> dict[str, FailureModelConfig]:
+        """Per-leaf failure model: the leaf's cluster's (inherited) model,
+        falling back to the scenario-global model."""
+        out: dict[str, FailureModelConfig] = {}
+        for metro in self.scenario.fleet.metros:
+            for dc in metro.datacenters:
+                for cluster in dc.clusters:
+                    root = f"{metro.name}/{cluster.id}"
+                    if root in self.fleet:
+                        for lid in self.fleet.leaves_under(root):
+                            out[lid] = cluster.failure_model
+        return out
+
+    def _model_for(self, leaf_id: str) -> FailureModelConfig:
+        return self._leaf_model.get(leaf_id, self.scenario.failure_model)
+
+    # -- main loop ------------------------------------------------------
+
+    def run(self) -> None:
+        """Run to the horizon: pop events while ``time <= horizon``, then
+        emit the final metrics flush at exactly the horizon."""
+        self._schedule_next_arrival()
+        self._arm_failure()
+        self._arm_maintenance()
+        if self.scheduler.wake_interval is not None:
+            self._ensure_wake(0)
+        if self._round_us < self._horizon_us:
+            self.queue.push(self._round_us, EventType.METRICS_FLUSH, None)
+        while True:
+            t = self.queue.peek_time()
+            if t is None or t > self._horizon_us:
+                break
+            ev = self.queue.pop()
+            self.now = ev.time
+            self._dispatch(ev)
+        self.now = self._horizon_us
+        self._report_live_progress()
+        self.sink.flush(
+            self._horizon_us, self.fleet, len(self._pending), len(self._running)
+        )
+
+    def _report_live_progress(self) -> None:
+        """At the horizon, credit the checkpoint-banked (durable) work of
+        still-allocated jobs to the sink via ``job_progress`` — metrics
+        only; engine state is left untouched.  Work past the last
+        checkpoint boundary is at-risk, not durable, and is not credited
+        (jobs without checkpointing bank nothing)."""
+        horizon = self._horizon_us
+        for jid in sorted(set(self._running) | set(self._graced)):
+            rt = self._jobs[jid]
+            interval = rt.job.checkpoint_interval_s
+            if not (interval and interval > 0):
+                continue
+            cum = rt.kept_work_s + rt.stint_work_s(horizon)
+            banked = math.floor(cum / interval) * interval
+            banked = min(max(banked, rt.kept_work_s), rt.total_work_s)
+            delta = banked - rt.kept_work_s
+            if delta > 0:
+                self.sink.job_progress(
+                    rt.job, rt.stint_start_us, horizon, delta * rt.spec.chips, 0.0
+                )
+
+    def _dispatch(self, ev) -> None:
+        et = ev.type
+        if et is EventType.NODE_REPAIR:
+            self._on_repair(ev)
+        elif et is EventType.JOB_COMPLETION:
+            self._on_completion(ev)
+        elif et is EventType.NODE_FAILURE:
+            self._on_failure(ev)
+        elif et is EventType.PREEMPTION_DONE:
+            self._on_preemption_done(ev)
+        elif et is EventType.JOB_ARRIVAL:
+            self._on_arrival(ev)
+        elif et is EventType.MAINTENANCE_DRAIN:
+            self._on_maintenance(ev)
+        elif et is EventType.JOB_TIMEOUT:
+            self._on_timeout(ev)
+        elif et is EventType.SCHED_WAKE:
+            self._on_wake(ev)
+        elif et is EventType.METRICS_FLUSH:
+            self._on_flush(ev)
+        else:  # pragma: no cover - EventType is closed
+            raise AssertionError(f"unhandled event type {et!r}")
+
+    # -- wake coalescing ------------------------------------------------
+
+    def _mark_dirty(self, t: int) -> None:
+        """Record a state change and ensure one wake at the next round
+        boundary (a boundary that already ran gets the following one)."""
+        self._dirty = True
+        boundary = -(-t // self._round_us) * self._round_us
+        if self._last_wake_us is not None and boundary <= self._last_wake_us:
+            boundary = self._last_wake_us + self._round_us
+        self._ensure_wake(boundary)
+
+    def _ensure_wake(self, t: int) -> None:
+        if t in self._wake_times:
+            return
+        self._wake_times.add(t)
+        self.queue.push(t, EventType.SCHED_WAKE, None)
+
+    def _on_wake(self, ev) -> None:
+        t = self.now
+        self._wake_times.discard(t)
+        self._last_wake_us = t
+        self._dirty = False
+        view = _EngineView(self, t)
+        actions = self.scheduler.schedule(view)
+        self._apply_actions(actions, view, t)
+        wi = self.scheduler.wake_interval
+        if wi is not None and t + wi <= self._horizon_us:
+            self._ensure_wake(t + wi)
+
+    # -- action application ---------------------------------------------
+
+    def _apply_actions(self, actions: list[Action], view: _EngineView, t: int) -> None:
+        placed: set[str] = set()
+        for action in actions:
+            if isinstance(action, Place):
+                self._apply_place(action, view, t, placed)
+            elif isinstance(action, Preempt):
+                self._apply_preempt(action, t)
+            elif self.strict:
+                raise TypeError(f"unknown action {action!r}")
+        # Roll back tentative reservations the scheduler didn't confirm.
+        for jid in list(view.tentative):
+            if jid not in placed:
+                self.fleet.release(jid)
+                del view.tentative[jid]
+
+    def _apply_place(
+        self, action: Place, view: _EngineView, t: int, placed: set[str]
+    ) -> None:
+        jid = action.job_id
+        try:
+            rt = self._jobs.get(jid)
+            if rt is None:
+                raise ValueError(f"Place for unknown job {jid!r}")
+            if jid in placed or jid not in self._pending:
+                raise ValueError(f"Place for non-pending job {jid!r}")
+            self._validate_placement_spec(rt, action.placement)
+            tent = view.tentative.get(jid)
+            if tent is not None and tent == action.placement:
+                alloc = self.fleet.allocation(jid)
+            else:
+                if tent is not None:  # scheduler substituted its own placement
+                    self.fleet.release(jid)
+                    del view.tentative[jid]
+                alloc = Allocation(jid, [action.placement.to_gang_alloc()])
+                self.fleet.apply(alloc)  # raises on any conflict
+                view.tentative[jid] = action.placement
+        except ValueError:
+            if self.strict:
+                raise
+            return
+        placed.add(jid)
+        self._start_job(rt, alloc, action.placement, t)
+
+    def _validate_placement_spec(self, rt: _JobRt, placement: Placement) -> None:
+        """Check a Place action's placement against the job's GangSpec:
+        exact chip count, pinned chip type, and the hard ``within``
+        constraint (every leaf under ONE domain at that level).  Raises
+        ``ValueError`` (refused in strict mode, skipped otherwise)."""
+        spec = rt.spec
+        jid = rt.job.id
+        if placement.chips != spec.chips:
+            raise ValueError(
+                f"Place for job {jid!r}: placement covers {placement.chips}"
+                f" chips, gang spec wants {spec.chips}"
+            )
+        if spec.chip_type is not None and placement.chip_type != spec.chip_type:
+            raise ValueError(
+                f"Place for job {jid!r}: placement chip type"
+                f" {placement.chip_type!r} != pinned spec type"
+                f" {spec.chip_type!r}"
+            )
+        if spec.within is not None:
+            level = spec.within.level
+            anchor: str | None = None
+            for lid, _ in placement.leaves:
+                dom: str | None = None
+                for aid in self.fleet.ancestors(lid, include_self=True):
+                    if self.fleet.domain(aid).level == level:
+                        dom = aid
+                        break
+                if dom is None:
+                    raise ValueError(
+                        f"Place for job {jid!r}: leaf {lid!r} has no ancestor"
+                        f" at within-level {level!r}"
+                    )
+                if anchor is None:
+                    anchor = dom
+                elif dom != anchor:
+                    raise ValueError(
+                        f"Place for job {jid!r} violates within={level!r}:"
+                        f" leaves span {anchor!r} and {dom!r}"
+                    )
+
+    def _apply_preempt(self, action: Preempt, t: int) -> None:
+        try:
+            rt = self._jobs.get(action.job_id)
+            if rt is None:
+                raise ValueError(f"Preempt for unknown job {action.job_id!r}")
+            job = rt.job
+            if job.status is not JobStatus.RUNNING:
+                raise ValueError(
+                    f"Preempt victim {job.id!r} is not running"
+                    f" (status {job.status.name})"
+                )
+            if job.tier is Tier.MONITORING:
+                raise ValueError(f"cannot preempt MONITORING job {job.id!r}")
+            if not job.preemptible:
+                raise ValueError(f"job {job.id!r} is not preemptible")
+            elapsed_s = (t - rt.stint_start_us) / 1e6
+            if elapsed_s < job.min_runtime_s:
+                raise ValueError(
+                    f"job {job.id!r} min_runtime not elapsed this stint"
+                    f" ({elapsed_s:.0f}s < {job.min_runtime_s:.0f}s)"
+                )
+            trigger = "scheduler"
+            if action.preemptor is None:
+                if job.tier is Tier.PROD:
+                    raise ValueError(
+                        f"anonymous Preempt (preemptor=None) cannot target"
+                        f" PROD job {job.id!r}; name the preemptor so band"
+                        f" rules can be enforced"
+                    )
+            else:
+                preemptor_rt = self._jobs.get(action.preemptor)
+                if preemptor_rt is None:
+                    raise ValueError(f"unknown preemptor {action.preemptor!r}")
+                p_tier = preemptor_rt.job.tier
+                if job.tier is Tier.PROD and p_tier is Tier.PROD:
+                    raise ValueError(
+                        f"no preemption within PROD ({job.id!r} by"
+                        f" {action.preemptor!r})"
+                    )
+                if job.tier >= p_tier:
+                    raise ValueError(
+                        f"victim {job.id!r} tier {job.tier.name} is not below"
+                        f" preemptor {action.preemptor!r} tier {p_tier.name}"
+                    )
+                if preemptor_rt.n_failures > 0:
+                    # DESIGN §8/§9: a failure-requeued job evicting others is
+                    # a second-order failure cost, tagged distinctly.
+                    trigger = "failure_second_order"
+        except ValueError:
+            if self.strict:
+                raise
+            return
+        self._preempt(rt, t, action.mode, trigger=trigger)
+
+    # -- job lifecycle --------------------------------------------------
+
+    def _job_view(self, rt: _JobRt, t: int) -> JobView:
+        job = rt.job
+        in_stint = job.status in (JobStatus.RUNNING, JobStatus.PREEMPTED)
+        stint = rt.stint_work_s(t) if in_stint else 0.0
+        cum = rt.kept_work_s + stint  # surviving progress
+        interval = job.checkpoint_interval_s
+        if not in_stint:
+            ckpt_age = 0.0
+        elif interval and interval > 0:
+            ckpt_age = cum - math.floor(cum / interval) * interval
+        else:
+            ckpt_age = cum
+        within = rt.spec.within.level if rt.spec.within is not None else None
+        return JobView(
+            id=job.id,
+            submit_time=job.submit_t,
+            chips=rt.spec.chips,
+            chip_type=rt.spec.chip_type,
+            tier=job.tier,
+            job_class=job.job_class,
+            preemptible=job.preemptible,
+            min_runtime_s=job.min_runtime_s,
+            # Attained service = ALL work consumed (surviving + lost).
+            attained_service_chip_s=(cum + rt.lost_work_s) * rt.spec.chips,
+            checkpoint_age_s=ckpt_age,
+            walltime_est_s=job.walltime_est_s,
+            within=within,
+            tenant=job.tenant,
+        )
+
+    def _schedule_next_arrival(self) -> None:
+        nxt = self.source.next_arrival()
+        if nxt is None:
+            return
+        t_arr, job = nxt
+        if t_arr < self.now:
+            raise ValueError(
+                f"job source went backwards: arrival at {t_arr} < now {self.now}"
+            )
+        self.queue.push(t_arr, EventType.JOB_ARRIVAL, job)
+
+    def _on_arrival(self, ev) -> None:
+        job: Job = ev.payload
+        t = self.now
+        if len(job.gangs) != 1:
+            raise ValueError(
+                f"job {job.id!r} has {len(job.gangs)} gangs; multi-gang jobs"
+                " are not implemented in v0.1"
+            )
+        if job.id in self._jobs:
+            raise ValueError(f"duplicate job id {job.id!r}")
+        rt = _JobRt(job=job, spec=job.gangs[0], total_work_s=float(job.true_duration_s))
+        self._jobs[job.id] = rt
+        self.sink.job_submitted(job, t)
+        if self.admission.admit(job, t):
+            job.status = JobStatus.ADMITTED
+            self._pending[job.id] = rt
+            self.sink.job_admitted(job, t)
+            if job.valid_until is not None:
+                rt.valid_until_seq = self.queue.push(
+                    max(t, job.valid_until),
+                    EventType.JOB_TIMEOUT,
+                    ("valid_until", job.id),
+                )
+            self._mark_dirty(t)
+        else:
+            job.status = JobStatus.FAILED
+            self.sink.job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
+        self._schedule_next_arrival()
+
+    def _start_job(
+        self, rt: _JobRt, alloc: Allocation, placement: Placement, t: int
+    ) -> None:
+        job = rt.job
+        resumed = rt.started_ever
+        overhead_s = job.restart_overhead_s if resumed else 0.0
+        interval = job.checkpoint_interval_s
+        ckpt_on = interval is not None and interval > 0
+        remaining = rt.total_work_s - rt.kept_work_s
+        # Amortize save overhead only when this stint will actually write
+        # a checkpoint (remaining work exceeds one interval) — short jobs
+        # pay no tax for checkpoints they never take.
+        eff = (
+            interval / (interval + job.checkpoint_save_s)
+            if ckpt_on and job.checkpoint_save_s > 0 and remaining > interval
+            else 1.0
+        )
+        speed = self.speed(job, placement)
+        dur_s = overhead_s + remaining / (speed * eff)
+
+        rt.stint_start_us = t
+        rt.stint_overhead_s = overhead_s
+        rt.stint_speed = speed
+        rt.stint_eff = eff
+        rt.allocation = alloc
+        rt.placed_chips = placement.chips
+        rt.placed_chip_type = placement.chip_type
+        rt.completion_seq = self.queue.push(
+            t + _s_to_us(dur_s), EventType.JOB_COMPLETION, job.id
+        )
+        del self._pending[job.id]
+        self._running[job.id] = rt
+        job.status = JobStatus.RUNNING
+        if not resumed:
+            rt.started_ever = True
+            rt.first_start_us = t
+            if rt.valid_until_seq is not None:
+                self.queue.cancel(rt.valid_until_seq)
+                rt.valid_until_seq = None
+            if job.max_lifetime_s is not None:
+                rt.lifetime_seq = self.queue.push(
+                    t + _s_to_us(job.max_lifetime_s),
+                    EventType.JOB_TIMEOUT,
+                    ("lifetime", job.id),
+                )
+        self.sink.job_started(job, alloc, t)
+        self.sink.chips_allocated(placement.chips, placement.chip_type, t)
+
+    def _interrupt(self, rt: _JobRt, t: int) -> None:
+        """Apply the pinned checkpoint math for an interruption at ``t``
+        and report the stint's surviving/lost work to the sink.  A pending
+        ``bank_next_interrupt`` flag (drain grace, DESIGN §8) banks the
+        full ``cum`` instead of flooring to the checkpoint boundary."""
+        job = rt.job
+        work = rt.stint_work_s(t)
+        cum = rt.kept_work_s + work
+        interval = job.checkpoint_interval_s
+        if interval and interval > 0:
+            if rt.bank_next_interrupt:
+                kept = min(cum, rt.total_work_s)  # out-of-band checkpoint
+            else:
+                kept = math.floor(cum / interval) * interval
+                kept = max(kept, rt.kept_work_s)
+                kept = min(kept, rt.total_work_s)
+        else:
+            kept = rt.kept_work_s  # checkpointing disabled: nothing banked
+        rt.bank_next_interrupt = False
+        delta_kept = kept - rt.kept_work_s
+        delta_lost = cum - kept
+        rt.lost_work_s += delta_lost
+        rt.kept_work_s = kept
+        job.attained_service_chip_s = (kept + rt.lost_work_s) * rt.spec.chips
+        job.goodput_chip_s = kept * rt.spec.chips
+        if delta_kept > 0 or delta_lost > 0:
+            self.sink.job_progress(
+                job,
+                rt.stint_start_us,
+                t,
+                delta_kept * rt.spec.chips,
+                delta_lost * rt.spec.chips,
+            )
+
+    def _release(self, rt: _JobRt, t: int) -> None:
+        """Release the job's allocation; report freed chips; complete any
+        pending drain->maintenance transitions its leaves were blocking."""
+        alloc = rt.allocation
+        if alloc is None:
+            return
+        leaf_ids: dict[str, None] = {}
+        for gang in alloc.gangs:
+            nodes = gang.nodes
+            for lid in nodes if isinstance(nodes, list) else nodes.keys():
+                leaf_ids.setdefault(lid)
+        self.fleet.release(rt.job.id)
+        rt.allocation = None
+        self.sink.chips_freed(rt.placed_chips, rt.placed_chip_type, t)
+        for lid in leaf_ids:
+            self._check_maint_transition(lid, t)
+
+    def _tombstone(self, rt: _JobRt) -> None:
+        """Cancel every pending event owned by this job."""
+        for attr in ("completion_seq", "preemption_seq", "lifetime_seq",
+                     "valid_until_seq"):
+            seq = getattr(rt, attr)
+            if seq is not None:
+                self.queue.cancel(seq)
+                setattr(rt, attr, None)
+
+    def _finish(self, rt: _JobRt, t: int, status: JobStatus) -> None:
+        """Terminal transition: release, tombstone, report, mark dirty
+        whenever the schedulable state changed (capacity freed OR a job
+        left the pending queue — either can unblock a strict-FIFO head)."""
+        job = rt.job
+        freed = rt.allocation is not None
+        was_pending = job.id in self._pending
+        if freed:
+            self._release(rt, t)
+        self._tombstone(rt)
+        self._pending.pop(job.id, None)
+        self._running.pop(job.id, None)
+        self._graced.pop(job.id, None)
+        job.status = status
+        productive = rt.kept_work_s * rt.spec.chips
+        lost = rt.lost_work_s * rt.spec.chips
+        self.sink.job_finished(job, t, status, productive, lost)
+        if freed or was_pending:
+            self._mark_dirty(t)
+
+    def _on_completion(self, ev) -> None:
+        jid: str = ev.payload
+        rt = self._jobs[jid]
+        rt.completion_seq = None
+        delta_kept = rt.total_work_s - rt.kept_work_s
+        rt.kept_work_s = rt.total_work_s  # all work delivered
+        rt.job.attained_service_chip_s = (
+            rt.total_work_s + rt.lost_work_s
+        ) * rt.spec.chips
+        rt.job.goodput_chip_s = rt.total_work_s * rt.spec.chips
+        if delta_kept > 0:
+            self.sink.job_progress(
+                rt.job, rt.stint_start_us, self.now, delta_kept * rt.spec.chips, 0.0
+            )
+        override = getattr(rt.job, "terminal_status_override", None)
+        status = override if isinstance(override, JobStatus) else JobStatus.COMPLETED
+        self._finish(rt, self.now, status)
+
+    def _preempt(self, rt: _JobRt, t: int, mode: PreemptMode, trigger: str) -> None:
+        """Begin a (validated or engine-initiated) preemption."""
+        job = rt.job
+        self.sink.job_preempted(job, t, trigger)
+        if rt.completion_seq is not None:
+            self.queue.cancel(rt.completion_seq)
+            rt.completion_seq = None
+        self._running.pop(job.id, None)
+        if mode is PreemptMode.CANCEL:
+            self._interrupt(rt, t)
+            self._finish(rt, t, JobStatus.CANCELED)
+        else:
+            job.status = JobStatus.PREEMPTED
+            self._graced[job.id] = rt
+            grace_us = _s_to_us(job.checkpoint_save_s)
+            rt.preemption_seq = self.queue.push(
+                t + grace_us, EventType.PREEMPTION_DONE, job.id
+            )
+
+    def _on_preemption_done(self, ev) -> None:
+        jid: str = ev.payload
+        rt = self._jobs[jid]
+        rt.preemption_seq = None
+        self._graced.pop(jid, None)
+        t = self.now
+        self._interrupt(rt, t)
+        self._release(rt, t)
+        rt.job.status = JobStatus.PENDING
+        self._pending[jid] = rt  # original submit_t preserved on the Job
+        self.sink.job_requeued(rt.job, t)
+        self._mark_dirty(t)
+
+    def _on_timeout(self, ev) -> None:
+        kind, jid = ev.payload
+        rt = self._jobs[jid]
+        job = rt.job
+        t = self.now
+        if kind == "valid_until":
+            rt.valid_until_seq = None
+            if rt.started_ever or job.status in _TERMINAL:
+                return
+            self._finish(rt, t, JobStatus.FAILED)
+            return
+        # kind == "lifetime"
+        rt.lifetime_seq = None
+        if job.status in _TERMINAL:
+            return
+        if job.status is JobStatus.RUNNING:
+            if rt.completion_seq is not None:
+                self.queue.cancel(rt.completion_seq)
+                rt.completion_seq = None
+            self._interrupt(rt, t)
+        elif job.status is JobStatus.PREEMPTED:
+            self._interrupt(rt, t)
+        self._finish(rt, t, JobStatus.TIMEOUT)
+
+    # -- failures (DESIGN §8) -------------------------------------------
+
+    def _failure_rate_us(self, leaf_id: str) -> float:
+        model = self._model_for(leaf_id)
+        if model.node_mtbf_days <= 0:
+            return 0.0
+        return self.fleet.domain(leaf_id).lemon_factor / (
+            model.node_mtbf_days * DAY
+        )
+
+    def _maint_rate_us(self, leaf_id: str) -> float:
+        model = self._model_for(leaf_id)
+        if model.maintenance_rate_per_node_month <= 0:
+            return 0.0
+        return model.maintenance_rate_per_node_month / (_DAYS_PER_MONTH * DAY)
+
+    def _healthy_leaves(self) -> list[str]:
+        return [
+            lid
+            for lid in self.fleet.leaves()
+            if self.fleet.domain(lid).state is NodeState.HEALTHY
+        ]
+
+    def _arm(self, which: str) -> None:
+        """(Re)arm the sampled failure or maintenance event if disarmed.
+
+        The gap is exponential at the STATIC fleet-wide maximum aggregate
+        rate; the fired event is thinned in :meth:`_thinned_victim`
+        (accepted with probability ``current/max``).  Thinning keeps the
+        hazard exact under any healthy-set trajectory while the per-stream
+        draw pattern (gap, accept, victim) stays exogenous — paired A/B
+        runs stay aligned."""
+        if which == "failures":
+            if self._failure_seq is not None:
+                return
+            total, etype = self._failure_rate_max, EventType.NODE_FAILURE
+        else:
+            if self._maint_seq is not None:
+                return
+            total, etype = self._maint_rate_max, EventType.MAINTENANCE_DRAIN
+        if total <= 0.0:
+            return
+        delay = self.rng.stream(which).exponential(1.0 / total)
+        seq = self.queue.push(self.now + max(1, round(delay)), etype, None)
+        if which == "failures":
+            self._failure_seq = seq
+        else:
+            self._maint_seq = seq
+
+    def _arm_failure(self) -> None:
+        self._arm("failures")
+
+    def _arm_maintenance(self) -> None:
+        self._arm("maintenance")
+
+    def _thinned_victim(self, stream_name: str, rate_fn, max_total: float) -> str | None:
+        """Thinning-accept the fired event and pick a healthy victim
+        weighted by ``rate_fn`` (sorted-id scan).  Draw order is pinned:
+        one accept uniform, then one victim uniform (the victim draw
+        happens even for rejected events, keeping paired runs aligned).
+        Returns ``None`` when rejected or nothing is eligible."""
+        leaves = self._healthy_leaves()
+        rates = [rate_fn(lid) for lid in leaves]
+        total = sum(rates)
+        if total <= 0.0 or max_total <= 0.0:
+            return None
+        stream = self.rng.stream(stream_name)
+        accepted = stream.random() * max_total < total
+        u = stream.random() * total
+        acc = 0.0
+        victim = leaves[-1]  # float-edge fallback
+        for lid, r in zip(leaves, rates):
+            acc += r
+            if u < acc:
+                victim = lid
+                break
+        return victim if accepted else None
+
+    def _on_failure(self, ev) -> None:
+        t = self.now
+        if ev.payload is None:  # sampled
+            self._failure_seq = None
+            victim = self._thinned_victim(
+                "failures", self._failure_rate_us, self._failure_rate_max
+            )
+            if victim is not None:
+                self._fail_node(victim, t)
+            self._arm_failure()
+        else:  # forced (tests): no chaining
+            leaf = self.fleet.domain(ev.payload)
+            if leaf.state in (NodeState.HEALTHY, NodeState.DRAINING):
+                self._fail_node(ev.payload, t)
+
+    def _sample_failure_cause(self) -> str:
+        """One cause label from :data:`FAILURE_CAUSE_MIX`, drawn from the
+        dedicated ``"failure_causes"`` stream (one uniform per failure)."""
+        u = self.rng.stream("failure_causes").random()
+        acc = 0.0
+        for cause, frac in FAILURE_CAUSE_MIX:
+            acc += frac
+            if u < acc:
+                return cause
+        return FAILURE_CAUSE_MIX[-1][0]  # float-edge fallback
+
+    def _fail_node(self, node_id: str, t: int) -> None:
+        leaf = self.fleet.domain(node_id)
+        was_healthy = leaf.state is NodeState.HEALTHY
+        victims = self.fleet.fail_node(node_id)  # sorted job ids
+        self.sink.node_failed(node_id, t, victims, cause=self._sample_failure_cause())
+        if was_healthy:
+            self.sink.healthy_delta(-leaf.chips, leaf.chip_type, t)
+        self._maint_wait.discard(node_id)  # failure repair supersedes drain
+        self._maint_duration.pop(node_id, None)
+        for jid in victims:
+            rt = self._jobs[jid]
+            job = rt.job
+            if job.status is JobStatus.RUNNING:
+                if rt.completion_seq is not None:
+                    self.queue.cancel(rt.completion_seq)
+                    rt.completion_seq = None
+                self._running.pop(jid, None)
+            elif job.status is JobStatus.PREEMPTED:
+                if rt.preemption_seq is not None:
+                    self.queue.cancel(rt.preemption_seq)
+                    rt.preemption_seq = None
+                self._graced.pop(jid, None)
+            else:  # pragma: no cover - owners are always running/graced
+                continue
+            rt.bank_next_interrupt = False  # a crash voids the drain bank
+            self._interrupt(rt, t)
+            rt.n_failures += 1
+            self._release(rt, t)
+            job.status = JobStatus.PENDING
+            self._pending[jid] = rt
+            self.sink.job_requeued(job, t)
+        self._mark_dirty(t)
+        # Schedule the node's repair.
+        model = self._model_for(node_id)
+        r = self.rng.stream("repair")
+        if r.random() < model.repair_manual_frac:
+            lo, hi = model.repair_manual_days
+            delay_s = r.uniform(lo, hi) * 86_400.0
+        else:
+            lo, hi = model.repair_auto_min
+            delay_s = r.uniform(lo, hi) * 60.0
+        self.queue.push(t + _s_to_us(delay_s), EventType.NODE_REPAIR, node_id)
+
+    def _on_repair(self, ev) -> None:
+        node_id: str = ev.payload
+        t = self.now
+        leaf = self.fleet.domain(node_id)
+        if leaf.state not in (NodeState.FAILED, NodeState.MAINTENANCE):
+            return  # e.g. drain cancelled by a forced-failure repair race
+        self.fleet.repair_node(node_id)
+        self.sink.node_repaired(node_id, t)
+        self.sink.healthy_delta(leaf.chips, leaf.chip_type, t)
+        self._mark_dirty(t)
+        self._arm_failure()
+        self._arm_maintenance()
+
+    # -- maintenance drains (DESIGN §8) ---------------------------------
+
+    def _on_maintenance(self, ev) -> None:
+        t = self.now
+        p = ev.payload
+        if p is None:  # sampled drain
+            self._maint_seq = None
+            victim = self._thinned_victim(
+                "maintenance", self._maint_rate_us, self._maint_rate_max
+            )
+            if victim is not None:
+                self._drain_node(victim, t)
+            self._arm_maintenance()
+        elif isinstance(p, tuple) and p[0] == "grace":
+            self._on_drain_grace(p[1], t)
+        else:  # forced (tests): no chaining
+            if self.fleet.domain(p).state is NodeState.HEALTHY:
+                self._drain_node(p, t)
+
+    def _drain_node(self, node_id: str, t: int) -> None:
+        self.fleet.drain_node(node_id)
+        leaf = self.fleet.domain(node_id)
+        self.sink.node_drain_started(node_id, t)
+        self.sink.healthy_delta(-leaf.chips, leaf.chip_type, t)
+        # Draw the maintenance duration NOW (drain start is exogenous —
+        # workload-independent), not at the drain->MAINTENANCE transition
+        # whose timing depends on when residents release.
+        lo, hi = self._model_for(node_id).repair_auto_min
+        self._maint_duration[node_id] = (
+            self.rng.stream("maintenance").uniform(lo, hi) * 60.0
+        )
+        grace_us = self._model_for(node_id).drain_grace_us
+        self.queue.push(
+            t + grace_us, EventType.MAINTENANCE_DRAIN, ("grace", node_id)
+        )
+        self._mark_dirty(t)
+
+    def _on_drain_grace(self, node_id: str, t: int) -> None:
+        leaf = self.fleet.domain(node_id)
+        if leaf.state is not NodeState.DRAINING:
+            return  # failed (and possibly repaired) during the grace window
+        for jid in sorted(self.fleet.owners(node_id)):
+            rt = self._jobs[jid]
+            if rt.job.status is JobStatus.RUNNING:
+                # Engine-initiated: bypasses preemptibility/min-runtime
+                # validation — the machine is going away.  The whole grace
+                # window was checkpoint notice (DESIGN §8), so the coming
+                # interruption banks full progress (out-of-band checkpoint)
+                # when checkpointing is enabled.
+                rt.bank_next_interrupt = True
+                self._preempt(rt, t, PreemptMode.REQUEUE, trigger="maintenance")
+            # PREEMPTED residents are already leaving; nothing to do.
+        self._maint_wait.add(node_id)
+        self._check_maint_transition(node_id, t)
+
+    def _check_maint_transition(self, leaf_id: str, t: int) -> None:
+        """DRAINING -> MAINTENANCE once past-grace and empty; schedules the
+        node's return to HEALTHY after the maintenance duration drawn at
+        drain start (see :meth:`_drain_node`)."""
+        if leaf_id not in self._maint_wait:
+            return
+        if self.fleet.domain(leaf_id).state is not NodeState.DRAINING:
+            self._maint_wait.discard(leaf_id)
+            return
+        if self.fleet.owners(leaf_id):
+            return
+        self._maint_wait.discard(leaf_id)
+        self.fleet.to_maintenance(leaf_id)
+        delay_s = self._maint_duration.pop(leaf_id, None)
+        if delay_s is None:  # defensive: never drawn (hand-driven state)
+            lo, hi = self._model_for(leaf_id).repair_auto_min
+            delay_s = (lo + hi) / 2.0 * 60.0
+        self.queue.push(t + _s_to_us(delay_s), EventType.NODE_REPAIR, leaf_id)
+
+    # -- metrics flush ---------------------------------------------------
+
+    def _on_flush(self, ev) -> None:
+        t = self.now
+        self.sink.flush(t, self.fleet, len(self._pending), len(self._running))
+        nxt = t + self._round_us
+        if nxt < self._horizon_us:
+            self.queue.push(nxt, EventType.METRICS_FLUSH, None)

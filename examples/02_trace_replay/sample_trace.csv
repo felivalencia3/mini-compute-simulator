@@ -1,0 +1,36 @@
+# SYNTHETIC sample trace in fleetsim's canonical schema (DESIGN section 10).
+# This is hand-written sample data for tests and examples - NOT real trace data.
+# Columns: job_id,user,tenant,class,submit_time,num_chips,chip_type,num_nodes,duration_s,walltime_limit_s,final_status
+# Units: submit_time is int MICROSECONDS since the trace epoch; *_s columns are float SECONDS.
+# final_status is one of COMPLETED, FAILED, CANCELED, TIMEOUT, NODE_FAIL (Helios enum).
+job_id,user,tenant,class,submit_time,num_chips,chip_type,num_nodes,duration_s,walltime_limit_s,final_status
+j000,u0,t0,eval,0,1,h100,1,120,600,COMPLETED
+j001,u1,t0,eval,30000000,2,h100,1,150,600,COMPLETED
+j002,u2,t1,eval,60000000,1,h100,1,90,,FAILED
+j003,u0,t0,eval,90000000,4,h100,1,300,1800,COMPLETED
+j004,u3,t2,eval,120000000,8,h100,1,240,1800,CANCELED
+j005,u1,t1,finetune,300000000,8,h100,1,3600,14400,COMPLETED
+j006,u4,t0,eval,360000000,1,h100,1,60,300,COMPLETED
+j007,u2,t1,eval,420000000,2,h100,1,45,,FAILED
+j008,u0,t0,finetune,600000000,16,h100,2,5400,21600,COMPLETED
+j009,u5,t3,eval,660000000,1,h100,1,30,300,COMPLETED
+j010,u0,t0,pretrain,900000000,32,h100,4,7200,86400,COMPLETED
+j011,u3,t2,eval,1200000000,4,h100,1,600,600,TIMEOUT
+j012,u1,t0,eval,1500000000,1,h100,1,75,300,COMPLETED
+j013,u4,t1,eval,1800000000,2,h100,1,200,900,COMPLETED
+j014,u2,t2,finetune,2100000000,8,h100,1,1800,7200,NODE_FAIL
+j015,u5,t3,eval,2400000000,1,h100,1,150,,CANCELED
+j016,u0,t0,eval,2700000000,8,h100,1,90,600,COMPLETED
+j017,u1,t1,infer_replica,3000000000,8,h100,1,14400,,COMPLETED
+j018,u3,t0,eval,3300000000,1,h100,1,45,300,COMPLETED
+j019,u2,t2,eval,3600000000,2,h100,1,120,,FAILED
+j020,u0,t0,finetune,3900000000,16,h100,2,2700,10800,COMPLETED
+j021,u4,t1,eval,4200000000,4,h100,1,360,1800,COMPLETED
+j022,u5,t3,eval,4500000000,1,h100,1,60,300,COMPLETED
+j023,u1,t0,eval,4800000000,1,h100,1,90,,CANCELED
+j024,u3,t2,eval,5100000000,2,h100,1,240,900,COMPLETED
+j025,u0,t1,finetune,5400000000,8,h100,1,4500,14400,FAILED
+j026,u2,t0,eval,5700000000,4,h100,1,180,900,COMPLETED
+j027,u4,t3,eval,6000000000,1,h100,1,30,300,COMPLETED
+j028,u5,t2,eval,6300000000,2,h100,1,150,600,COMPLETED
+j029,u1,t0,eval,6600000000,8,h100,1,300,1800,COMPLETED
