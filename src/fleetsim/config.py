@@ -17,11 +17,29 @@ fleet layer, not here); leaves are nodes carrying ``chips`` of one
 ``chip_type``.  The compact form's level list is normalized by prepending
 ``"cluster"`` when absent.
 
-Distribution expressions (``pow2[1, 8]``, ``lognormal[median=2m, p90=30m]``,
-``exponential[mean=30s]``, ``uniform[a, b]``, ``fixed[x]``) parse into
-declarative :class:`DistSpec` records; sampling is the workload phase's job.
-NOTE: inside YAML *flow* mappings ``{...}`` the brackets must be quoted
-(``chips: "pow2[1, 8]"``); block-context plain scalars need no quotes.
+Distribution expressions (``pow2[1, 8]``, ``lognormal[median=2m, p90=30m]``
+or ``p99=...``, ``exponential[mean=30s]``, ``pareto[alpha=1.5, xm=1h]``,
+``weibull[shape=1.5, scale=10m]``, ``uniform[a, b]``, ``fixed[x]``) parse
+into declarative :class:`DistSpec` records; sampling is the workload
+phase's job.  Two v0.2 MAPPING forms exist: ``chips: {pmf: {1: .55, ...}}``
+(or a preset name from :data:`PMF_PRESETS`) and ``duration: {body:
+lognormal[...], tail: {alpha, splice, cap}}`` (the lognormal-body /
+Pareto-tail splice).  NOTE: inside YAML *flow* mappings ``{...}`` the
+brackets must be quoted (``chips: "pow2[1, 8]"``); block-context plain
+scalars need no quotes.
+
+v0.2 traffic surface (docs/traffic-math.md): per class,
+``arrival: {process: poisson|nhpp|mmpp2|hawkes|closed_loop,
+rate_per_hour|rate_per_day|rate_per_week: <mean rate, inside the block>,
+seasonality: null | helios_v01 | v01_steps | {daily: [[a,b],...],
+weekly: [[A,B],...]}, hawkes: {branching, kernel_tau},
+mmpp2: {rate_ratio, burst_frac, switch_tau},
+closed_loop: {target_pending | concurrency}}``.  The v0.1 sugar
+(top-level ``rate_*`` + ``diurnal``) normalizes to poisson / nhpp on the
+pinned ``v01_steps`` curve.  ``workload.preset: google_fleet`` (with
+optional ``scale`` chips and per-class ``classes`` overrides) expands to
+the stylized multi-tenant mix.  ``workload.tenant_zipf_s`` (default 1.2)
+sets the finite-Zipf tenant exponent, per-class overridable.
 
 UNITS: every ``*_us`` field is int microseconds; every ``*_s`` field is
 float seconds.  DistSpec params written as durations (``"2m"``, ``"30s"``)
@@ -40,6 +58,7 @@ v0.1-unimplemented features are rejected with messages containing
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -53,6 +72,14 @@ from .units import HOUR, S, parse_duration
 
 __all__ = [
     "DistSpec",
+    "SeasonalityConfig",
+    "ArrivalProcessConfig",
+    "ARRIVAL_PROCESSES",
+    "SEASONALITY_PRESETS",
+    "HELIOS_V01_DAILY",
+    "PMF_PRESETS",
+    "TENANT_ZIPF_S_DEFAULT",
+    "WORKLOAD_PRESETS",
     "NodeGroup",
     "ClusterConfig",
     "DatacenterConfig",
@@ -101,16 +128,51 @@ class DistSpec:
     params: dict[str, int | float] = field(default_factory=dict)
 
 
-#: Positional parameter names per known distribution kind.
+#: Positional parameter names per known distribution kind.  ``backlog``
+#: is an ARRIVAL spec only (closed-loop standing backlog, v0.2); it is
+#: rejected for chips/duration by :func:`_validate_dist`.  ``lognormal``
+#: also accepts a named ``p99`` INSTEAD of ``p90`` (exactly one).
 _DIST_POSITIONAL: dict[str, tuple[str, ...]] = {
     "pow2": ("lo", "hi"),
     "uniform": ("lo", "hi"),
     "fixed": ("value",),
     "exponential": ("mean",),
     "lognormal": ("median", "p90"),
+    "pareto": ("alpha", "xm"),
+    "weibull": ("shape", "scale"),
+    "backlog": ("target_pending",),
 }
 
-KNOWN_DIST_KINDS = frozenset(_DIST_POSITIONAL)
+#: ``pmf`` and ``splice`` are MAPPING-ONLY kinds (v0.2): written as YAML
+#: mappings (``chips: {pmf: {...}}``, ``duration: {body: ..., tail:
+#: {...}}``), never as bracket expressions.
+KNOWN_DIST_KINDS = frozenset(_DIST_POSITIONAL) | {"pmf", "splice"}
+
+#: Named size pmfs (traffic-math §2.2, trace-derived).  Keys are chip
+#: counts; weights are normalized at load.  ``tpu_isca23`` follows the
+#: TPU v4 ISCA '23 slice histogram anchors (29% < 64 chips, 14% at 64,
+#: 18% at 128–192, 8% at 2–3K).
+PMF_PRESETS: dict[str, dict[int, float]] = {
+    "eval_v02": {1: 0.55, 2: 0.15, 4: 0.15, 8: 0.15},
+    "finetune_v02": {8: 0.30, 16: 0.25, 32: 0.20, 64: 0.15, 128: 0.10},
+    "pretrain_v02": {
+        256: 0.28, 512: 0.22, 1024: 0.18, 2048: 0.14,
+        4096: 0.09, 8192: 0.06, 16384: 0.03,
+    },
+    "tpu_isca23": {
+        16: 0.12, 32: 0.17, 64: 0.14, 128: 0.18,
+        256: 0.14, 512: 0.09, 1024: 0.08, 2048: 0.08,
+    },
+}
+
+#: Standard-normal quantiles used to derive the splice point from the
+#: body's p90/p99 (pinned; must match fleetsim.workload.distributions).
+_Z_BY_QUANTILE = {0.90: 1.2816, 0.99: 2.3263}
+
+#: Default finite-Zipf tenant exponent (traffic-math §2.4: s = 1.19
+#: reproduces PAI's top-5% -> 77% of jobs; 0.9 is the Helios GPU-time
+#: preset).  Replaces the v0.1 hardcoded 1.5 — a pinned behavior change.
+TENANT_ZIPF_S_DEFAULT = 1.2
 
 #: Sentinel used when an expression failed to parse (the parse error was
 #: already recorded in load_errors); validate() skips it.
@@ -180,6 +242,61 @@ def parse_dist(expr: int | float | str) -> DistSpec:
                     f"cannot parse value {val!r} for parameter {key!r} in {expr!r}"
                 ) from None
     return DistSpec(kind, params)
+
+
+# ---------------------------------------------------------------------------
+# Arrival-process configuration (v0.2, traffic-math §2.1)
+# ---------------------------------------------------------------------------
+
+
+#: Harmonic coefficients of the ``helios_v01`` seasonality preset: the
+#: least-squares fit of K=2 daily harmonics to the log of the v0.1
+#: pinned step curve (traffic-math §2.1).  Weekly part is flat.
+HELIOS_V01_DAILY: tuple[tuple[float, float], ...] = (
+    (-0.205, -0.199),
+    (-0.001, -0.221),
+)
+
+#: Known seasonality preset names.  ``v01_steps`` is the v0.1 pinned
+#: 3-step diurnal curve (byte-identical arrivals to v0.1 ``diurnal:
+#: true``); ``helios_v01`` is its smooth harmonic fit.
+SEASONALITY_PRESETS = ("helios_v01", "v01_steps")
+
+ARRIVAL_PROCESSES = ("poisson", "nhpp", "mmpp2", "hawkes", "closed_loop")
+
+
+@dataclass(frozen=True)
+class SeasonalityConfig:
+    """Log-linear harmonic seasonality (traffic-math §2.1).
+
+    ``daily`` holds up to 3 ``(a_k, b_k)`` cos/sin pairs on the log-rate
+    at the 24 h fundamental; ``weekly`` up to 2 pairs at 168 h.  When
+    ``preset`` is set the pairs are empty and the preset defines the
+    curve.  The normalization ``theta0`` is DERIVED at sampling time
+    (weekly-mean normalization to the configured rate), never stored.
+    """
+
+    daily: tuple[tuple[float, float], ...] = ()
+    weekly: tuple[tuple[float, float], ...] = ()
+    preset: str | None = None
+
+
+@dataclass(frozen=True)
+class ArrivalProcessConfig:
+    """One class's arrival process (v0.2).  ``process`` is one of
+    ``poisson | nhpp | mmpp2 | hawkes`` (``closed_loop`` normalizes to a
+    ``backlog`` DistSpec at parse and never appears here).  The
+    process-specific fields carry doc-pinned defaults; ``*_s`` fields
+    are float seconds.  The stationary MEAN rate lives on the class's
+    ``rate_per_hour`` (all processes normalize to it)."""
+
+    process: str
+    seasonality: SeasonalityConfig | None = None
+    hawkes_branching: float = 0.4        # n = alpha/beta, stationary iff < 1
+    hawkes_kernel_tau_s: float = 900.0   # 1/beta
+    mmpp2_rate_ratio: float = 4.0        # lambda_burst / lambda_quiet
+    mmpp2_burst_frac: float = 0.25       # stationary burst-state fraction
+    mmpp2_switch_tau_s: float = 172800.0  # 1/(sigma1+sigma2)
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +424,27 @@ class WorkloadClassConfig:
     defaults to None (no cap; Meta's 7-day policy is one line of YAML).
     ``chip_type`` pins the class's gangs to one chip type — REQUIRED when
     the fleet has more than one leaf chip type (DESIGN §11: chips pinned
-    per job).  ``capacity``, ``n_gangs``, ``shape`` and ``twisted`` are
+    per job).
+
+    v0.2 additions: ``arrival`` (a ``backlog[target_pending=N]``
+    DistSpec) declares a CLOSED-LOOP standing-backlog class instead of a
+    Poisson rate — mutually exclusive with the rate keys; such classes
+    default to ``tier: best_effort`` and ``min_runtime: 0`` and
+    ``rate_per_hour`` is 0.  ``arrival`` may instead be a MAPPING
+    (traffic-math §2.1) selecting a process (poisson | nhpp | mmpp2 |
+    hawkes | closed_loop) with the rate key INSIDE the mapping; the
+    parsed result lands in ``arrival_process`` (closed_loop normalizes
+    to the backlog DistSpec).  The v0.1 sugar — top-level ``rate_*``
+    plus ``diurnal`` — is normalized at parse to ``arrival_process``
+    poisson (diurnal false) or nhpp with the ``v01_steps`` seasonality
+    (diurnal true, byte-identical arrivals to v0.1).  ``tenant_zipf_s``
+    is the finite-Zipf tenant exponent (inherits the workload-level
+    value, default 1.2).  ``segment_nodes`` + ``segment_level``
+    (both-or-neither) declare a segmented gang: whole-node blocks of
+    ``segment_nodes`` nodes, each block within one ``segment_level``
+    domain, with ``within`` as the OUTER constraint at a higher level.
+
+    ``capacity``, ``n_gangs``, ``shape`` and ``twisted`` are
     schema-carried; validate() rejects non-v0.1 values."""
 
     name: str
@@ -321,8 +458,13 @@ class WorkloadClassConfig:
     min_runtime_s: float = 0.0
     max_lifetime_s: float | None = None
     within: Constraint | None = None
+    arrival: DistSpec | None = None
+    arrival_process: ArrivalProcessConfig | None = None
+    segment_nodes: int | None = None
+    segment_level: str | None = None
     abort_prob: float = 0.0
     n_tenants: int = 8
+    tenant_zipf_s: float = TENANT_ZIPF_S_DEFAULT
     chip_type: str | None = None
     capacity: CapacityClass = CapacityClass.ON_DEMAND
     n_gangs: int = 1
@@ -333,13 +475,18 @@ class WorkloadClassConfig:
 @dataclass
 class WorkloadConfig:
     """``kind`` is "synthetic" (uses ``classes``) or "trace" (uses
-    ``source``).  ``n_tenants`` is the default a class inherits when it
-    does not set its own."""
+    ``source``).  ``n_tenants`` and ``tenant_zipf_s`` are the defaults a
+    class inherits when it does not set its own.  ``preset`` records the
+    workload preset name that was expanded (e.g. ``google_fleet``), or
+    None; expansion happens at parse, so ``classes`` always holds the
+    final merged class list."""
 
     kind: str = "synthetic"
     classes: list[WorkloadClassConfig] = field(default_factory=list)
     source: str | None = None
     n_tenants: int = 8
+    tenant_zipf_s: float = TENANT_ZIPF_S_DEFAULT
+    preset: str | None = None
 
 
 @dataclass
@@ -756,8 +903,11 @@ _JOB_CLASS_BY_NAME = {
     "infer_replica": JobClass.INFER_REPLICA,
 }
 
+#: YAML tier spellings.  ``best_effort`` is the canonical band-0 name
+#: (v0.2); ``free`` is the accepted legacy spelling for the same band.
 _TIER_BY_NAME = {
-    "free": Tier.FREE,
+    "best_effort": Tier.BEST_EFFORT,
+    "free": Tier.BEST_EFFORT,  # legacy alias
     "batch": Tier.BATCH,
     "prod": Tier.PROD,
     "monitoring": Tier.MONITORING,
@@ -768,6 +918,7 @@ _CLASS_KEYS = {
     "rate_per_hour",
     "rate_per_day",
     "rate_per_week",
+    "arrival",
     "chips",
     "chip_type",
     "duration",
@@ -777,8 +928,11 @@ _CLASS_KEYS = {
     "min_runtime",
     "max_lifetime",
     "within",
+    "segment_nodes",
+    "segment_level",
     "abort_prob",
     "n_tenants",
+    "tenant_zipf_s",
     "capacity",
     "gangs",
     "shape",
@@ -792,17 +946,422 @@ _ABORT_PROB_DEFAULT = 0.3
 _MIN_RUNTIME_DEFAULT_S = {JobClass.PRETRAIN: 7200.0}  # DESIGN §14 guard
 
 
+def _parse_pmf_mapping(raw: Any, ctx: str, errors: list[str]) -> DistSpec:
+    """Parse ``{pmf: {chips: weight, ...}}`` or ``{pmf: <preset name>}``
+    into a ``pmf`` DistSpec (params keyed by str(chips), weights
+    normalized here).  Records errors and returns the invalid sentinel
+    on failure."""
+    if isinstance(raw, str):
+        preset = PMF_PRESETS.get(raw)
+        if preset is None:
+            errors.append(
+                f"{ctx}: unknown pmf preset {raw!r}"
+                f" (known: {', '.join(sorted(PMF_PRESETS))})"
+            )
+            return _INVALID_DIST
+        raw = preset
+    if not isinstance(raw, Mapping) or not raw:
+        errors.append(
+            f"{ctx}: pmf expects a non-empty {{chips: weight}} mapping"
+            f" or a preset name, got {raw!r}"
+        )
+        return _INVALID_DIST
+    entries: list[tuple[int, float]] = []
+    ok = True
+    for k, v in raw.items():
+        if isinstance(k, bool) or not isinstance(k, int):
+            errors.append(f"{ctx}: pmf keys must be integers, got {k!r}")
+            ok = False
+            continue
+        if not _is_number(v) or float(v) <= 0:
+            errors.append(
+                f"{ctx}: pmf weight for {k} must be a positive number,"
+                f" got {v!r}"
+            )
+            ok = False
+            continue
+        entries.append((k, float(v)))
+    if not ok or not entries:
+        return _INVALID_DIST
+    entries.sort()
+    total = sum(w for _, w in entries)
+    return DistSpec("pmf", {str(k): w / total for k, w in entries})
+
+
+_SPLICE_TAIL_KEYS = frozenset({"alpha", "splice", "cap"})
+
+
+def _parse_splice_mapping(
+    m: Mapping[str, Any], ctx: str, errors: list[str]
+) -> DistSpec:
+    """Parse ``{body: lognormal[...], tail: {alpha, splice, cap}}`` into
+    a ``splice`` DistSpec (traffic-math §2.3).  Params: ``median`` +
+    ``p90``|``p99`` (int µs, from the body), ``alpha`` (float > 1,
+    validated later), ``cap`` (int µs), and the splice point as either
+    ``splice_q`` (0.90 | 0.99) or ``splice_at`` (int µs)."""
+    unknown = sorted(set(m) - {"body", "tail"})
+    if unknown:
+        errors.append(
+            f"{ctx}: unknown key(s) in splice duration: {', '.join(unknown)}"
+            f" (known: body, tail)"
+        )
+    body_raw = m.get("body")
+    tail = m.get("tail")
+    if body_raw is None or not isinstance(tail, Mapping):
+        errors.append(
+            f"{ctx}: splice duration requires 'body' (a lognormal"
+            f" expression) and 'tail' (a mapping with alpha, cap)"
+        )
+        return _INVALID_DIST
+    try:
+        body = parse_dist(body_raw)
+    except ValueError as exc:
+        errors.append(f"{ctx}.body: {exc}")
+        return _INVALID_DIST
+    if body.kind != "lognormal":
+        errors.append(
+            f"{ctx}.body: splice body must be lognormal, got {body.kind!r}"
+        )
+        return _INVALID_DIST
+    unknown_t = sorted(set(tail) - _SPLICE_TAIL_KEYS)
+    if unknown_t:
+        errors.append(
+            f"{ctx}.tail: unknown key(s): {', '.join(unknown_t)}"
+            f" (known: {', '.join(sorted(_SPLICE_TAIL_KEYS))})"
+        )
+    params: dict[str, int | float] = {}
+    for k in ("median", "p90", "p99"):
+        if k in body.params:
+            params[k] = body.params[k]
+    alpha = tail.get("alpha")
+    if not _is_number(alpha):
+        errors.append(f"{ctx}.tail.alpha: expected a number, got {alpha!r}")
+        return _INVALID_DIST
+    params["alpha"] = float(alpha)
+    if "cap" not in tail:
+        errors.append(
+            f"{ctx}.tail: 'cap' is required (untruncated Pareto tails"
+            f" make sample means non-convergent, traffic-math §2.3)"
+        )
+        return _INVALID_DIST
+    params["cap"] = _duration_us(tail["cap"], f"{ctx}.tail.cap", errors, 0)
+    splice = tail.get("splice", "p90")
+    if splice in ("p90", "p99"):
+        params["splice_q"] = 0.90 if splice == "p90" else 0.99
+    else:
+        params["splice_at"] = _duration_us(
+            splice, f"{ctx}.tail.splice", errors, 0
+        )
+    return DistSpec("splice", params)
+
+
 def _parse_dist_field(
     spec: Mapping[str, Any], key: str, ctx: str, errors: list[str]
 ) -> DistSpec:
     if key not in spec:
         errors.append(f"{ctx}: missing required key {key!r}")
         return _INVALID_DIST
+    raw = spec[key]
+    if isinstance(raw, Mapping):
+        if "pmf" in raw:
+            unknown = sorted(set(raw) - {"pmf"})
+            if unknown:
+                errors.append(
+                    f"{ctx}.{key}: unknown key(s) beside pmf:"
+                    f" {', '.join(unknown)}"
+                )
+            return _parse_pmf_mapping(raw["pmf"], f"{ctx}.{key}", errors)
+        if "body" in raw or "tail" in raw:
+            return _parse_splice_mapping(raw, f"{ctx}.{key}", errors)
+        errors.append(
+            f"{ctx}.{key}: mapping form must be {{pmf: ...}} or"
+            f" {{body: ..., tail: ...}}, got keys {sorted(raw)}"
+        )
+        return _INVALID_DIST
     try:
-        return parse_dist(spec[key])
+        return parse_dist(raw)
     except ValueError as exc:
         errors.append(f"{ctx}.{key}: {exc}")
         return _INVALID_DIST
+
+
+def _parse_harmonic_pairs(
+    raw: Any, ctx: str, max_pairs: int, errors: list[str]
+) -> tuple[tuple[float, float], ...]:
+    """Parse ``[[a, b], ...]`` harmonic coefficient pairs (≤ max_pairs)."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, (list, tuple)):
+        errors.append(f"{ctx}: expected a list of [a, b] pairs, got {raw!r}")
+        return ()
+    if len(raw) > max_pairs:
+        errors.append(
+            f"{ctx}: at most {max_pairs} harmonic pairs allowed,"
+            f" got {len(raw)}"
+        )
+        return ()
+    out: list[tuple[float, float]] = []
+    for i, pair in enumerate(raw):
+        if (
+            not isinstance(pair, (list, tuple))
+            or len(pair) != 2
+            or not all(_is_number(x) for x in pair)
+        ):
+            errors.append(
+                f"{ctx}[{i}]: expected a [a, b] number pair, got {pair!r}"
+            )
+            return ()
+        out.append((float(pair[0]), float(pair[1])))
+    return tuple(out)
+
+
+def _parse_seasonality(
+    raw: Any, ctx: str, errors: list[str]
+) -> SeasonalityConfig | None:
+    """Parse an ``arrival.seasonality`` value: null (flat), a preset
+    name, or ``{daily: [[a,b],...], weekly: [[A,B],...]}`` with ≤3 daily
+    and ≤2 weekly pairs (traffic-math config surface)."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        if raw not in SEASONALITY_PRESETS:
+            errors.append(
+                f"{ctx}: unknown seasonality preset {raw!r}"
+                f" (known: {', '.join(SEASONALITY_PRESETS)})"
+            )
+            return None
+        return SeasonalityConfig(preset=raw)
+    if not isinstance(raw, Mapping):
+        errors.append(
+            f"{ctx}: expected null, a preset name, or"
+            f" {{daily, weekly}}, got {raw!r}"
+        )
+        return None
+    unknown = sorted(set(raw) - {"daily", "weekly"})
+    if unknown:
+        errors.append(
+            f"{ctx}: unknown key(s): {', '.join(unknown)}"
+            f" (known: daily, weekly)"
+        )
+    daily = _parse_harmonic_pairs(raw.get("daily"), f"{ctx}.daily", 3, errors)
+    weekly = _parse_harmonic_pairs(raw.get("weekly"), f"{ctx}.weekly", 2, errors)
+    if not daily and not weekly:
+        errors.append(
+            f"{ctx}: at least one daily or weekly harmonic pair required"
+            f" (write 'seasonality: null' for a flat rate)"
+        )
+        return None
+    return SeasonalityConfig(daily=daily, weekly=weekly)
+
+
+_ARRIVAL_KEYS = frozenset(
+    {
+        "process",
+        "rate_per_hour",
+        "rate_per_day",
+        "rate_per_week",
+        "seasonality",
+        "hawkes",
+        "mmpp2",
+        "closed_loop",
+    }
+)
+_RATE_DIVISOR = {"rate_per_hour": 1.0, "rate_per_day": 24.0, "rate_per_week": 168.0}
+
+
+def _parse_arrival_mapping(
+    m: Mapping[str, Any], ctx: str, errors: list[str]
+) -> tuple[ArrivalProcessConfig | None, DistSpec | None, float]:
+    """Parse the mapping form of ``arrival`` (traffic-math §2.1).
+
+    Returns ``(arrival_process, backlog_spec, rate_per_hour)``:
+    open-loop processes yield an :class:`ArrivalProcessConfig` plus the
+    normalized mean rate; ``process: closed_loop`` yields a ``backlog``
+    DistSpec (reusing the standing-backlog machinery) and rate 0.
+    All structural and range validation happens here (recorded into
+    ``errors``)."""
+    unknown = sorted(set(m) - _ARRIVAL_KEYS)
+    if unknown:
+        errors.append(
+            f"{ctx}: unknown key(s): {', '.join(unknown)}"
+            f" (known: {', '.join(sorted(_ARRIVAL_KEYS))})"
+        )
+    process = m.get("process")
+    if process not in ARRIVAL_PROCESSES:
+        errors.append(
+            f"{ctx}.process: unknown arrival process {process!r}"
+            f" (known: {', '.join(ARRIVAL_PROCESSES)})"
+        )
+        return None, None, 0.0
+
+    rate_keys = [k for k in _RATE_DIVISOR if k in m]
+    rate_per_hour = 0.0
+    if process == "closed_loop":
+        if rate_keys:
+            errors.append(
+                f"{ctx}: rate keys ({', '.join(rate_keys)}) are forbidden"
+                f" with process 'closed_loop' (a saturated closed source"
+                f" has no arrival rate)"
+            )
+    elif len(rate_keys) != 1:
+        errors.append(
+            f"{ctx}: exactly one of rate_per_hour | rate_per_day |"
+            f" rate_per_week is required inside the arrival block"
+            f" (got {rate_keys or 'none'})"
+        )
+    else:
+        k = rate_keys[0]
+        try:
+            raw_rate = float(m[k])
+        except (TypeError, ValueError):
+            errors.append(f"{ctx}.{k}: expected a number, got {m[k]!r}")
+            raw_rate = 0.0
+        rate_per_hour = raw_rate / _RATE_DIVISOR[k]
+        if raw_rate <= 0:
+            errors.append(
+                f"{ctx}.{k}: arrival rate must be positive, got {raw_rate}"
+            )
+
+    seasonality: SeasonalityConfig | None = None
+    if "seasonality" in m:
+        if process in ("poisson", "closed_loop"):
+            if m["seasonality"] is not None:
+                errors.append(
+                    f"{ctx}.seasonality: not accepted with process"
+                    f" {process!r} (use 'nhpp' for a seasonal rate)"
+                )
+        else:
+            seasonality = _parse_seasonality(
+                m["seasonality"], f"{ctx}.seasonality", errors
+            )
+    if process == "nhpp" and seasonality is None:
+        errors.append(
+            f"{ctx}: process 'nhpp' requires a seasonality (a flat nhpp"
+            f" IS poisson — write process: poisson instead)"
+        )
+
+    for block, proc in (("hawkes", "hawkes"), ("mmpp2", "mmpp2"),
+                        ("closed_loop", "closed_loop")):
+        if block in m and process != proc:
+            errors.append(
+                f"{ctx}.{block}: only accepted with process {proc!r}"
+                f" (got process {process!r})"
+            )
+
+    if process == "closed_loop":
+        cl = m.get("closed_loop") or {}
+        if not isinstance(cl, Mapping):
+            errors.append(f"{ctx}.closed_loop: expected a mapping, got {cl!r}")
+            cl = {}
+        unknown_cl = sorted(set(cl) - {"target_pending", "concurrency", "think_time"})
+        if unknown_cl:
+            errors.append(
+                f"{ctx}.closed_loop: unknown key(s): {', '.join(unknown_cl)}"
+                f" (known: target_pending, concurrency, think_time)"
+            )
+        if "target_pending" in cl and "concurrency" in cl:
+            errors.append(
+                f"{ctx}.closed_loop: give target_pending OR concurrency"
+                f" (aliases), not both"
+            )
+        target = cl.get("target_pending", cl.get("concurrency", 4))
+        if isinstance(target, bool) or not isinstance(target, int) or target < 1:
+            errors.append(
+                f"{ctx}.closed_loop: target_pending must be an integer"
+                f" >= 1, got {target!r}"
+            )
+            target = 1
+        if "think_time" in cl:
+            try:
+                tt = parse_dist(cl["think_time"])
+            except ValueError as exc:
+                errors.append(f"{ctx}.closed_loop.think_time: {exc}")
+                tt = None
+            if tt is not None and (
+                tt.kind != "fixed" or tt.params.get("value") not in (0, 0.0)
+            ):
+                errors.append(
+                    f"{ctx}.closed_loop.think_time: only fixed[0s] is"
+                    f" implemented in v0.2 (omit the key)"
+                )
+        return None, DistSpec("backlog", {"target_pending": target}), 0.0
+
+    cfg = ArrivalProcessConfig(process=str(process), seasonality=seasonality)
+    if process == "hawkes":
+        hk = m.get("hawkes") or {}
+        if not isinstance(hk, Mapping):
+            errors.append(f"{ctx}.hawkes: expected a mapping, got {hk!r}")
+            hk = {}
+        unknown_h = sorted(set(hk) - {"branching", "kernel_tau"})
+        if unknown_h:
+            errors.append(
+                f"{ctx}.hawkes: unknown key(s): {', '.join(unknown_h)}"
+                f" (known: branching, kernel_tau)"
+            )
+        branching = hk.get("branching", 0.4)
+        if not _is_number(branching) or not 0.0 <= float(branching) < 1.0:
+            errors.append(
+                f"{ctx}.hawkes.branching: must be in [0, 1) — the mean"
+                f" children per event; >= 1 is supercritical (non-"
+                f"stationary cascade) — got {branching!r}"
+            )
+            branching = 0.4
+        tau_us = (
+            _duration_us(hk["kernel_tau"], f"{ctx}.hawkes.kernel_tau", errors, 0)
+            if "kernel_tau" in hk
+            else 900_000_000
+        )
+        if tau_us <= 0:
+            errors.append(
+                f"{ctx}.hawkes.kernel_tau: must be a positive duration"
+            )
+            tau_us = 900_000_000
+        cfg = ArrivalProcessConfig(
+            process="hawkes",
+            seasonality=seasonality,
+            hawkes_branching=float(branching),
+            hawkes_kernel_tau_s=tau_us / S,
+        )
+    elif process == "mmpp2":
+        mp = m.get("mmpp2") or {}
+        if not isinstance(mp, Mapping):
+            errors.append(f"{ctx}.mmpp2: expected a mapping, got {mp!r}")
+            mp = {}
+        unknown_m = sorted(set(mp) - {"rate_ratio", "burst_frac", "switch_tau"})
+        if unknown_m:
+            errors.append(
+                f"{ctx}.mmpp2: unknown key(s): {', '.join(unknown_m)}"
+                f" (known: burst_frac, rate_ratio, switch_tau)"
+            )
+        ratio = mp.get("rate_ratio", 4.0)
+        if not _is_number(ratio) or float(ratio) <= 1.0:
+            errors.append(
+                f"{ctx}.mmpp2.rate_ratio: must be > 1"
+                f" (lambda_burst/lambda_quiet), got {ratio!r}"
+            )
+            ratio = 4.0
+        frac = mp.get("burst_frac", 0.25)
+        if not _is_number(frac) or not 0.0 < float(frac) < 1.0:
+            errors.append(
+                f"{ctx}.mmpp2.burst_frac: must be in (0, 1), got {frac!r}"
+            )
+            frac = 0.25
+        tau_us = (
+            _duration_us(mp["switch_tau"], f"{ctx}.mmpp2.switch_tau", errors, 0)
+            if "switch_tau" in mp
+            else 2 * 24 * 3600 * S
+        )
+        if tau_us <= 0:
+            errors.append(f"{ctx}.mmpp2.switch_tau: must be a positive duration")
+            tau_us = 2 * 24 * 3600 * S
+        cfg = ArrivalProcessConfig(
+            process="mmpp2",
+            seasonality=seasonality,
+            mmpp2_rate_ratio=float(ratio),
+            mmpp2_burst_frac=float(frac),
+            mmpp2_switch_tau_s=tau_us / S,
+        )
+    return cfg, None, rate_per_hour
 
 
 def _parse_workload_class(
@@ -810,6 +1369,7 @@ def _parse_workload_class(
     spec: Mapping[str, Any],
     default_tenants: int,
     errors: list[str],
+    default_zipf_s: float = TENANT_ZIPF_S_DEFAULT,
 ) -> WorkloadClassConfig:
     ctx = f"workload.classes.{name}"
     unknown = sorted(set(spec) - _CLASS_KEYS)
@@ -824,14 +1384,47 @@ def _parse_workload_class(
             f" (known: {', '.join(sorted(_JOB_CLASS_BY_NAME))})"
         )
 
+    arrival: DistSpec | None = None
+    arrival_process: ArrivalProcessConfig | None = None
+    mapping_rate = 0.0
+    if "arrival" in spec:
+        if isinstance(spec["arrival"], Mapping):
+            arrival_process, arrival, mapping_rate = _parse_arrival_mapping(
+                spec["arrival"], f"{ctx}.arrival", errors
+            )
+        else:
+            try:
+                arrival = parse_dist(spec["arrival"])
+            except ValueError as exc:
+                errors.append(f"{ctx}.arrival: {exc}")
+                arrival = _INVALID_DIST
+
     rate_keys = [
         k for k in ("rate_per_hour", "rate_per_day", "rate_per_week") if k in spec
     ]
     rate_per_hour = 0.0
-    if len(rate_keys) != 1:
+    if arrival_process is not None:
+        rate_per_hour = mapping_rate
+        if rate_keys:
+            errors.append(
+                f"{ctx}: with an explicit arrival block, rate keys go"
+                f" INSIDE the block (got top-level {', '.join(rate_keys)})"
+            )
+        if spec.get("diurnal"):
+            errors.append(
+                f"{ctx}.diurnal: has no effect with an explicit arrival"
+                f" block (seasonality is configured there)"
+            )
+    elif arrival is not None:
+        if rate_keys:
+            errors.append(
+                f"{ctx}: 'arrival' (closed-loop backlog) cannot be combined"
+                f" with rate keys ({', '.join(rate_keys)}) — pick one"
+            )
+    elif len(rate_keys) != 1:
         errors.append(
-            f"{ctx}: exactly one of rate_per_hour | rate_per_day | rate_per_week"
-            f" is required (got {rate_keys or 'none'})"
+            f"{ctx}: exactly one of rate_per_hour | rate_per_day |"
+            f" rate_per_week | arrival is required (got {rate_keys or 'none'})"
         )
     else:
         k = rate_keys[0]
@@ -840,21 +1433,33 @@ def _parse_workload_class(
         except (TypeError, ValueError):
             errors.append(f"{ctx}.{k}: expected a number, got {spec[k]!r}")
             raw = 0.0
-        divisor = {"rate_per_hour": 1.0, "rate_per_day": 24.0, "rate_per_week": 168.0}[k]
-        rate_per_hour = raw / divisor
+        rate_per_hour = raw / _RATE_DIVISOR[k]
         if raw <= 0:
             errors.append(f"{ctx}.{k}: arrival rate must be positive, got {raw}")
+        # v0.1 sugar normalization: top-level rate + diurnal maps to the
+        # nhpp process on the pinned v0.1 step curve (byte-identical
+        # arrivals) or plain poisson (traffic-math §2.1).
+        arrival_process = (
+            ArrivalProcessConfig(
+                process="nhpp", seasonality=SeasonalityConfig(preset="v01_steps")
+            )
+            if spec.get("diurnal")
+            else ArrivalProcessConfig(process="poisson")
+        )
 
     chips = _parse_dist_field(spec, "chips", ctx, errors)
     duration = _parse_dist_field(spec, "duration", ctx, errors)
 
     tier_raw = spec.get("tier")
     if tier_raw is None:
-        tier = (
-            Tier.PROD
-            if job_class in (JobClass.PRETRAIN, JobClass.INFER_REPLICA)
-            else Tier.BATCH
-        )
+        if arrival is not None:
+            tier = Tier.BEST_EFFORT  # backlog-class default (v0.2)
+        else:
+            tier = (
+                Tier.PROD
+                if job_class in (JobClass.PRETRAIN, JobClass.INFER_REPLICA)
+                else Tier.BATCH
+            )
     else:
         tier = _TIER_BY_NAME.get(str(tier_raw).lower())
         if tier is None:
@@ -870,7 +1475,11 @@ def _parse_workload_class(
             spec["checkpoint_interval"], f"{ctx}.checkpoint_interval", errors, 0
         ) / S
     # DESIGN §5.1/§14 per-class default: pretrain 2 h preemption guard.
-    min_runtime_s = _MIN_RUNTIME_DEFAULT_S.get(job_class, 0.0)
+    # Backlog (closed-loop) classes default to 0 regardless of job class —
+    # standing best-effort work must be freely reclaimable.
+    min_runtime_s = (
+        0.0 if arrival is not None else _MIN_RUNTIME_DEFAULT_S.get(job_class, 0.0)
+    )
     if "min_runtime" in spec:
         min_runtime_s = _duration_us(
             spec["min_runtime"], f"{ctx}.min_runtime", errors, 0
@@ -886,6 +1495,20 @@ def _parse_workload_class(
                 f" (omit the key for no cap)"
             )
             max_lifetime_s = None
+    # Splice tail cap <-> lifetime coupling (traffic-math §2.3): the
+    # Pareto tail is truncated at its physical cap; a max_lifetime BELOW
+    # the cap would silently re-truncate, so it is an error, and an
+    # omitted max_lifetime inherits the cap.
+    if duration.kind == "splice" and "cap" in duration.params:
+        cap_s = duration.params["cap"] / S
+        if max_lifetime_s is None:
+            max_lifetime_s = cap_s
+        elif cap_s > max_lifetime_s:
+            errors.append(
+                f"{ctx}.duration.tail.cap: exceeds max_lifetime"
+                f" ({cap_s} s > {max_lifetime_s} s) — the tail cap must"
+                f" not outlive the job's lifetime cap"
+            )
 
     within_raw = spec.get("within")
     within: Constraint | None = None
@@ -920,9 +1543,27 @@ def _parse_workload_class(
         else:
             errors.append(f"{ctx}.shape: expected [a, b, c], got {shape_raw!r}")
 
+    segment_nodes: int | None = None
+    if "segment_nodes" in spec:
+        raw_sn = spec["segment_nodes"]
+        if isinstance(raw_sn, bool) or not isinstance(raw_sn, int):
+            errors.append(
+                f"{ctx}.segment_nodes: expected an integer, got {raw_sn!r}"
+            )
+        else:
+            segment_nodes = raw_sn
+    segment_level_raw = spec.get("segment_level")
+    segment_level = str(segment_level_raw) if segment_level_raw is not None else None
+
     abort_default = (
         0.0 if job_class is JobClass.INFER_REPLICA else _ABORT_PROB_DEFAULT
     )
+    zipf_raw = spec.get("tenant_zipf_s", default_zipf_s)
+    if not _is_number(zipf_raw) or float(zipf_raw) < 0:
+        errors.append(
+            f"{ctx}.tenant_zipf_s: must be a number >= 0, got {zipf_raw!r}"
+        )
+        zipf_raw = default_zipf_s
     chip_type_raw = spec.get("chip_type")
     return WorkloadClassConfig(
         name=name,
@@ -936,8 +1577,13 @@ def _parse_workload_class(
         min_runtime_s=min_runtime_s,
         max_lifetime_s=max_lifetime_s,
         within=within,
+        arrival=arrival,
+        arrival_process=arrival_process,
+        segment_nodes=segment_nodes,
+        segment_level=segment_level,
         abort_prob=float(spec.get("abort_prob", abort_default)),
         n_tenants=int(spec.get("n_tenants", default_tenants)),
+        tenant_zipf_s=float(zipf_raw),
         chip_type=str(chip_type_raw) if chip_type_raw is not None else None,
         capacity=capacity,
         n_gangs=int(spec.get("gangs", 1)),
@@ -946,7 +1592,190 @@ def _parse_workload_class(
     )
 
 
-def _parse_workload(doc: Mapping[str, Any], errors: list[str]) -> WorkloadConfig:
+#: Known workload preset names (expanded by :func:`_expand_workload_preset`).
+WORKLOAD_PRESETS = ("google_fleet",)
+
+#: google_fleet rate anchors, PER 1024 FLEET CHIPS (tuned to the
+#: examples/01_minimal utilization target of rho ~ 0.9 at 2,048 chips).
+_GF_EVAL_PER_HOUR_PER_1K = 20.0
+_GF_FINETUNE_PER_DAY_PER_1K = 45.0
+_GF_PRETRAIN_PER_WEEK_PER_1K = 1.0
+
+
+def _google_fleet_classes(
+    scale: int, fleet: FleetConfig
+) -> dict[str, dict[str, Any]]:
+    """The ``google_fleet`` preset class specs (traffic-math §2).
+
+    A stylized multi-tenant ML-fleet mix, scaled by ``scale`` (total
+    fleet chips): Hawkes-burst eval floods on a diurnal baseline, MMPP-2
+    crunch/normal finetunes under the same envelope, rare Poisson
+    pretrains with the lognormal-body/Pareto-tail duration splice, and a
+    standing best-effort backlog sized to the fleet.  Tier shares are
+    Borg-2019-flavored: pretrain PROD, finetune+eval BATCH, filler
+    BEST_EFFORT (band 0).
+
+    Deterministic fleet-shape inspection (first cluster only): with >= 3
+    declared levels, pretrains are SEGMENTED at the next-to-leaf level
+    (one segment = one full such domain); with >= 4 levels they also get
+    a hard ``within`` at ``levels[1]``.  The pretrain size pmf is
+    truncated to entries <= max(256, min(scale // 4, placeable)) and
+    renormalized, where ``placeable`` is the capacity the derived
+    placement constraints actually allow: the chips of ONE ``levels[1]``
+    domain when the hard ``within`` applies (an 8,192-chip draw can
+    never place inside a 4,096-chip pod, even on an empty fleet), else
+    the first cluster's total chips — so "huge" really stays placeable
+    at the declared scale.
+    """
+    f = scale / 1024.0
+    clusters = fleet.clusters()
+    # Capacity ceiling implied by the derived placement constraints (the
+    # `within`/segment logic below): pretrains are searched under the
+    # first cluster's roots, and hard-`within` pins them inside one
+    # levels[1] domain.  Computed BEFORE building the class specs so the
+    # pmf truncation below can use it.
+    placeable: int | None = None
+    if clusters:
+        cl0 = clusters[0]
+        placeable = cl0.total_chips()
+        if len(cl0.levels) >= 4:
+            for group, _ in _walk_groups(cl0):
+                if group.level == cl0.levels[1]:
+                    per_domain = (
+                        sum(c.total_chips() for c in group.children)
+                        if group.children
+                        else group.chips
+                    )
+                    if per_domain > 0:
+                        placeable = per_domain
+                    break
+    # Pretrain sizes: truncate the doc pmf to the fleet's own scale AND
+    # its per-domain placement ceiling.
+    cap_chips = max(256, scale // 4)
+    if placeable is not None:
+        cap_chips = max(256, min(cap_chips, placeable))
+    pre_pmf = {
+        k: w for k, w in PMF_PRESETS["pretrain_v02"].items() if k <= cap_chips
+    }
+    if not pre_pmf:
+        pre_pmf = {256: 1.0}
+
+    pretrain: dict[str, Any] = {
+        "class": "pretrain",
+        "arrival": {
+            "process": "poisson",
+            "rate_per_week": _GF_PRETRAIN_PER_WEEK_PER_1K * f,
+        },
+        "chips": {"pmf": pre_pmf},
+        "duration": {
+            "body": "lognormal[median=12d, p90=30d]",
+            "tail": {"alpha": 1.5, "splice": "p90", "cap": "54d"},
+        },
+        "tier": "prod",
+        "checkpoint_interval": "1h",
+        "min_runtime": "2h",
+    }
+    if clusters and len(clusters[0].levels) >= 3:
+        cl = clusters[0]
+        seg_level = cl.levels[-2]
+        seg_nodes = 0
+        for group, _ in _walk_groups(cl):
+            if group.level == seg_level and group.children:
+                seg_nodes = sum(c.total_nodes() for c in group.children)
+                break
+        if seg_nodes >= 1:
+            pretrain["segment_nodes"] = seg_nodes
+            pretrain["segment_level"] = seg_level
+            if len(cl.levels) >= 4:
+                pretrain["within"] = cl.levels[1]
+
+    return {
+        "pretrain": pretrain,
+        "finetune": {
+            "class": "finetune",
+            "arrival": {
+                "process": "mmpp2",
+                "rate_per_day": _GF_FINETUNE_PER_DAY_PER_1K * f,
+                "seasonality": "helios_v01",
+                "mmpp2": {
+                    "rate_ratio": 4,
+                    "burst_frac": 0.25,
+                    "switch_tau": "2d",
+                },
+            },
+            "chips": {"pmf": "finetune_v02"},
+            "duration": "lognormal[median=4h, p90=24h]",
+            "tier": "batch",
+        },
+        "eval": {
+            "class": "eval",
+            "arrival": {
+                "process": "hawkes",
+                "rate_per_hour": _GF_EVAL_PER_HOUR_PER_1K * f,
+                "seasonality": "helios_v01",
+                "hawkes": {"branching": 0.4, "kernel_tau": "15m"},
+            },
+            "chips": {"pmf": "eval_v02"},
+            "duration": "lognormal[median=2m, p99=1h]",
+            "tier": "batch",
+        },
+        "best_effort": {
+            "class": "finetune",
+            "arrival": {
+                "process": "closed_loop",
+                "closed_loop": {"target_pending": max(4, scale // 512)},
+            },
+            "chips": {"pmf": {8: 0.5, 16: 0.3, 32: 0.2}},
+            "duration": "lognormal[median=1h, p90=6h]",
+            "checkpoint_interval": "0s",
+        },
+    }
+
+
+def _expand_workload_preset(
+    w: Mapping[str, Any], fleet: FleetConfig, errors: list[str]
+) -> Mapping[str, Any]:
+    """Expand ``workload: {preset: ..., scale: ..., classes: ...}`` into
+    a plain classes mapping (pure, deterministic).  Per-class overrides
+    shallow-merge over the preset's class spec (key by key); an override
+    of ``null`` REMOVES the preset class; override-only names append in
+    document order.  ``scale`` defaults to the fleet's total chips."""
+    preset = str(w["preset"])
+    if preset not in WORKLOAD_PRESETS:
+        errors.append(
+            f"workload.preset: unknown preset {preset!r}"
+            f" (known: {', '.join(WORKLOAD_PRESETS)})"
+        )
+        return {}
+    scale = w.get("scale")
+    if scale is None:
+        scale = sum(cl.total_chips() for cl in fleet.clusters())
+    if isinstance(scale, bool) or not isinstance(scale, int) or scale < 1:
+        errors.append(
+            f"workload.scale: must be a positive integer chip count,"
+            f" got {scale!r}"
+        )
+        return {}
+    classes = _google_fleet_classes(scale, fleet)
+    overrides = w.get("classes") or {}
+    if not isinstance(overrides, Mapping):
+        errors.append("workload.classes: expected a mapping of class name -> spec")
+        overrides = {}
+    for cname, cspec in overrides.items():
+        cname = str(cname)
+        if cspec is None:
+            classes.pop(cname, None)
+            continue
+        if not isinstance(cspec, Mapping):
+            errors.append(f"workload.classes.{cname}: expected a mapping")
+            continue
+        classes[cname] = {**classes.get(cname, {}), **cspec}
+    return classes
+
+
+def _parse_workload(
+    doc: Mapping[str, Any], fleet: FleetConfig, errors: list[str]
+) -> WorkloadConfig:
     w = doc.get("workload")
     if w is None:
         errors.append("workload: section is required")
@@ -956,9 +1785,28 @@ def _parse_workload(doc: Mapping[str, Any], errors: list[str]) -> WorkloadConfig
         return WorkloadConfig()
     kind = str(w.get("kind", "synthetic"))
     n_tenants = int(w.get("n_tenants", 8))
+    zipf_raw = w.get("tenant_zipf_s", TENANT_ZIPF_S_DEFAULT)
+    if not _is_number(zipf_raw) or float(zipf_raw) < 0:
+        errors.append(
+            f"workload.tenant_zipf_s: must be a number >= 0, got {zipf_raw!r}"
+        )
+        zipf_raw = TENANT_ZIPF_S_DEFAULT
+    tenant_zipf_s = float(zipf_raw)
     source = w.get("source")
+    preset_name: str | None = None
+    if "preset" in w:
+        preset_name = str(w["preset"])
+        if kind != "synthetic":
+            errors.append(
+                f"workload.preset: only valid with kind 'synthetic',"
+                f" got {kind!r}"
+            )
+        raw_classes: Mapping[str, Any] = _expand_workload_preset(w, fleet, errors)
+    else:
+        if "scale" in w:
+            errors.append("workload.scale: only valid together with 'preset'")
+        raw_classes = w.get("classes") or {}
     classes: list[WorkloadClassConfig] = []
-    raw_classes = w.get("classes") or {}
     if not isinstance(raw_classes, Mapping):
         errors.append("workload.classes: expected a mapping of class name -> spec")
         raw_classes = {}
@@ -966,12 +1814,18 @@ def _parse_workload(doc: Mapping[str, Any], errors: list[str]) -> WorkloadConfig
         if not isinstance(cspec, Mapping):
             errors.append(f"workload.classes.{cname}: expected a mapping")
             continue
-        classes.append(_parse_workload_class(str(cname), cspec, n_tenants, errors))
+        classes.append(
+            _parse_workload_class(
+                str(cname), cspec, n_tenants, errors, tenant_zipf_s
+            )
+        )
     return WorkloadConfig(
         kind=kind,
         classes=classes,
         source=str(source) if source is not None else None,
         n_tenants=n_tenants,
+        tenant_zipf_s=tenant_zipf_s,
+        preset=preset_name,
     )
 
 
@@ -1068,7 +1922,7 @@ def _build_scenario(doc: Mapping[str, Any]) -> Scenario:
         doc.get("failure_model"), FailureModelConfig(), "failure_model", errors
     )
     fleet = _parse_fleet(doc, failure_model, errors)
-    workload = _parse_workload(doc, errors)
+    workload = _parse_workload(doc, fleet, errors)
 
     sched_raw = doc.get("scheduler") or {}
     if not isinstance(sched_raw, Mapping):
@@ -1122,11 +1976,26 @@ def _is_number(v: Any) -> bool:
 def _validate_dist(spec: DistSpec, ctx: str, errors: list[str]) -> None:
     if spec.kind == "invalid":
         return  # the parse failure was already recorded in load_errors
+    if spec.kind == "backlog":
+        errors.append(
+            f"{ctx}: 'backlog' is an arrival spec (closed-loop standing"
+            f" backlog), not a value distribution — use it under 'arrival'"
+        )
+        return
     if spec.kind not in KNOWN_DIST_KINDS:
         errors.append(
             f"{ctx}: unknown distribution kind {spec.kind!r}"
             f" (known: {', '.join(sorted(KNOWN_DIST_KINDS))})"
         )
+        return
+    if spec.kind == "pmf":
+        _validate_pmf_params(spec, ctx, errors)
+        return
+    if spec.kind == "splice":
+        _validate_splice_params(spec, ctx, errors)
+        return
+    if spec.kind == "lognormal":
+        _validate_lognormal_params(spec, ctx, errors)
         return
     required = _DIST_POSITIONAL[spec.kind]
     missing = [k for k in required if k not in spec.params]
@@ -1157,21 +2026,136 @@ def _validate_dist(spec: DistSpec, ctx: str, errors: list[str]) -> None:
     elif spec.kind == "exponential":
         if not _is_number(p["mean"]) or p["mean"] <= 0:
             errors.append(f"{ctx}: exponential mean must be positive, got {p['mean']!r}")
-    elif spec.kind == "lognormal":
-        median, p90 = p["median"], p["p90"]
-        if not (_is_number(median) and _is_number(p90)) or median <= 0 or p90 <= 0:
+    elif spec.kind == "pareto":
+        alpha, xm = p["alpha"], p["xm"]
+        if not (_is_number(alpha) and _is_number(xm)) or alpha <= 0 or xm <= 0:
             errors.append(
-                f"{ctx}: lognormal median and p90 must be positive,"
-                f" got median={median!r}, p90={p90!r}"
+                f"{ctx}: pareto alpha and xm must be positive,"
+                f" got alpha={alpha!r}, xm={xm!r}"
             )
-        elif p90 < median:
+    elif spec.kind == "weibull":
+        shape_p, scale_p = p["shape"], p["scale"]
+        if (
+            not (_is_number(shape_p) and _is_number(scale_p))
+            or shape_p <= 0
+            or scale_p <= 0
+        ):
             errors.append(
-                f"{ctx}: lognormal requires p90 >= median,"
-                f" got median={median}, p90={p90}"
+                f"{ctx}: weibull shape and scale must be positive,"
+                f" got shape={shape_p!r}, scale={scale_p!r}"
             )
     elif spec.kind == "fixed":
         if not _is_number(p["value"]):
             errors.append(f"{ctx}: fixed value must be a number, got {p['value']!r}")
+
+
+def _validate_lognormal_params(spec: DistSpec, ctx: str, errors: list[str]) -> None:
+    """Lognormal takes ``median`` plus EXACTLY ONE of ``p90`` | ``p99``."""
+    p = spec.params
+    extra = sorted(set(p) - {"median", "p90", "p99"})
+    if extra:
+        errors.append(
+            f"{ctx}: unexpected parameter(s) for lognormal: {', '.join(extra)}"
+        )
+        return
+    if "median" not in p:
+        errors.append(f"{ctx}: lognormal requires parameter(s) median")
+        return
+    has90, has99 = "p90" in p, "p99" in p
+    if has90 and has99:
+        errors.append(
+            f"{ctx}: lognormal takes p90 OR p99, not both (exactly one)"
+        )
+        return
+    if not (has90 or has99):
+        errors.append(f"{ctx}: lognormal requires parameter(s) p90 (or p99)")
+        return
+    qname = "p90" if has90 else "p99"
+    median, q = p["median"], p[qname]
+    if not (_is_number(median) and _is_number(q)) or median <= 0 or q <= 0:
+        errors.append(
+            f"{ctx}: lognormal median and {qname} must be positive,"
+            f" got median={median!r}, {qname}={q!r}"
+        )
+    elif q < median:
+        errors.append(
+            f"{ctx}: lognormal requires {qname} >= median,"
+            f" got median={median}, {qname}={q}"
+        )
+
+
+def _validate_pmf_params(spec: DistSpec, ctx: str, errors: list[str]) -> None:
+    """pmf params are ``{str(chips): weight}``: keys must be powers of
+    two (DESIGN 4.1 sizes cluster at powers of two); weights positive."""
+    if not spec.params:
+        errors.append(f"{ctx}: pmf requires at least one entry")
+        return
+    for k, w in spec.params.items():
+        try:
+            chips = int(k)
+        except (TypeError, ValueError):
+            errors.append(f"{ctx}: pmf key {k!r} is not an integer chip count")
+            continue
+        if not _is_pow2(chips):
+            errors.append(
+                f"{ctx}: pmf chip counts must be powers of two, got {chips}"
+            )
+        if not _is_number(w) or w <= 0:
+            errors.append(
+                f"{ctx}: pmf weight for {chips} must be positive, got {w!r}"
+            )
+
+
+def _validate_splice_params(spec: DistSpec, ctx: str, errors: list[str]) -> None:
+    """Splice body/tail parameter checks (traffic-math §2.3): lognormal
+    body params, ``alpha > 1``, and splice point strictly below cap."""
+    p = spec.params
+    body = DistSpec(
+        "lognormal", {k: p[k] for k in ("median", "p90", "p99") if k in p}
+    )
+    _validate_lognormal_params(body, f"{ctx}.body", errors)
+    alpha = p.get("alpha")
+    if not _is_number(alpha) or alpha <= 1.0:
+        errors.append(
+            f"{ctx}.tail.alpha: must be > 1 (alpha <= 1 has infinite"
+            f" mean even truncated in practice), got {alpha!r}"
+        )
+        return
+    cap = p.get("cap")
+    if not _is_number(cap) or cap <= 0:
+        errors.append(f"{ctx}.tail.cap: must be a positive duration, got {cap!r}")
+        return
+    # Locate the splice point to check it sits below the cap.
+    median = p.get("median")
+    if "splice_at" in p:
+        theta = p["splice_at"]
+        if not _is_number(theta) or theta <= 0:
+            errors.append(
+                f"{ctx}.tail.splice: must be a positive duration, got {theta!r}"
+            )
+            return
+    elif _is_number(median) and median > 0:
+        q = p.get("splice_q")
+        z = _Z_BY_QUANTILE.get(q)
+        if z is None:
+            errors.append(
+                f"{ctx}.tail.splice: must be 'p90', 'p99', or a duration,"
+                f" got splice_q={q!r}"
+            )
+            return
+        qv = p.get("p90") if "p90" in p else p.get("p99")
+        zq = _Z_BY_QUANTILE[0.90] if "p90" in p else _Z_BY_QUANTILE[0.99]
+        if not _is_number(qv) or qv <= 0:
+            return  # body errors already recorded
+        sigma = (math.log(qv) - math.log(median)) / zq
+        theta = median * math.exp(sigma * z)
+    else:
+        return  # body errors already recorded
+    if theta >= cap:
+        errors.append(
+            f"{ctx}.tail: splice point ({theta:.6g} us) must sit strictly"
+            f" below the cap ({cap} us)"
+        )
 
 
 def validate(scenario: Scenario) -> list[str]:
@@ -1273,6 +2257,16 @@ def validate(scenario: Scenario) -> list[str]:
         ctx = f"workload.classes.{c.name}"
         _validate_dist(c.chips, f"{ctx}.chips", errors)
         _validate_dist(c.duration, f"{ctx}.duration", errors)
+        if c.chips.kind == "splice":
+            errors.append(
+                f"{ctx}.chips: 'splice' is a duration distribution,"
+                f" not a chip-count one"
+            )
+        if c.duration.kind == "pmf":
+            errors.append(
+                f"{ctx}.duration: 'pmf' is a chip-count distribution,"
+                f" not a duration one"
+            )
         if c.chip_type is not None and c.chip_type not in scenario.fleet.chip_types:
             errors.append(
                 f"{ctx}.chip_type: unknown chip_type {c.chip_type!r}"
@@ -1299,6 +2293,77 @@ def validate(scenario: Scenario) -> list[str]:
                 errors.append(
                     f"{ctx}.within: preferred (relaxable) constraints are {_NOT_V01}"
                 )
+        # --- closed-loop backlog arrival (v0.2) ---
+        if c.arrival is not None and c.arrival.kind != "invalid":
+            if c.arrival.kind != "backlog":
+                errors.append(
+                    f"{ctx}.arrival: unknown arrival kind {c.arrival.kind!r}"
+                    f" (known: backlog)"
+                )
+            else:
+                extra = sorted(set(c.arrival.params) - {"target_pending"})
+                if extra:
+                    errors.append(
+                        f"{ctx}.arrival: unexpected parameter(s) for backlog:"
+                        f" {', '.join(extra)}"
+                    )
+                tp = c.arrival.params.get("target_pending")
+                if (
+                    tp is None
+                    or isinstance(tp, bool)
+                    or not isinstance(tp, int)
+                    or tp < 1
+                ):
+                    errors.append(
+                        f"{ctx}.arrival: backlog requires an integer"
+                        f" target_pending >= 1, got {tp!r}"
+                    )
+                if c.diurnal:
+                    errors.append(
+                        f"{ctx}.diurnal: has no effect with a backlog arrival"
+                        f" (closed-loop classes have no arrival process)"
+                    )
+        # --- segmented gangs (v0.2) ---
+        if (c.segment_nodes is None) != (c.segment_level is None):
+            errors.append(
+                f"{ctx}: segment_nodes and segment_level must be given"
+                f" together (got only one)"
+            )
+        elif c.segment_nodes is not None:
+            if c.segment_nodes < 1:
+                errors.append(
+                    f"{ctx}.segment_nodes: must be >= 1, got {c.segment_nodes}"
+                )
+            if c.segment_level not in level_vocab:
+                errors.append(
+                    f"{ctx}.segment_level: unknown level {c.segment_level!r}"
+                    f" (known: {', '.join(sorted(level_vocab)) or 'none'})"
+                )
+            elif c.within is not None and c.within.level in level_vocab:
+                # within is the OUTER constraint: it must sit strictly
+                # above segment_level in every cluster declaring both.
+                n_both = 0
+                for cl in clusters:
+                    if (
+                        c.segment_level in cl.levels
+                        and c.within.level in cl.levels
+                    ):
+                        n_both += 1
+                        if cl.levels.index(c.within.level) >= cl.levels.index(
+                            c.segment_level
+                        ):
+                            errors.append(
+                                f"{ctx}: within level {c.within.level!r} must"
+                                f" be strictly above segment_level"
+                                f" {c.segment_level!r} in cluster {cl.id!r}"
+                                f" (levels {cl.levels})"
+                            )
+                if n_both == 0:
+                    errors.append(
+                        f"{ctx}: no cluster declares both within level"
+                        f" {c.within.level!r} and segment_level"
+                        f" {c.segment_level!r}"
+                    )
         if not 0.0 <= c.abort_prob <= 1.0:
             errors.append(
                 f"{ctx}.abort_prob: must be in [0, 1], got {c.abort_prob}"

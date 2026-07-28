@@ -1,0 +1,120 @@
+# fleetsim example 04 — frontier scale: half a million chips, a standing
+# best-effort backlog, and a 131,072-chip pretrain that reclaims a cluster.
+#
+# THE QUESTION THIS EXAMPLE ANSWERS: what happens when a frontier-scale
+# training job (32 pods glued by data parallelism — the Llama-3 8x3072 /
+# TPU-Multislice shape) lands on a fleet that is already >90% occupied?
+# With a tiered scheduler and a freely-reclaimable best-effort band, the
+# answer is: the fleet runs near-full ALL the time, and the frontier job
+# still starts in minutes-to-hours, because the scheduler empties whole
+# pods of best-effort work (segmented reclaim) without touching prod or
+# batch tiers.  Run the paired baseline (see README.md) to see the same
+# fleet without the backlog: ~52 points of occupancy evaporate and
+# nothing else improves.
+#
+# FLEET: 4 clusters x 32 pods x 16 SUs x 32 nodes x 8 chips = 524,288
+# H100s.  The quanta follow DESIGN §3.3: an SU is 32 nodes = 256 GPUs
+# (SuperPOD RA), a pod is 16 SUs = 4,096 GPUs, a cluster is 32 pods =
+# 131,072 chips.  Failures are OFF here — at 42 node-day MTBF a
+# 16,384-node gang would be interrupted every ~23 minutes (8x the
+# Llama-3 405B rate) and the thrash would swamp the scheduling story
+# this example isolates; see README.md for the arithmetic.
+#
+# TRAFFIC: the google_fleet preset supplies the class structure
+# (traffic-math.md §2): Hawkes-burst evals and MMPP-2 crunch/normal
+# finetunes on the Helios diurnal envelope, rare Poisson pretrains with
+# the lognormal-body/Pareto-tail duration splice, and a closed-loop
+# best-effort backlog.  Per-class overrides re-anchor rates and sizes to
+# this fleet: preset default rates at 524K chips would mean ~500K
+# arrivals per 2 days (mice that buy no fleet-level insight but
+# dominate wall time), so the overrides lower the rates and raise the
+# gang sizes — a 500K-chip fleet runs 64-1024-chip finetunes, not
+# 8-128.  The OPEN-LOOP classes (eval + finetune + pretrain) offer
+# ~48% load (measured, see README.md); the backlog supplies the rest.
+# The added `frontier` class is the star: one 131,072-chip gang, 32
+# pod-segments within one cluster.
+#
+# Runtime: ~80 s wall for this run, ~40 s for the no-backlog baseline
+# (see README.md for the measured comparison); `round: 120s` halves the
+# wake count vs the 60s default — at this altitude a 2-minute
+# scheduling round is still aggressive.
+
+sim: {horizon: 2d, round: 120s, seed: 42}
+
+fleet:
+  metro: us-central
+  clusters:
+    - name: frontier-a
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, su, node], counts: [32, 16, 32]}  # 131,072
+    - name: frontier-b
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, su, node], counts: [32, 16, 32]}
+    - name: frontier-c
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, su, node], counts: [32, 16, 32]}
+    - name: frontier-d
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, su, node], counts: [32, 16, 32]}
+
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+workload:
+  preset: google_fleet
+  n_tenants: 256
+  classes:
+    # Preset keeps: duration splice 12d/p90=30d/alpha=1.5/cap=54d, tier
+    # prod, ckpt 1h, min_runtime 2h, and the fleet-derived segmentation
+    # (SU blocks of 32 nodes, within one pod).  Overridden: sizes fit a
+    # 4,096-chip pod; ~14/day of planned launches instead of the
+    # per-chip-scaled default.
+    pretrain:
+      arrival: {process: poisson, rate_per_week: 100}
+      chips: {pmf: {1024: 0.40, 2048: 0.35, 4096: 0.25}}
+    # Preset keeps: MMPP-2 crunch/normal regimes (ratio 4, burst 25%,
+    # tau 2d) on the Helios diurnal envelope, lognormal 4h/24h, batch.
+    # Overridden: frontier-fleet finetunes are 64-1024 chips, not 8-128.
+    finetune:
+      arrival:
+        process: mmpp2
+        rate_per_day: 2000
+        seasonality: helios_v01
+        mmpp2: {rate_ratio: 4, burst_frac: 0.25, switch_tau: 2d}
+      chips: {pmf: {64: 0.30, 128: 0.25, 256: 0.20, 512: 0.15, 1024: 0.10}}
+    # Preset keeps: Hawkes self-excitation (branching 0.4, kernel 15m)
+    # on the Helios envelope, 1-8 chip mice, lognormal 2m/p99=1h, batch.
+    eval:
+      arrival:
+        process: hawkes
+        rate_per_hour: 400
+        seasonality: helios_v01
+        hawkes: {branching: 0.4, kernel_tau: 15m}
+    # The standing backlog (closed loop, tier best_effort, ckpt off ->
+    # cheap kills): the engine tops the class back up to 128 pending at
+    # every wake, so every reclaimable hole is filled within a round.
+    best_effort:
+      arrival:
+        process: closed_loop
+        closed_loop: {target_pending: 128}
+      chips: {pmf: {256: 0.5, 512: 0.5}}
+      duration: lognormal[median=2h, p90=8h]
+    # THE FRONTIER JOB: 131,072 chips = 32 x 512-node pod segments, all
+    # within ONE cluster (data-parallel across pods, like Llama-3's 8 x
+    # 3,072-GPU pods or a TPU Multislice job).  Poisson "planned launch"
+    # tuned so exactly one lands inside the horizon at this seed;
+    # abort_prob 0 keeps the demo's one launch from being an abort draw.
+    frontier:
+      class: pretrain
+      arrival: {process: poisson, rate_per_week: 8}
+      chips: fixed[131072]
+      duration: lognormal[median=25d, p90=45d]
+      tier: prod
+      within: cluster
+      segment_level: pod
+      segment_nodes: 512
+      checkpoint_interval: 1h
+      min_runtime: 2h
+      abort_prob: 0
+
+scheduler: {name: tiered_priority, params: {preempt: requeue}}
+outputs: {events: parquet}

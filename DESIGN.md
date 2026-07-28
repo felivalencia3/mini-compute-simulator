@@ -456,10 +456,13 @@ fleet:
 workload:
   kind: synthetic
   classes:
-    pretrain: {rate_per_week: 2,  chips: pow2[256, 2048], duration: lognormal[median=10d, p90=30d],
+    # NOTE: inside YAML flow mappings the bracket expressions MUST be
+    # quoted (unquoted `[` is a YAML syntax error there); block-style
+    # mappings (examples/01_minimal) need no quotes.
+    pretrain: {rate_per_week: 2,  chips: "pow2[256, 2048]", duration: "lognormal[median=10d, p90=30d]",
                tier: prod, checkpoint_interval: 1h, min_runtime: 2h, within: pod}
-    finetune: {rate_per_day: 30,  chips: pow2[8, 64],  duration: lognormal[median=4h, p90=24h], tier: batch}
-    eval:     {rate_per_hour: 40, chips: pow2[1, 8],   duration: lognormal[median=2m, p90=30m],
+    finetune: {rate_per_day: 30,  chips: "pow2[8, 64]",  duration: "lognormal[median=4h, p90=24h]", tier: batch}
+    eval:     {rate_per_hour: 40, chips: "pow2[1, 8]",   duration: "lognormal[median=2m, p90=30m]",
                tier: batch, diurnal: true}
 scheduler: {name: tiered_priority, params: {preempt: requeue}}
 outputs: {events: parquet, plots: true}
@@ -511,3 +514,114 @@ examples/  validation/  tests/  docs/
 **Traces & characterization**: Philly (ATC '19, msr-fiddle/philly-traces), Helios (SC '21, S-Lab-System-Group/HeliosData), PAI (NSDI '22, alibaba/clusterdata), Acme (NSDI '24, arXiv 2403.07648), Meta reliability (arXiv 2410.21680), Llama 3 (arXiv 2407.21783), MegaScale (NSDI '24).
 **Scheduling literature**: Gandiva, Tiresias, Themis, Gavel, Pollux, Synergy, Lucid, Shockwave, Sia.
 **Simulators**: Blox (EuroSys '24, msr-fiddle/blox), ASTRA-sim, SimAI (aliyun/SimAI), Batsim, UBCCR Slurm simulator, kube-scheduler-simulator, Vidur (MLSys '24), LLMServingSim, AIReSim.
+
+---
+
+## 16. v0.2 addendum
+
+*Appended after v0.2 landed; §§1–15 are the v0 design as written. Where
+they disagree, this section and the code win.*
+
+### 16.1 The best-effort tier and the closed-loop backlog
+
+Band 0's canonical name is now **`best_effort`** (`free` remains a legacy
+spelling; `Tier.FREE` is an `IntEnum` alias and `Tier(0).name ==
+"BEST_EFFORT"`). What makes the band real in v0.2 is its traffic model: a
+workload class may declare a **closed-loop standing backlog** instead of
+an arrival rate —
+
+```yaml
+best_effort:
+  arrival: {process: closed_loop, closed_loop: {target_pending: 128}}
+  # sugar: arrival: backlog[128]
+```
+
+The engine calls the source's `refill(now_us, pending_by_class)` hook at
+every scheduler wake, after same-timestamp state changes settle and
+before the scheduler view is built; the source tops the class back up to
+`target_pending` pending jobs. Such classes default to `tier:
+best_effort`, `min_runtime: 0`, preemptible, and (with
+`checkpoint_interval: 0s`) zero-length preemption grace — instantly
+reclaimable "cheap kills". This is the Borg-style saturated filler:
+utilization → 1 while preemptive shielding leaves prod statistics
+untouched (validated: `validation/test_priority_preemptive.py` measures
+shielded prod sojourns at their solo M/M/1 value under a saturating
+backlog). The metrics contract follows traffic-math.md §2.1: report
+best-effort **goodput**, never best-effort mean wait — undefined under
+saturation. The summary layer enforces it: BEST_EFFORT-tier jobs are
+excluded from every queue-wait/JCT distribution, per-class stats are
+additionally broken out by **source class** (`Job.source_class`, the
+generating workload-class label, exported as a `jobs.parquet` column),
+so a backlog reusing another JobClass never pollutes that class's
+numbers. Rate keys plus `closed_loop` in one class are a validation
+error, as is `diurnal: true` on a backlog class.
+
+### 16.2 Segmented gangs and the frontier-scale rationale
+
+Frontier training jobs do not fit inside one full-bisection domain and
+have not for a while: Llama-3 405B ran as 8 data-parallel pods of 3,072
+GPUs behind 1:7 oversubscription, TPU Multislice glues v5p slices over
+DCN, and MAST schedules across clusters by moving data, not by finding a
+mythical 100K-chip pod. The placement primitive this implies — and which
+v0.2 implements (§4.2's `segments` field is now live) — is the
+Slurm-block shape: `segment_nodes: N` + `segment_level: <level>` splits a
+gang into equal whole-node blocks, each block contained in ONE domain at
+the segment level, with `within` as the OUTER constraint (strictly above
+the segment level; cluster roots when absent). Placement is atomic
+(all segments or none), bin-packed onto the fewest segment domains by
+descending free-node count on O(1) counters; `jobs.parquet` reports
+`n_domains_spanned`. Failure semantics are unchanged: one node death
+kills the whole segmented gang.
+
+The matching scheduler capability is **segmented reclaim** in
+`tiered_priority`: a pending segmented gang plans victims per segment
+domain (greedy fewest-preemptions per segment, one aggregate victim set,
+storm-capped at `max_preemptions_per_wake`, default 512), so one frontier
+gang can empty multiple pods of best-effort mice in a single wake.
+Two guardrails make reclaim exact rather than chip-count-optimistic:
+every planned victim set is **dry-run-verified** by the engine's real
+placement search with the victims hypothetically released (so node
+shapes and leaf health are respected — a sub-node co-resident or a
+DRAINING node cannot bait useless evictions), and an **in-flight claim**
+suppresses re-planning for a preemptor whose victims are still in their
+grace window (a grace longer than the round never triggers a redundant
+second victim set).
+`examples/04_frontier/` measures the whole story end to end at 524,288
+chips: a 131,072-chip, 32-pod-segment job starts 233 s after submission
+on a 99.5%-occupied fleet (345 preemptions in one wake), and the backlog
+refills the reclaim dip within two rounds. Cross-segment bandwidth
+penalties stay a v0.3 cost-model concern — `speed` remains 1.0 with the
+hook in place.
+
+### 16.3 Traffic v2
+
+The v0.1 pinned diurnal step curve and uniform-over-exponents sizing are
+superseded by the generative model specified in **docs/traffic-math.md**
+(normative; §5.1 defaults here are retained only as the v0.1 sugar):
+per-class arrival processes (Poisson, log-linear harmonic NHPP, MMPP-2,
+Hawkes, closed-loop), weighted pow2 size pmfs with named presets,
+lognormal-body durations with an optional truncated-Pareto splice tail,
+finite-Zipf tenant marking (`tenant_zipf_s`, default 1.2 — a pinned
+behavior change from v0.1's hardcoded 1.5), and the `google_fleet`
+workload preset. Determinism contract unchanged and regression-pinned:
+v0.1 scenarios produce byte-identical arrivals (`tests/test_traffic_v02.py`).
+The closed-form validation ladder gained the traffic-math §5 rungs:
+Pollaczek–Khinchine M/G/1 under lognormal service
+(`validation/test_pk_mg1.py`) and preemptive-resume priority M/G/1
+per-class sojourns plus backlog shielding
+(`validation/test_priority_preemptive.py`), both asserted sharply at
+realized moments and loosely against the analytic constants (the
+round-alignment quantization and its 1/(1−ρ) amplification are modeled,
+not hand-waved — see the test docstrings).
+
+### 16.4 Roadmap update
+
+v0.2 as shipped = traffic v2 + best-effort/closed-loop backlog +
+segmented gangs with tiered reclaim + the frontier example + the new
+validation rungs. **Moved out of v0.2 to v0.3**: EASY backfill/`Reserve`,
+tenant quota (in/over-quota, lend-borrow), capacity classes beyond
+on-demand, autoscaling inference + unserved-demand metric, and the
+Helios adapter with the QSSF-beats-FIFO reproduction. v0.3 therefore
+stacks those on top of its original scope (relaxable constraints +
+placement-quality penalty, TPU `ocs_pool` predicates, multi-gang
+Multislice, cross-segment speed penalty). v0.4+ unchanged (§11).

@@ -214,14 +214,34 @@ def _compare_rows(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str]]
     add("allocation rate (window)", "window", "allocation_rate")
     add("goodput (window)", "window", "goodput")
     add("ETTR p50 (window)", "window", "ettr", "job_weighted", "p50")
+    # Queue-wait / JCT rows are FULL-RUN values (labeled): the summary's
+    # windowed variants live under summary["window"].  Source-class rows
+    # (workload-class label, e.g. a `frontier` class distinct from other
+    # PRETRAINs) are shown when the summaries carry them.
     classes = sorted(
         {c for s in summaries for c in (_get(s, "full", "queue_wait_s") or {})}
     )
     for cls in classes:
         add(
-            f"queue wait p50 {cls} (s)",
+            f"queue wait p50 {cls} (s, full)",
             "full",
             "queue_wait_s",
+            cls,
+            "job_weighted",
+            "p50",
+            spec="{:.1f}",
+        )
+    for cls in sorted(
+        {
+            c
+            for s in summaries
+            for c in (_get(s, "full", "queue_wait_s_by_source_class") or {})
+        }
+    ):
+        add(
+            f"queue wait p50 [{cls}] (s, full)",
+            "full",
+            "queue_wait_s_by_source_class",
             cls,
             "job_weighted",
             "p50",
@@ -231,9 +251,25 @@ def _compare_rows(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str]]
         {c for s in summaries for c in (_get(s, "full", "jct_s") or {})}
     ):
         add(
-            f"JCT p50 {cls} (s)",
+            f"JCT p50 {cls} (s, full)",
             "full",
             "jct_s",
+            cls,
+            "job_weighted",
+            "p50",
+            spec="{:.1f}",
+        )
+    for cls in sorted(
+        {
+            c
+            for s in summaries
+            for c in (_get(s, "full", "jct_s_by_source_class") or {})
+        }
+    ):
+        add(
+            f"JCT p50 [{cls}] (s, full)",
+            "full",
+            "jct_s_by_source_class",
             cls,
             "job_weighted",
             "p50",

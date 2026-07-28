@@ -28,6 +28,9 @@ INVARIANTS
   ``healthy_chips(D) == sum(leaf.chips)`` over HEALTHY leaves.
 - ``leaf.free_chips == leaf.chips - used(leaf)`` when HEALTHY, else ``0``
   (DRAINING / FAILED / MAINTENANCE leaves contribute zero free chips).
+- Free-NODE counters (v0.2): for every domain and ``(chip_type, size)``
+  key, the count equals the number of HEALTHY zero-owner leaves of that
+  type/size under the domain — the segmented-placement primitive.
 - Counter updates are O(depth) per touched leaf; searches and iterators
   use sorted-id or insertion order — never raw set iteration order.
 - :meth:`FleetTree.apply` / :meth:`FleetTree.release` are atomic (validate
@@ -57,7 +60,14 @@ class Placement:
     sub-node gang, or one entry per fully-taken leaf (``chips ==
     leaf.chips``) for a whole-node gang.  ``anchor`` is the domain that
     satisfied the ``within`` constraint (the searched domain), or the
-    cluster root when the spec carried no constraint.
+    cluster root when the spec carried no constraint — except for
+    SEGMENTED placements, where ``anchor`` is the LCA of all segment
+    domains (DESIGN §4.2: the placement-quality score).
+
+    ``segment_domains`` (v0.2, segmented gangs only) lists the
+    segment-level domain id hosting each segment, one entry per segment
+    in deterministic assignment order; ids REPEAT when several segments
+    share one domain.  Empty tuple for non-segmented placements.
 
     INVARIANT: ``sum(chips for _, chips in leaves) == spec.chips`` of the
     searched :class:`~fleetsim.model.GangSpec`.
@@ -67,19 +77,42 @@ class Placement:
     anchor: str
     chip_type: str
     whole_node: bool
+    segment_domains: tuple[str, ...] = ()
 
     @property
     def chips(self) -> int:
         """Total chips this placement covers."""
         return sum(chips for _, chips in self.leaves)
 
+    @property
+    def n_domains_spanned(self) -> int:
+        """Distinct segment-level domains used (1 for non-segmented —
+        a plain gang always sits under its single anchor)."""
+        if not self.segment_domains:
+            return 1
+        return len(set(self.segment_domains))
+
     def to_gang_alloc(self) -> GangAlloc:
         """Render as a :class:`~fleetsim.model.GangAlloc`: a list of leaf
-        ids for a whole-node gang, a ``{leaf: chips}`` dict for sub-node."""
+        ids for a whole-node gang, a ``{leaf: chips}`` dict for sub-node.
+        Segmented placements record ``segment_domains`` and
+        ``n_domains_spanned`` in ``GangAlloc.attrs``."""
+        attrs: dict = {}
+        if self.segment_domains:
+            attrs = {
+                "segment_domains": list(self.segment_domains),
+                "n_domains_spanned": self.n_domains_spanned,
+            }
         if self.whole_node:
-            return GangAlloc(nodes=[leaf for leaf, _ in self.leaves], anchor=self.anchor)
+            return GangAlloc(
+                nodes=[leaf for leaf, _ in self.leaves],
+                anchor=self.anchor,
+                attrs=attrs,
+            )
         return GangAlloc(
-            nodes={leaf: chips for leaf, chips in self.leaves}, anchor=self.anchor
+            nodes={leaf: chips for leaf, chips in self.leaves},
+            anchor=self.anchor,
+            attrs=attrs,
         )
 
 
@@ -195,6 +228,18 @@ class FleetTree:
         self._allocs: dict[str, Allocation] = {}
         self._healthy: dict[str, int] = {did: 0 for did in self._domains}
         self._free_ct: dict[str, dict[str, int]] = {did: {} for did in self._domains}
+        # Free-NODE counters (v0.2, segmented placement): per domain, the
+        # number of HEALTHY, zero-owner leaves keyed by (chip_type, leaf
+        # chips).  Maintained incrementally like the chip counters so
+        # segment packing operates on domain counters, never fleet-wide
+        # leaf scans.
+        self._free_nodes: dict[str, dict[tuple[str, int], int]] = {
+            did: {} for did in self._domains
+        }
+        # Lazy static cache: (level, ancestor_id) -> domains at `level`
+        # under `ancestor_id`, ascending id order (topology is immutable,
+        # so entries never invalidate).
+        self._at_level_under: dict[tuple[str, str], tuple[str, ...]] = {}
 
         for dom in self._domains.values():
             dom.total_chips = 0
@@ -208,6 +253,7 @@ class FleetTree:
             if leaf.state is NodeState.HEALTHY:
                 self._add_free(lid, leaf.chips)
                 self._add_healthy(lid, leaf.chips)
+                self._add_free_nodes(lid, 1)
 
     # ------------------------------------------------------------------
     # Lookups and helpers
@@ -304,6 +350,33 @@ class FleetTree:
         """Capacity on HEALTHY leaves under ``domain_id`` (allocated or not)."""
         return self._healthy[domain_id]
 
+    def free_full_nodes(
+        self, domain_id: str, chip_type: str, leaf_chips: int
+    ) -> int:
+        """Count of HEALTHY, zero-owner leaves of ``chip_type`` with
+        exactly ``leaf_chips`` chips under ``domain_id`` (an O(1) counter
+        read — the segmented-placement primitive)."""
+        return self._free_nodes[domain_id].get((chip_type, leaf_chips), 0)
+
+    def domains_at_under(self, level: str, ancestor_id: str) -> tuple[str, ...]:
+        """Domain ids at ``level`` under ``ancestor_id`` (inclusive of
+        itself when it sits at ``level``), ascending id order.  Cached —
+        topology is immutable."""
+        key = (level, ancestor_id)
+        cached = self._at_level_under.get(key)
+        if cached is not None:
+            return cached
+        if ancestor_id not in self._domains:
+            raise KeyError(ancestor_id)
+        out = tuple(
+            did
+            for did in self._levels.get(level, ())
+            if did == ancestor_id
+            or ancestor_id in self.ancestors(did)
+        )
+        self._at_level_under[key] = out
+        return out
+
     def owners(self, leaf_id: str) -> dict[str, int]:
         """Copy of the ``{alloc_id: chips}`` owner map of a leaf."""
         return dict(self._owners[leaf_id])
@@ -356,6 +429,8 @@ class FleetTree:
                     f" free {leaf.free_chips}"
                 )
         for lid, (chips, _) in demand.items():
+            if not self._owners[lid]:  # free node -> owned node
+                self._add_free_nodes(lid, -1)
             self._owners[lid][jid] = chips
             self._add_free(lid, -chips)
         self._allocs[jid] = allocation
@@ -381,6 +456,8 @@ class FleetTree:
             chips = self._owners[lid].pop(jid)
             if self._domains[lid].state is NodeState.HEALTHY:
                 self._add_free(lid, chips)
+                if not self._owners[lid]:  # owned node -> free node
+                    self._add_free_nodes(lid, 1)
 
     def _demand(self, allocation: Allocation) -> dict[str, tuple[int, bool]]:
         """Merge an allocation's gangs into ``{leaf_id: (chips, whole)}``.
@@ -437,7 +514,9 @@ class FleetTree:
         leaves are scanned in ascending id order.  ``spec.chip_type`` pins
         the chip type; when unpinned, each chip type present under the
         domain is tried in sorted order (v1 configs pin, per DESIGN §11).
-        ``segments``/``shape``/``twisted`` are v0.3 semantics and ignored.
+        A spec with ``segments`` delegates to :meth:`search_segmented`
+        (first-fit over the same outer domains, segment bin-packing
+        inside).  ``shape``/``twisted`` are v0.3 semantics and ignored.
 
         Per-leaf mode: a request smaller than the leaf's chip count is
         sub-node (needs ``free >= chips``); otherwise whole-node leaves are
@@ -446,6 +525,8 @@ class FleetTree:
         """
         if spec.chips <= 0:
             raise ValueError(f"gang spec needs a positive chip count, got {spec.chips}")
+        if spec.segments is not None:
+            return self.search_segmented(spec)
         if spec.within is not None:
             search_domains = self.domains_at(spec.within.level)
         else:
@@ -455,6 +536,166 @@ class FleetTree:
             if placement is not None:
                 return placement
         return None
+
+    def search_segmented(self, spec: GangSpec) -> Placement | None:
+        """Segmented (Slurm-block) search for one gang, or ``None``.
+
+        SEMANTICS (v0.2, pinned): the gang is WHOLE-NODE only and splits
+        into ``spec.chips / (nodes_per_segment * leaf_size)`` equal
+        segments of exactly ``nodes_per_segment`` fully-free HEALTHY
+        leaves each; every segment is contained in ONE domain at the
+        segment level, and multiple segments MAY share a domain that has
+        room.  All segments place atomically or none.  Outer search
+        domains are ``spec.within.level`` domains (the OUTER constraint)
+        or the cluster roots, tried first-fit in ascending id order.
+        Inside an outer domain, segment-hosting domains are packed by
+        DESCENDING free-node capacity (ties ascending id) — bin-packing
+        that concentrates the job into the fewest domains and preserves
+        empty domains for future large jobs.  ``anchor`` is the LCA of
+        all segment domains.  Placement speed stays 1.0 — the cross-pod
+        (multi-segment) bandwidth penalty is the v0.3 cost model, not a
+        feasibility change here.
+
+        The candidate filter and packing operate on the incrementally
+        maintained free-node counters (O(domains at segment level)); only
+        the leaves of CHOSEN segment domains are scanned, so cost scales
+        with the allocation, never the fleet.
+
+        Raises ``ValueError`` for a spec without ``segments``, a
+        non-positive ``nodes_per_segment``, or a non-positive chip count.
+        Chip counts that do not decompose into whole segments of any
+        available leaf size simply find no fit.
+        """
+        if spec.segments is None:
+            raise ValueError("search_segmented requires spec.segments")
+        nodes_per_seg, seg_level = spec.segments
+        if nodes_per_seg <= 0:
+            raise ValueError(
+                f"segments nodes_per_segment must be positive, got {nodes_per_seg}"
+            )
+        if spec.chips <= 0:
+            raise ValueError(f"gang spec needs a positive chip count, got {spec.chips}")
+        if spec.within is not None:
+            search_domains = self.domains_at(spec.within.level)
+        else:
+            search_domains = self._cluster_roots
+        for did in search_domains:
+            placement = self._search_segmented_domain(
+                did, spec, nodes_per_seg, seg_level
+            )
+            if placement is not None:
+                return placement
+        return None
+
+    def _search_segmented_domain(
+        self, did: str, spec: GangSpec, nodes_per_seg: int, seg_level: str
+    ) -> Placement | None:
+        """Segment-pack ``spec`` under one outer domain, or ``None``."""
+        types = (
+            (spec.chip_type,) if spec.chip_type is not None else self._types_under[did]
+        )
+        for ct in types:
+            # Candidate leaf sizes for this chip type, from the domain's
+            # free-node counter keys (a size with zero free nodes cannot
+            # host anything; deterministic ascending-size order).
+            sizes = sorted(
+                size
+                for (t, size), n in self._free_nodes[did].items()
+                if t == ct and n > 0
+            )
+            for leaf_size in sizes:
+                seg_chips = nodes_per_seg * leaf_size
+                if spec.chips % seg_chips:
+                    continue  # does not decompose into whole segments
+                n_segments = spec.chips // seg_chips
+                total_nodes = n_segments * nodes_per_seg
+                if self._free_nodes[did].get((ct, leaf_size), 0) < total_nodes:
+                    continue  # counter prune: not enough free nodes at all
+                chosen = self._pack_segments(
+                    did, ct, leaf_size, seg_level, nodes_per_seg, n_segments
+                )
+                if chosen is None:
+                    continue
+                return self._realize_segments(
+                    chosen, ct, leaf_size, nodes_per_seg
+                )
+        return None
+
+    def _pack_segments(
+        self,
+        did: str,
+        ct: str,
+        leaf_size: int,
+        seg_level: str,
+        nodes_per_seg: int,
+        n_segments: int,
+    ) -> list[tuple[str, int]] | None:
+        """Assign ``n_segments`` segments to segment-level domains under
+        ``did`` by descending free-node capacity, or ``None`` if they do
+        not all fit.  Returns ``[(segment_domain_id, k_segments), ...]``
+        in assignment order."""
+        cands: list[tuple[int, str]] = []
+        for sd in self.domains_at_under(seg_level, did):
+            free_n = self._free_nodes[sd].get((ct, leaf_size), 0)
+            if free_n >= nodes_per_seg:
+                cands.append((free_n, sd))
+        cands.sort(key=lambda pair: (-pair[0], pair[1]))
+        remaining = n_segments
+        chosen: list[tuple[str, int]] = []
+        for free_n, sd in cands:
+            if remaining <= 0:
+                break
+            k = min(remaining, free_n // nodes_per_seg)
+            if k > 0:
+                chosen.append((sd, k))
+                remaining -= k
+        return chosen if remaining == 0 else None
+
+    def _realize_segments(
+        self,
+        chosen: list[tuple[str, int]],
+        ct: str,
+        leaf_size: int,
+        nodes_per_seg: int,
+    ) -> Placement:
+        """Pick concrete leaves for a committed segment assignment and
+        build the Placement (leaf scan limited to chosen domains)."""
+        leaves: list[tuple[str, int]] = []
+        seg_domains: list[str] = []
+        for sd, k in chosen:
+            need = k * nodes_per_seg
+            for lid in self._leaves_under[sd]:  # ascending id order
+                leaf = self._domains[lid]
+                if (
+                    leaf.chip_type == ct
+                    and leaf.chips == leaf_size
+                    and leaf.state is NodeState.HEALTHY
+                    and not self._owners[lid]
+                ):
+                    leaves.append((lid, leaf.chips))
+                    need -= 1
+                    if need == 0:
+                        break
+            if need:  # pragma: no cover - counters guarantee availability
+                raise AssertionError(
+                    f"free-node counter mismatch under {sd!r}:"
+                    f" {need} nodes short"
+                )
+            seg_domains.extend([sd] * k)
+        anchor = chosen[0][0]
+        for sd, _ in chosen[1:]:
+            lca = self.lca(anchor, sd)
+            if lca is None:  # pragma: no cover - one outer domain root
+                raise AssertionError("segment domains have no common root")
+            anchor = lca
+        leaves.sort(key=lambda pair: pair[0])  # Placement invariant
+        return Placement(
+            leaves=tuple(leaves),
+            anchor=anchor,
+            chip_type=ct,
+            whole_node=True,
+            segment_domains=tuple(seg_domains),
+        )
 
     def _search_domain(self, did: str, spec: GangSpec) -> Placement | None:
         types = (
@@ -505,6 +746,58 @@ class FleetTree:
                     return tuple(whole), True
         return None
 
+    def search_after_release(
+        self, spec: GangSpec, job_ids: Iterable[str]
+    ) -> Placement | None:
+        """Dry-run search: the placement ``spec`` would find if the
+        allocations of ``job_ids`` were released — WITHOUT changing tree
+        state (v0.2, preemption planning).
+
+        Releases each applied allocation in ``job_ids`` (ids without an
+        applied allocation are skipped), runs :meth:`search_first_fit`
+        (which delegates segmented specs), then restores every released
+        allocation exactly — including on non-HEALTHY leaves, whose chips
+        correctly contribute nothing to the free counters in either
+        direction.  This makes reclaim planning exact under both leaf
+        health and node-shape effects: a victim on a DRAINING node frees
+        nothing, and sub-node co-residents keep their leaves out of the
+        whole-node pool.
+
+        INVARIANT: tree state (counters, owners, allocations) is
+        byte-identical on exit; only the insertion order of restored
+        allocations/owner entries may move to the end of their tables
+        (all consumers sort).
+        """
+        saved: list[Allocation] = []
+        try:
+            for jid in job_ids:
+                alloc = self._allocs.get(jid)
+                if alloc is None:
+                    continue
+                self.release(jid)
+                saved.append(alloc)
+            return self.search_first_fit(spec)
+        finally:
+            for alloc in saved:
+                self._reapply(alloc)
+
+    def _reapply(self, allocation: Allocation) -> None:
+        """Exact inverse of :meth:`release` for a just-released allocation:
+        re-record owners and re-decrement free counters on HEALTHY leaves
+        only (non-HEALTHY leaves already contribute zero free).  No
+        validation — callers guarantee the allocation was applied moments
+        ago and nothing else touched its leaves in between."""
+        jid = allocation.job_id
+        for lid, (chips, _) in self._demand(allocation).items():
+            leaf = self._domains[lid]
+            healthy = leaf.state is NodeState.HEALTHY
+            if healthy and not self._owners[lid]:  # free node -> owned node
+                self._add_free_nodes(lid, -1)
+            self._owners[lid][jid] = chips
+            if healthy:
+                self._add_free(lid, -chips)
+        self._allocs[jid] = allocation
+
     # ------------------------------------------------------------------
     # Node lifecycle
     # ------------------------------------------------------------------
@@ -540,6 +833,8 @@ class FleetTree:
         avail = leaf.chips - sum(self._owners[leaf_id].values())
         if avail:
             self._add_free(leaf_id, avail)
+        if not self._owners[leaf_id]:  # returns as a free node
+            self._add_free_nodes(leaf_id, 1)
 
     def drain_node(self, leaf_id: str) -> None:
         """HEALTHY -> DRAINING: blocks new placements (free contribution
@@ -575,6 +870,8 @@ class FleetTree:
         if free:
             self._add_free(leaf_id, -free)
         self._add_healthy(leaf_id, -leaf.chips)
+        if not self._owners[leaf_id]:  # free node -> unhealthy node
+            self._add_free_nodes(leaf_id, -1)
 
     # ------------------------------------------------------------------
     # Fragmentation queries (DESIGN §9; v1 tree semantics, no geometry)
@@ -642,6 +939,17 @@ class FleetTree:
             self._healthy[cur] += delta
             cur = self._domains[cur].parent
 
+    def _add_free_nodes(self, leaf_id: str, delta: int) -> None:
+        """Adjust the free-NODE counter for ``leaf_id`` on every ancestor
+        (called on HEALTHY/zero-owner boundary transitions only)."""
+        leaf = self._domains[leaf_id]
+        key = (leaf.chip_type, leaf.chips)
+        cur: str | None = leaf_id
+        while cur is not None:
+            table = self._free_nodes[cur]
+            table[key] = table.get(key, 0) + delta
+            cur = self._domains[cur].parent
+
     # ------------------------------------------------------------------
     # Debug / test support
     # ------------------------------------------------------------------
@@ -656,6 +964,7 @@ class FleetTree:
             leaf_ids = self._leaves_under[did]
             total = healthy = free = 0
             free_ct: dict[str, int] = {}
+            free_nodes: dict[tuple[str, int], int] = {}
             for lid in leaf_ids:
                 leaf = self._domains[lid]
                 total += leaf.chips
@@ -664,6 +973,9 @@ class FleetTree:
                     avail = leaf.chips - sum(self._owners[lid].values())
                     free += avail
                     free_ct[leaf.chip_type] = free_ct.get(leaf.chip_type, 0) + avail
+                    if not self._owners[lid]:
+                        key = (leaf.chip_type, leaf.chips)
+                        free_nodes[key] = free_nodes.get(key, 0) + 1
             if dom.total_chips != total:
                 raise AssertionError(
                     f"{did!r}: total_chips {dom.total_chips} != recomputed {total}"
@@ -681,6 +993,13 @@ class FleetTree:
                     raise AssertionError(
                         f"{did!r}: free[{ct!r}] {self._free_ct[did].get(ct, 0)}"
                         f" != recomputed {free_ct.get(ct, 0)}"
+                    )
+            for key in sorted(set(free_nodes) | set(self._free_nodes[did])):
+                if self._free_nodes[did].get(key, 0) != free_nodes.get(key, 0):
+                    raise AssertionError(
+                        f"{did!r}: free_nodes[{key!r}]"
+                        f" {self._free_nodes[did].get(key, 0)}"
+                        f" != recomputed {free_nodes.get(key, 0)}"
                     )
         for lid in self._leaf_ids:
             leaf = self._domains[lid]

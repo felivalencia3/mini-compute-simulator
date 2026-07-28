@@ -475,7 +475,7 @@ def test_registry_and_params():
     s = get_scheduler("tiered_priority")
     assert isinstance(s, TieredPriorityScheduler)
     assert s.preempt_mode is PreemptMode.REQUEUE
-    assert s.max_preemptions_per_wake == 50
+    assert s.max_preemptions_per_wake == 512  # v0.2 default (multi-pod reclaim)
     assert isinstance(s.placement, FirstFit)
     s2 = get_scheduler(
         "tiered_priority", {"preempt": "cancel", "max_preemptions_per_wake": 3}

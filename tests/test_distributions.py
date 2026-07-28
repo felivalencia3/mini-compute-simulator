@@ -165,8 +165,10 @@ def test_from_spec_invalid_sentinel_raises():
 
 
 def test_from_spec_unknown_kind_raises():
+    # NOTE: weibull/pareto became real kinds in v0.2 — use a name that
+    # stays unknown.
     with pytest.raises(ValueError, match="unknown"):
-        from_spec(DistSpec("weibull", {"k": 1.0}))
+        from_spec(DistSpec("zeta", {"k": 1.0}))
 
 
 def test_from_spec_missing_param_raises():
