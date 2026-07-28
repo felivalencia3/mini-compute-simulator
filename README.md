@@ -1,5 +1,7 @@
 # fleetsim
 
+[![CI](https://github.com/felivalencia3/mini-compute-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/felivalencia3/mini-compute-simulator/actions/workflows/ci.yml)
+
 **FleetSim simulates fleets, not jobs.** Given a fleet of heterogeneous
 GPU/TPU clusters described in YAML, a stochastic mix of pretraining gangs,
 fine-tunes, evals, and inference — plus node failures — it answers: *what
