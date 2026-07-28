@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fleetsim-smallest-first"
+version = "0.1.0"
+description = "Example out-of-tree fleetsim scheduler plugin: smallest-job-first ordering"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = ["fleetsim>=0.1"]
+
+# The entry point is how `scheduler: {name: smallest_first}` in a scenario
+# finds this class without fleetsim knowing this package exists.
+[project.entry-points."fleetsim.schedulers"]
+smallest_first = "fleetsim_smallest_first:SmallestFirstScheduler"
+
+[tool.setuptools]
+py-modules = ["fleetsim_smallest_first"]
