@@ -9,7 +9,7 @@ backward-compatibility regression on examples/01_minimal, and the
 google_fleet preset expansion.
 """
 
-import hashlib
+import json
 import math
 from pathlib import Path
 
@@ -996,43 +996,84 @@ class TestDeterminism:
 
 
 class TestBackwardCompat:
-    #: SHA-256 of the examples/01_minimal arrival stream fingerprint
-    #: (time, id, chips, true_duration, walltime, outcome — everything
-    #: except tenant), captured from the v0.1 generator BEFORE the v0.2
-    #: traffic changes.  v0.1 scenarios must keep producing exactly this.
-    V01_CORE_FINGERPRINT = (
-        "2e9c5b8009ee1eb2fbd71fc1687fc3a08ac7b76befcec3958323606c46d8e1ac"
-    )
-    #: Tenant sequence under the v0.2 default tenant_zipf_s = 1.2.  The
-    #: tenant field is the ONE pinned behavior change vs v0.1 (which
-    #: hardcoded s = 1.5) — traffic-math §2.4.
-    V02_TENANT_FINGERPRINT = (
-        "d720ab790b2fc4f4a9a58e8c82a0d16200cdffc427b45c44b209dccc0ab698bf"
-    )
+    """Guards the v0.1 arrival stream of examples/01_minimal.
 
-    def test_examples_01_minimal_regression(self):
+    ``tests/data/v01_arrivals_golden.json`` freezes the stream as produced
+    at v0.2 (verified equivalent to the v0.1 generator for v0.1-feature
+    scenarios at capture time; the one pinned change is the tenant default
+    tenant_zipf_s 1.5 -> 1.2, traffic-math §2.4).  Determinism is exact on
+    a given platform, but the lognormal/exponential samplers route through
+    the platform libm, whose exp/log may differ by 1 ULP across OS/arch —
+    so continuous values are compared with tolerances and knife-edge
+    discrete draws get a small mismatch budget, instead of a golden hash.
+    """
+
+    GOLDEN = Path(__file__).parent / "data" / "v01_arrivals_golden.json"
+
+    @staticmethod
+    def _drain_example_01():
         scn = load_scenario(EXAMPLE_01)
         fleet = build_fleet(scn)
         rng = RngStreams(scn.sim.seed)
         src = SyntheticSource(scn.workload, fleet, rng, scn.sim.horizon_us)
-        rows, tenants = [], []
+        rows = []
         while (nxt := src.next_arrival()) is not None:
             t, j = nxt
             rows.append(
-                (
-                    t,
-                    j.id,
-                    j.gangs[0].chips,
-                    repr(j.true_duration_s),
-                    repr(j.walltime_est_s),
-                    str(j.terminal_status_override),
-                )
+                {
+                    "t_us": t,
+                    "id": j.id,
+                    "chips": j.gangs[0].chips,
+                    "duration_s": j.true_duration_s,
+                    "walltime_s": j.walltime_est_s,
+                    "outcome": str(j.terminal_status_override),
+                    "tenant": j.tenant,
+                }
             )
-            tenants.append(j.tenant)
-        core = hashlib.sha256(repr(rows).encode()).hexdigest()
-        tenant = hashlib.sha256(repr(tenants).encode()).hexdigest()
-        assert core == self.V01_CORE_FINGERPRINT
-        assert tenant == self.V02_TENANT_FINGERPRINT
+        return rows
+
+    def test_examples_01_minimal_deterministic_in_process(self):
+        # Exact equality is the contract on a fixed platform.
+        assert self._drain_example_01() == self._drain_example_01()
+
+    def test_examples_01_minimal_regression(self):
+        rows = self._drain_example_01()
+        golden = json.loads(self.GOLDEN.read_text())
+
+        # Aggregate shape: ULP flips can move an arrival across the horizon
+        # edge, so allow +/-2 on counts; wholesale logic changes move these
+        # by orders of magnitude.
+        assert abs(len(rows) - golden["total"]) <= 2
+        per_class: dict[str, int] = {}
+        for r in rows:
+            cls = r["id"].rsplit("-", 1)[0]
+            per_class[cls] = per_class.get(cls, 0) + 1
+        for cls, n in golden["per_class"].items():
+            assert abs(per_class.get(cls, 0) - n) <= 2, (cls, per_class.get(cls), n)
+
+        def row_matches(got: dict, exp: dict) -> bool:
+            if got["id"] != exp["id"] or got["chips"] != exp["chips"]:
+                return False
+            if abs(got["t_us"] - exp["t_us"]) > 2:
+                return False
+            for key in ("duration_s", "walltime_s"):
+                g, e = got[key], exp[key]
+                if (g is None) != (e is None):
+                    return False
+                # Golden values are stored at 9 significant digits (rel
+                # error <= 5e-9); 1e-6 clears that plus libm ULP noise.
+                if g is not None and abs(g - e) > 1e-6 * max(abs(g), abs(e), 1.0):
+                    return False
+            return got["outcome"] == exp["outcome"] and got["tenant"] == exp["tenant"]
+
+        checked = golden["rows"]
+        mismatches = sum(
+            0 if row_matches(got, exp) else 1
+            for got, exp in zip(rows[: len(checked)], checked)
+        )
+        # Knife-edge uniform-vs-threshold draws (outcome, tenant) may flip on
+        # a 1-ULP pmf difference; a real regression flips nearly every row.
+        assert mismatches <= 5, f"{mismatches} of {len(checked)} golden rows diverged"
 
     def test_diurnal_sugar_equals_explicit_nhpp_v01_steps(self):
         legacy = {"eval": dict(EVAL, diurnal=True)}

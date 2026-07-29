@@ -165,12 +165,17 @@ seed)`. Named independent RNG streams (`arrivals/<class>`,
 `size/<class>`, `failures`, `repair`, `maintenance`, ...) mean enabling
 failure injection never perturbs the arrival sequence — A/B scheduler
 comparisons are paired experiments, not noise. Identical `(scenario,
-seed)` produce **byte-identical** Parquet and JSON outputs
-(`validation/test_determinism.py` enforces this in CI, alongside
+seed)` produce **byte-identical** Parquet and JSON outputs on a given
+platform (`validation/test_determinism.py` enforces this in CI). Across
+OS/architectures, results may differ by float ULPs: the lognormal and
+exponential samplers route through the platform libm, whose `exp`/`log`
+differ in the last bit between e.g. glibc and Apple's libm — so
+cross-platform regression tests compare with tolerances, never golden
+hashes (`tests/test_traffic_v02.py::TestBackwardCompat`). CI also runs
 closed-form queueing rungs — M/M/c vs Erlang-C, Pollaczek–Khinchine
 M/G/1 under lognormal service, preemptive-resume priority M/G/1
 per-class sojourns, best-effort backlog shielding — and invariant
-property tests).
+property tests.
 
 ## License
 

@@ -1,0 +1,9011 @@
+{
+ "comment": "First 1000 arrivals of examples/01_minimal at v0.2 (seed 42), verified equivalent to the v0.1 generator for v0.1-feature scenarios. Continuous values rounded to 9 significant digits; compared with tolerances because libm (exp/log) differs by ULPs across platforms.",
+ "total": 14552,
+ "per_class": {
+  "finetune": 1266,
+  "eval": 13281,
+  "pretrain": 5
+ },
+ "rows": [
+  {
+   "t_us": 119693429,
+   "id": "finetune-0",
+   "chips": 16,
+   "duration_s": 2734.96614,
+   "walltime_s": 5117.32943,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 292401929,
+   "id": "eval-0",
+   "chips": 2,
+   "duration_s": 78.4361878,
+   "walltime_s": 200.800094,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 410998856,
+   "id": "eval-1",
+   "chips": 8,
+   "duration_s": 825.421432,
+   "walltime_s": 1367.61332,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 412171532,
+   "id": "eval-2",
+   "chips": 2,
+   "duration_s": 456.361643,
+   "walltime_s": 762.711223,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 561303090,
+   "id": "finetune-1",
+   "chips": 16,
+   "duration_s": 319.316535,
+   "walltime_s": 94026.9005,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 721363887,
+   "id": "finetune-2",
+   "chips": 32,
+   "duration_s": 2430.43484,
+   "walltime_s": 2240.68044,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 977871932,
+   "id": "eval-3",
+   "chips": 1,
+   "duration_s": 20.2372986,
+   "walltime_s": 29.0057024,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 1111303958,
+   "id": "eval-4",
+   "chips": 8,
+   "duration_s": 0.889509057,
+   "walltime_s": 2.06782708,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 1164202560,
+   "id": "eval-5",
+   "chips": 4,
+   "duration_s": 0.066542012,
+   "walltime_s": 5.77731092,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 1321132270,
+   "id": "eval-6",
+   "chips": 2,
+   "duration_s": 2545.50442,
+   "walltime_s": 2429.18124,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 1328453607,
+   "id": "eval-7",
+   "chips": 8,
+   "duration_s": 5.04366226,
+   "walltime_s": 73.9801799,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 1433113000,
+   "id": "eval-8",
+   "chips": 1,
+   "duration_s": 272.206169,
+   "walltime_s": 142.956507,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 1761471953,
+   "id": "eval-9",
+   "chips": 1,
+   "duration_s": 190.504717,
+   "walltime_s": 200.250948,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 1923197574,
+   "id": "finetune-3",
+   "chips": 64,
+   "duration_s": 908.866277,
+   "walltime_s": 1567.48232,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 1953838218,
+   "id": "eval-10",
+   "chips": 8,
+   "duration_s": 3386.06003,
+   "walltime_s": 7232.86772,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2391282929,
+   "id": "eval-11",
+   "chips": 4,
+   "duration_s": 1025.65684,
+   "walltime_s": 1046.24844,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2739019480,
+   "id": "eval-12",
+   "chips": 8,
+   "duration_s": 45.4973598,
+   "walltime_s": 34.1843249,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2858329130,
+   "id": "eval-13",
+   "chips": 8,
+   "duration_s": 68.5492786,
+   "walltime_s": 136.797476,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2894977906,
+   "id": "eval-14",
+   "chips": 1,
+   "duration_s": 79.2347906,
+   "walltime_s": 192.456845,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2930067804,
+   "id": "eval-15",
+   "chips": 4,
+   "duration_s": 3.32960125,
+   "walltime_s": 5.81035287,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 2957311106,
+   "id": "eval-16",
+   "chips": 4,
+   "duration_s": 19.6145208,
+   "walltime_s": 114.778471,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 2979022317,
+   "id": "eval-17",
+   "chips": 8,
+   "duration_s": 514.821677,
+   "walltime_s": 1391.94823,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 3020864852,
+   "id": "finetune-4",
+   "chips": 16,
+   "duration_s": 2313.94741,
+   "walltime_s": 2687.12626,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 3136694618,
+   "id": "eval-18",
+   "chips": 2,
+   "duration_s": 7534.66198,
+   "walltime_s": 9250.66393,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 3410304446,
+   "id": "finetune-5",
+   "chips": 16,
+   "duration_s": 9127.47742,
+   "walltime_s": 32300.2254,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 3411705621,
+   "id": "eval-19",
+   "chips": 8,
+   "duration_s": 185.40703,
+   "walltime_s": 193.789097,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 3588648007,
+   "id": "eval-20",
+   "chips": 4,
+   "duration_s": 477.968403,
+   "walltime_s": 684.865161,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 3846746213,
+   "id": "eval-21",
+   "chips": 1,
+   "duration_s": 715.121409,
+   "walltime_s": 1685.63065,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 4209851659,
+   "id": "eval-22",
+   "chips": 1,
+   "duration_s": 366.795967,
+   "walltime_s": 244.262064,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 4250320864,
+   "id": "eval-23",
+   "chips": 2,
+   "duration_s": 57.3962245,
+   "walltime_s": 124.113811,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 4284030421,
+   "id": "eval-24",
+   "chips": 4,
+   "duration_s": 13.1732176,
+   "walltime_s": 84.0468568,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 4316313911,
+   "id": "eval-25",
+   "chips": 1,
+   "duration_s": 1544.60534,
+   "walltime_s": 1722.38997,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 4381941139,
+   "id": "eval-26",
+   "chips": 8,
+   "duration_s": 207.388465,
+   "walltime_s": 348.606812,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 4472725557,
+   "id": "eval-27",
+   "chips": 8,
+   "duration_s": 11409.9615,
+   "walltime_s": 26340.8886,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 4634617589,
+   "id": "eval-28",
+   "chips": 4,
+   "duration_s": 1198.7889,
+   "walltime_s": 4713.15666,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 4847408223,
+   "id": "eval-29",
+   "chips": 8,
+   "duration_s": 289.087042,
+   "walltime_s": 646.85179,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 5060754833,
+   "id": "eval-30",
+   "chips": 1,
+   "duration_s": 5.03815635,
+   "walltime_s": 5.63780604,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 5125878884,
+   "id": "eval-31",
+   "chips": 1,
+   "duration_s": 382.069933,
+   "walltime_s": 652.180674,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 5338625361,
+   "id": "eval-32",
+   "chips": 1,
+   "duration_s": 1222.91841,
+   "walltime_s": 2088.77,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 5413125940,
+   "id": "finetune-6",
+   "chips": 32,
+   "duration_s": 38388.5834,
+   "walltime_s": 59634.8727,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 5868623930,
+   "id": "eval-33",
+   "chips": 4,
+   "duration_s": 5.35426609,
+   "walltime_s": 19.5987257,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 5908630940,
+   "id": "eval-34",
+   "chips": 4,
+   "duration_s": 6.72643193,
+   "walltime_s": 111.810053,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 5977010148,
+   "id": "eval-35",
+   "chips": 2,
+   "duration_s": 0.574094491,
+   "walltime_s": 7.49937347,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 5980361278,
+   "id": "finetune-7",
+   "chips": 64,
+   "duration_s": 10993.9196,
+   "walltime_s": 22706.9353,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 6328270184,
+   "id": "eval-36",
+   "chips": 8,
+   "duration_s": 1184.27092,
+   "walltime_s": 644.389762,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 6388345479,
+   "id": "finetune-8",
+   "chips": 8,
+   "duration_s": 19879.638,
+   "walltime_s": 40534.8414,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 6430233001,
+   "id": "eval-37",
+   "chips": 8,
+   "duration_s": 733.512461,
+   "walltime_s": 1361.74577,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 6611619127,
+   "id": "eval-38",
+   "chips": 8,
+   "duration_s": 24.54836,
+   "walltime_s": 87.4156401,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 6825414185,
+   "id": "eval-39",
+   "chips": 1,
+   "duration_s": 9.57612329,
+   "walltime_s": 19.0121178,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 6947098740,
+   "id": "eval-40",
+   "chips": 4,
+   "duration_s": 7414.94142,
+   "walltime_s": 15231.7066,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 7087387129,
+   "id": "eval-41",
+   "chips": 8,
+   "duration_s": 32.7861309,
+   "walltime_s": 344.466354,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 7604179796,
+   "id": "eval-42",
+   "chips": 2,
+   "duration_s": 5412.45029,
+   "walltime_s": 5298.25786,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 7652535137,
+   "id": "finetune-9",
+   "chips": 32,
+   "duration_s": 14794.7763,
+   "walltime_s": 30814.7721,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 7869292187,
+   "id": "eval-43",
+   "chips": 4,
+   "duration_s": 622.59088,
+   "walltime_s": 2780.98648,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 7959829054,
+   "id": "finetune-10",
+   "chips": 64,
+   "duration_s": 18717.9067,
+   "walltime_s": 68818.9167,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 7963121159,
+   "id": "eval-44",
+   "chips": 1,
+   "duration_s": 2.98063945,
+   "walltime_s": 18.6592018,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 8012063858,
+   "id": "eval-45",
+   "chips": 1,
+   "duration_s": 105.883944,
+   "walltime_s": 226.589181,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 8055724096,
+   "id": "eval-46",
+   "chips": 1,
+   "duration_s": 2.99259001,
+   "walltime_s": 287.448876,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 8158990921,
+   "id": "eval-47",
+   "chips": 8,
+   "duration_s": 26.8425066,
+   "walltime_s": 60.6338187,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 8306620697,
+   "id": "finetune-11",
+   "chips": 32,
+   "duration_s": 6973.60921,
+   "walltime_s": 12191.4601,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 8396763440,
+   "id": "eval-48",
+   "chips": 4,
+   "duration_s": 10.3564279,
+   "walltime_s": 12.1033049,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 8650963524,
+   "id": "eval-49",
+   "chips": 4,
+   "duration_s": 30.1889884,
+   "walltime_s": 302.33331,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 8775694296,
+   "id": "eval-50",
+   "chips": 8,
+   "duration_s": 111.08901,
+   "walltime_s": 196.406378,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 8907157650,
+   "id": "eval-51",
+   "chips": 8,
+   "duration_s": 34.910538,
+   "walltime_s": 701.973873,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 8911987239,
+   "id": "eval-52",
+   "chips": 2,
+   "duration_s": 30.5415118,
+   "walltime_s": 133.872174,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 9030511555,
+   "id": "eval-53",
+   "chips": 1,
+   "duration_s": 469.884425,
+   "walltime_s": 235.860691,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 9076838193,
+   "id": "eval-54",
+   "chips": 4,
+   "duration_s": 3.65602358,
+   "walltime_s": 3.29459526,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 9142927959,
+   "id": "eval-55",
+   "chips": 1,
+   "duration_s": 2.79590042,
+   "walltime_s": 3.64443274,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9203065139,
+   "id": "eval-56",
+   "chips": 8,
+   "duration_s": 30.5651654,
+   "walltime_s": 17.4477196,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 9259450239,
+   "id": "eval-57",
+   "chips": 1,
+   "duration_s": 71.916205,
+   "walltime_s": 73.5791001,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9274127384,
+   "id": "eval-58",
+   "chips": 8,
+   "duration_s": 904.050444,
+   "walltime_s": 1692.62782,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9284916073,
+   "id": "eval-59",
+   "chips": 1,
+   "duration_s": 5691.03639,
+   "walltime_s": 15046.5408,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9299779824,
+   "id": "eval-60",
+   "chips": 1,
+   "duration_s": 792.167815,
+   "walltime_s": 2819.51686,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 9361899515,
+   "id": "eval-61",
+   "chips": 1,
+   "duration_s": 172.690307,
+   "walltime_s": 568.897451,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 9437571922,
+   "id": "eval-62",
+   "chips": 2,
+   "duration_s": 156.082735,
+   "walltime_s": 426.009439,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9502063774,
+   "id": "eval-63",
+   "chips": 8,
+   "duration_s": 528.897392,
+   "walltime_s": 1364.87346,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 9541491074,
+   "id": "eval-64",
+   "chips": 8,
+   "duration_s": 2756.17793,
+   "walltime_s": 3711.9123,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 9701531281,
+   "id": "finetune-12",
+   "chips": 16,
+   "duration_s": 109976.1,
+   "walltime_s": 160446.001,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 9836463966,
+   "id": "eval-65",
+   "chips": 8,
+   "duration_s": 623.923059,
+   "walltime_s": 875.352254,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 10433874938,
+   "id": "eval-66",
+   "chips": 2,
+   "duration_s": 12.3676842,
+   "walltime_s": 11.4111531,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 10618579277,
+   "id": "eval-67",
+   "chips": 2,
+   "duration_s": 438.764126,
+   "walltime_s": 921.050817,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 10640173733,
+   "id": "eval-68",
+   "chips": 1,
+   "duration_s": 32.8089754,
+   "walltime_s": 57.7380401,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 11136973494,
+   "id": "eval-69",
+   "chips": 1,
+   "duration_s": 6.64739616,
+   "walltime_s": 18.7861816,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 11324112403,
+   "id": "eval-70",
+   "chips": 2,
+   "duration_s": 16.0467361,
+   "walltime_s": 790.820341,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 11408473333,
+   "id": "eval-71",
+   "chips": 4,
+   "duration_s": 532.705654,
+   "walltime_s": 1708.40005,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 11471584355,
+   "id": "eval-72",
+   "chips": 2,
+   "duration_s": 2.62327802,
+   "walltime_s": 1.74818176,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 11473329750,
+   "id": "eval-73",
+   "chips": 4,
+   "duration_s": 3600.32577,
+   "walltime_s": 8275.45652,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 11517322933,
+   "id": "eval-74",
+   "chips": 2,
+   "duration_s": 9.45864854,
+   "walltime_s": 9.29171981,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 11783259850,
+   "id": "eval-75",
+   "chips": 4,
+   "duration_s": 0.0244337368,
+   "walltime_s": 32.757721,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 12114739383,
+   "id": "eval-76",
+   "chips": 8,
+   "duration_s": 27.2365924,
+   "walltime_s": 41.5457019,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 12274844781,
+   "id": "finetune-13",
+   "chips": 64,
+   "duration_s": 17050.4483,
+   "walltime_s": 58107.4274,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 12290811475,
+   "id": "eval-77",
+   "chips": 2,
+   "duration_s": 220.911642,
+   "walltime_s": 147.893718,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 12557031314,
+   "id": "eval-78",
+   "chips": 4,
+   "duration_s": 8.53783026,
+   "walltime_s": 595.248479,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 12592859910,
+   "id": "eval-79",
+   "chips": 8,
+   "duration_s": 667.272636,
+   "walltime_s": 1326.96586,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 12809132851,
+   "id": "eval-80",
+   "chips": 4,
+   "duration_s": 223.977847,
+   "walltime_s": 182.101628,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 12839870918,
+   "id": "eval-81",
+   "chips": 4,
+   "duration_s": 19.0357273,
+   "walltime_s": 19.655035,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 12849372723,
+   "id": "eval-82",
+   "chips": 1,
+   "duration_s": 994.915492,
+   "walltime_s": 2471.0206,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 12894882102,
+   "id": "eval-83",
+   "chips": 2,
+   "duration_s": 273.805127,
+   "walltime_s": 253.210309,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 13147325841,
+   "id": "eval-84",
+   "chips": 2,
+   "duration_s": 210.021445,
+   "walltime_s": 293.528334,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 13352322684,
+   "id": "finetune-14",
+   "chips": 8,
+   "duration_s": 13053.2811,
+   "walltime_s": 10703.5411,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 13528945908,
+   "id": "eval-85",
+   "chips": 2,
+   "duration_s": 462.019356,
+   "walltime_s": 1218.89633,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 13693040305,
+   "id": "eval-86",
+   "chips": 1,
+   "duration_s": 19.7911653,
+   "walltime_s": 74.0780092,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 13715209717,
+   "id": "eval-87",
+   "chips": 4,
+   "duration_s": 1.79127666,
+   "walltime_s": 162.797745,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 13751428835,
+   "id": "eval-88",
+   "chips": 2,
+   "duration_s": 3.04582912,
+   "walltime_s": 16.7468507,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 13984420323,
+   "id": "eval-89",
+   "chips": 1,
+   "duration_s": 405.265482,
+   "walltime_s": 824.978794,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 14127410422,
+   "id": "finetune-15",
+   "chips": 64,
+   "duration_s": 1815.11628,
+   "walltime_s": 39247.5586,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 14648145897,
+   "id": "finetune-16",
+   "chips": 16,
+   "duration_s": 13151.5993,
+   "walltime_s": 9750.01986,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 14690583737,
+   "id": "eval-90",
+   "chips": 4,
+   "duration_s": 0.607804317,
+   "walltime_s": 6.42175679,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 14714515905,
+   "id": "finetune-17",
+   "chips": 64,
+   "duration_s": 714.071882,
+   "walltime_s": 8129.7998,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 14913642500,
+   "id": "eval-91",
+   "chips": 8,
+   "duration_s": 0.55672373,
+   "walltime_s": 0.617045419,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 14963921682,
+   "id": "eval-92",
+   "chips": 8,
+   "duration_s": 2.23881533,
+   "walltime_s": 9.48793515,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 15021496776,
+   "id": "eval-93",
+   "chips": 8,
+   "duration_s": 16.0853169,
+   "walltime_s": 22.015954,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 15033300383,
+   "id": "eval-94",
+   "chips": 8,
+   "duration_s": 29.4554109,
+   "walltime_s": 12.2496666,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 15231738869,
+   "id": "eval-95",
+   "chips": 2,
+   "duration_s": 117.759376,
+   "walltime_s": 237.433626,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 15299192615,
+   "id": "eval-96",
+   "chips": 2,
+   "duration_s": 516.317255,
+   "walltime_s": 747.294893,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 15441774399,
+   "id": "eval-97",
+   "chips": 2,
+   "duration_s": 773.855812,
+   "walltime_s": 514.846732,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 15500003884,
+   "id": "eval-98",
+   "chips": 1,
+   "duration_s": 657.174638,
+   "walltime_s": 595.204475,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 15603149029,
+   "id": "finetune-18",
+   "chips": 64,
+   "duration_s": 76482.8697,
+   "walltime_s": 163140.365,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 15643543736,
+   "id": "finetune-19",
+   "chips": 8,
+   "duration_s": 24572.8943,
+   "walltime_s": 11593.7556,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 15698097284,
+   "id": "eval-99",
+   "chips": 4,
+   "duration_s": 178.976794,
+   "walltime_s": 203.831748,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 15796604634,
+   "id": "eval-100",
+   "chips": 1,
+   "duration_s": 7655.55628,
+   "walltime_s": 67387.6738,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 15917791261,
+   "id": "eval-101",
+   "chips": 4,
+   "duration_s": 1095.88684,
+   "walltime_s": 1567.14117,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 16058720019,
+   "id": "eval-102",
+   "chips": 8,
+   "duration_s": 13.72878,
+   "walltime_s": 14.4560633,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 16228695103,
+   "id": "eval-103",
+   "chips": 4,
+   "duration_s": 6.21956294,
+   "walltime_s": 3.82326661,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 16297854043,
+   "id": "eval-104",
+   "chips": 4,
+   "duration_s": 1188.93935,
+   "walltime_s": 2697.48732,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 16316432468,
+   "id": "finetune-20",
+   "chips": 32,
+   "duration_s": 44614.9931,
+   "walltime_s": 68709.3108,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 16346897699,
+   "id": "eval-105",
+   "chips": 2,
+   "duration_s": 1820.41648,
+   "walltime_s": 4798.0766,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 16543832006,
+   "id": "eval-106",
+   "chips": 2,
+   "duration_s": 14.9779912,
+   "walltime_s": 201.528254,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 16604406488,
+   "id": "eval-107",
+   "chips": 2,
+   "duration_s": 68.3350873,
+   "walltime_s": 66.9436514,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 16798058266,
+   "id": "eval-108",
+   "chips": 2,
+   "duration_s": 19.2483102,
+   "walltime_s": 843.766041,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 16897127411,
+   "id": "eval-109",
+   "chips": 2,
+   "duration_s": 113.137958,
+   "walltime_s": 112.483547,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 16917668783,
+   "id": "eval-110",
+   "chips": 2,
+   "duration_s": 7.82316851,
+   "walltime_s": 12.9651772,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 16955417513,
+   "id": "eval-111",
+   "chips": 2,
+   "duration_s": 505.353739,
+   "walltime_s": 965.777372,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 17060525296,
+   "id": "eval-112",
+   "chips": 1,
+   "duration_s": 0.017574441,
+   "walltime_s": 41.9456248,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 17137435772,
+   "id": "eval-113",
+   "chips": 4,
+   "duration_s": 11.7110414,
+   "walltime_s": 12.497319,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 17260014589,
+   "id": "eval-114",
+   "chips": 4,
+   "duration_s": 222.111629,
+   "walltime_s": 143.297105,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 17275799196,
+   "id": "eval-115",
+   "chips": 2,
+   "duration_s": 134.358187,
+   "walltime_s": 96.7982138,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 17591951258,
+   "id": "eval-116",
+   "chips": 2,
+   "duration_s": 107.2394,
+   "walltime_s": 270.008548,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 17593908198,
+   "id": "eval-117",
+   "chips": 2,
+   "duration_s": 41.5029002,
+   "walltime_s": 169.214009,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 17644186619,
+   "id": "eval-118",
+   "chips": 4,
+   "duration_s": 2.13342402,
+   "walltime_s": 0.880552081,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 17828329989,
+   "id": "eval-119",
+   "chips": 2,
+   "duration_s": 9.52190047,
+   "walltime_s": 24.8465966,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 17894608409,
+   "id": "eval-120",
+   "chips": 2,
+   "duration_s": 58.7530932,
+   "walltime_s": 143.913403,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 17906547780,
+   "id": "eval-121",
+   "chips": 2,
+   "duration_s": 199.48289,
+   "walltime_s": 165.387772,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 17911102046,
+   "id": "eval-122",
+   "chips": 1,
+   "duration_s": 688.154441,
+   "walltime_s": 770.686938,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 17978683755,
+   "id": "eval-123",
+   "chips": 8,
+   "duration_s": 230.82693,
+   "walltime_s": 312.366883,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 18085877427,
+   "id": "eval-124",
+   "chips": 4,
+   "duration_s": 57.594943,
+   "walltime_s": 89.0163665,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 18107935049,
+   "id": "eval-125",
+   "chips": 4,
+   "duration_s": 809.147802,
+   "walltime_s": 3739.07928,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 18190637714,
+   "id": "eval-126",
+   "chips": 8,
+   "duration_s": 0.600844967,
+   "walltime_s": 7.22285019,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 18459038042,
+   "id": "eval-127",
+   "chips": 2,
+   "duration_s": 66.7873581,
+   "walltime_s": 160.203218,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 18520937480,
+   "id": "eval-128",
+   "chips": 2,
+   "duration_s": 921.582083,
+   "walltime_s": 896.363348,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 18531141852,
+   "id": "eval-129",
+   "chips": 1,
+   "duration_s": 4.08996962,
+   "walltime_s": 2506.55423,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 18657196157,
+   "id": "finetune-21",
+   "chips": 32,
+   "duration_s": 13006.5502,
+   "walltime_s": 47594.3083,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 18700556865,
+   "id": "eval-130",
+   "chips": 4,
+   "duration_s": 133.627103,
+   "walltime_s": 129.3433,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 18911968173,
+   "id": "eval-131",
+   "chips": 1,
+   "duration_s": 4216.13198,
+   "walltime_s": 7589.55563,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 18937711092,
+   "id": "finetune-22",
+   "chips": 32,
+   "duration_s": 4529.12257,
+   "walltime_s": 66272.9886,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 19100028971,
+   "id": "eval-132",
+   "chips": 8,
+   "duration_s": 1174.24404,
+   "walltime_s": 1705.51051,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 19397039471,
+   "id": "eval-133",
+   "chips": 1,
+   "duration_s": 3604.53888,
+   "walltime_s": 5195.76645,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 19715537191,
+   "id": "eval-134",
+   "chips": 1,
+   "duration_s": 14.6485853,
+   "walltime_s": 79.2878552,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 20019275229,
+   "id": "finetune-23",
+   "chips": 64,
+   "duration_s": 38999.2403,
+   "walltime_s": 33420.6393,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 20048529704,
+   "id": "eval-135",
+   "chips": 8,
+   "duration_s": 13.0055455,
+   "walltime_s": 47.6076841,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 20198659325,
+   "id": "finetune-24",
+   "chips": 64,
+   "duration_s": 17124.4699,
+   "walltime_s": 26242.8886,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 20348253960,
+   "id": "eval-136",
+   "chips": 1,
+   "duration_s": 509.954796,
+   "walltime_s": 803.872113,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 20493028876,
+   "id": "eval-137",
+   "chips": 1,
+   "duration_s": 45.7850429,
+   "walltime_s": 32.2008194,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 20506363169,
+   "id": "eval-138",
+   "chips": 1,
+   "duration_s": 2.58569408,
+   "walltime_s": 18.0402713,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 21191966943,
+   "id": "finetune-25",
+   "chips": 16,
+   "duration_s": 4253.67312,
+   "walltime_s": 9563.22973,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21496589841,
+   "id": "finetune-26",
+   "chips": 16,
+   "duration_s": 121.728621,
+   "walltime_s": 10847.3828,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21575220606,
+   "id": "eval-139",
+   "chips": 1,
+   "duration_s": 46.1694001,
+   "walltime_s": 121.280845,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21598939126,
+   "id": "eval-140",
+   "chips": 4,
+   "duration_s": 222.116207,
+   "walltime_s": 159.359424,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 21599695138,
+   "id": "eval-141",
+   "chips": 1,
+   "duration_s": 10.8892042,
+   "walltime_s": 260.449768,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 21677198407,
+   "id": "eval-142",
+   "chips": 1,
+   "duration_s": 52.2284067,
+   "walltime_s": 94.8829696,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 21696916614,
+   "id": "finetune-27",
+   "chips": 64,
+   "duration_s": 83198.5944,
+   "walltime_s": 74626.7405,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21785072241,
+   "id": "eval-143",
+   "chips": 4,
+   "duration_s": 236.97606,
+   "walltime_s": 763.63745,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21845487026,
+   "id": "eval-144",
+   "chips": 1,
+   "duration_s": 34.5292908,
+   "walltime_s": 143.840721,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 21895563454,
+   "id": "eval-145",
+   "chips": 4,
+   "duration_s": 9.28412551,
+   "walltime_s": 6.31362406,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 21922924164,
+   "id": "eval-146",
+   "chips": 2,
+   "duration_s": 19.1958402,
+   "walltime_s": 50.0489487,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 21931484139,
+   "id": "eval-147",
+   "chips": 1,
+   "duration_s": 71.4957078,
+   "walltime_s": 243.304305,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 21987562340,
+   "id": "finetune-28",
+   "chips": 16,
+   "duration_s": 57083.0783,
+   "walltime_s": 125521.715,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 22037806812,
+   "id": "eval-148",
+   "chips": 2,
+   "duration_s": 543.045422,
+   "walltime_s": 1451.93554,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 22045815392,
+   "id": "eval-149",
+   "chips": 2,
+   "duration_s": 588.378935,
+   "walltime_s": 3001.6884,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22081973241,
+   "id": "eval-150",
+   "chips": 4,
+   "duration_s": 10.0951456,
+   "walltime_s": 43.397814,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22101339015,
+   "id": "eval-151",
+   "chips": 1,
+   "duration_s": 1.09686266,
+   "walltime_s": 21.1148579,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22118132085,
+   "id": "eval-152",
+   "chips": 8,
+   "duration_s": 257.229874,
+   "walltime_s": 464.168086,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22137186529,
+   "id": "eval-153",
+   "chips": 4,
+   "duration_s": 162.505156,
+   "walltime_s": 206.974163,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22166378118,
+   "id": "eval-154",
+   "chips": 1,
+   "duration_s": 65.5934344,
+   "walltime_s": 59.3621543,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 22271256013,
+   "id": "eval-155",
+   "chips": 8,
+   "duration_s": 62.6534577,
+   "walltime_s": 76.551489,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22331262562,
+   "id": "finetune-29",
+   "chips": 8,
+   "duration_s": 39602.3518,
+   "walltime_s": 33619.2631,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22465629931,
+   "id": "eval-156",
+   "chips": 1,
+   "duration_s": 8.39024439,
+   "walltime_s": 11.4296482,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 22610778310,
+   "id": "eval-157",
+   "chips": 2,
+   "duration_s": 1650.17485,
+   "walltime_s": 674.047948,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 22706450835,
+   "id": "eval-158",
+   "chips": 4,
+   "duration_s": 382.204611,
+   "walltime_s": 426.116863,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 22824425739,
+   "id": "eval-159",
+   "chips": 2,
+   "duration_s": 66.7228764,
+   "walltime_s": 487.404181,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 22856200648,
+   "id": "eval-160",
+   "chips": 1,
+   "duration_s": 0.259214216,
+   "walltime_s": 1.22982615,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 22991477635,
+   "id": "eval-161",
+   "chips": 4,
+   "duration_s": 54793.6719,
+   "walltime_s": 57761.5266,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 23161932479,
+   "id": "finetune-30",
+   "chips": 64,
+   "duration_s": 1992.59234,
+   "walltime_s": 75864.5439,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 23200751618,
+   "id": "eval-162",
+   "chips": 1,
+   "duration_s": 296.174859,
+   "walltime_s": 244.277782,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 23283240179,
+   "id": "eval-163",
+   "chips": 8,
+   "duration_s": 70.1462598,
+   "walltime_s": 59.5114146,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 23299960704,
+   "id": "eval-164",
+   "chips": 1,
+   "duration_s": 770.753813,
+   "walltime_s": 1076.61443,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 23358688707,
+   "id": "eval-165",
+   "chips": 8,
+   "duration_s": 17.5086674,
+   "walltime_s": 25.5777034,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 23387559116,
+   "id": "eval-166",
+   "chips": 2,
+   "duration_s": 0.403835908,
+   "walltime_s": 20.999576,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 23391582814,
+   "id": "eval-167",
+   "chips": 8,
+   "duration_s": 86.5023557,
+   "walltime_s": 210.076333,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 23518254252,
+   "id": "eval-168",
+   "chips": 2,
+   "duration_s": 36.5882755,
+   "walltime_s": 48.514182,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 23563503135,
+   "id": "eval-169",
+   "chips": 8,
+   "duration_s": 63.7890378,
+   "walltime_s": 81.5540919,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 23572298143,
+   "id": "finetune-31",
+   "chips": 16,
+   "duration_s": 19788.7973,
+   "walltime_s": 72950.3108,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 23591208941,
+   "id": "eval-170",
+   "chips": 1,
+   "duration_s": 5347.59715,
+   "walltime_s": 13038.418,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 23602320974,
+   "id": "eval-171",
+   "chips": 8,
+   "duration_s": 67.9789625,
+   "walltime_s": 120.92201,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 23628040938,
+   "id": "eval-172",
+   "chips": 1,
+   "duration_s": 12.5896566,
+   "walltime_s": 17.9975871,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 23669895822,
+   "id": "eval-173",
+   "chips": 2,
+   "duration_s": 5.50991447,
+   "walltime_s": 69.279725,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 23712375238,
+   "id": "eval-174",
+   "chips": 8,
+   "duration_s": 0.0747075338,
+   "walltime_s": 94.1146232,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 23780602494,
+   "id": "eval-175",
+   "chips": 2,
+   "duration_s": 10.0570885,
+   "walltime_s": 96.8507419,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24109543346,
+   "id": "eval-176",
+   "chips": 2,
+   "duration_s": 82.2072287,
+   "walltime_s": 62.2895826,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 24155582940,
+   "id": "eval-177",
+   "chips": 2,
+   "duration_s": 228.775789,
+   "walltime_s": 182.176881,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 24197071688,
+   "id": "eval-178",
+   "chips": 4,
+   "duration_s": 429.017942,
+   "walltime_s": 380.748122,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 24199022718,
+   "id": "eval-179",
+   "chips": 8,
+   "duration_s": 4174.06459,
+   "walltime_s": 10440.1453,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 24407924461,
+   "id": "eval-180",
+   "chips": 4,
+   "duration_s": 33.1164349,
+   "walltime_s": 35.2507248,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24589271907,
+   "id": "eval-181",
+   "chips": 1,
+   "duration_s": 384.134337,
+   "walltime_s": 1079.01563,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24609702481,
+   "id": "eval-182",
+   "chips": 8,
+   "duration_s": 8.91596143,
+   "walltime_s": 25.4060694,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 24699782304,
+   "id": "eval-183",
+   "chips": 2,
+   "duration_s": 418.661021,
+   "walltime_s": 786.741314,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 24772406924,
+   "id": "eval-184",
+   "chips": 1,
+   "duration_s": 26.3790737,
+   "walltime_s": 26.9868742,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24950815629,
+   "id": "eval-185",
+   "chips": 2,
+   "duration_s": 0.218337072,
+   "walltime_s": 53.8532923,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24960323760,
+   "id": "eval-186",
+   "chips": 4,
+   "duration_s": 1.84173281,
+   "walltime_s": 1.90837245,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 24992716145,
+   "id": "finetune-32",
+   "chips": 8,
+   "duration_s": 13578.3741,
+   "walltime_s": 254784.479,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 25029353610,
+   "id": "eval-187",
+   "chips": 1,
+   "duration_s": 6019.01794,
+   "walltime_s": 12469.085,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 25069024115,
+   "id": "finetune-33",
+   "chips": 64,
+   "duration_s": 11091.8972,
+   "walltime_s": 23003.5915,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 25174098430,
+   "id": "eval-188",
+   "chips": 2,
+   "duration_s": 209.481669,
+   "walltime_s": 166.679036,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 25298298401,
+   "id": "eval-189",
+   "chips": 2,
+   "duration_s": 79.9162784,
+   "walltime_s": 107.088087,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 25372708052,
+   "id": "eval-190",
+   "chips": 4,
+   "duration_s": 767.068415,
+   "walltime_s": 1367.14024,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 25600732375,
+   "id": "eval-191",
+   "chips": 1,
+   "duration_s": 47.7330386,
+   "walltime_s": 251.588399,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 25646942579,
+   "id": "eval-192",
+   "chips": 8,
+   "duration_s": 256.46025,
+   "walltime_s": 490.078912,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 25719886570,
+   "id": "eval-193",
+   "chips": 2,
+   "duration_s": 34.4631585,
+   "walltime_s": 73.9122396,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 25726046726,
+   "id": "eval-194",
+   "chips": 1,
+   "duration_s": 190.670388,
+   "walltime_s": 393.22638,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 25731244712,
+   "id": "eval-195",
+   "chips": 1,
+   "duration_s": 245.946755,
+   "walltime_s": 275.362098,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 25745025729,
+   "id": "eval-196",
+   "chips": 2,
+   "duration_s": 792.824897,
+   "walltime_s": 941.750049,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 25856915661,
+   "id": "eval-197",
+   "chips": 8,
+   "duration_s": 9744.29653,
+   "walltime_s": 10048.4408,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 25857477187,
+   "id": "eval-198",
+   "chips": 2,
+   "duration_s": 514.810173,
+   "walltime_s": 638.273132,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 25875414216,
+   "id": "eval-199",
+   "chips": 1,
+   "duration_s": 2481.98565,
+   "walltime_s": 1867.28297,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 25933023599,
+   "id": "eval-200",
+   "chips": 4,
+   "duration_s": 1085.61504,
+   "walltime_s": 1875.26736,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 25939889119,
+   "id": "eval-201",
+   "chips": 4,
+   "duration_s": 4.588678,
+   "walltime_s": 13.7527915,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 25997834129,
+   "id": "finetune-34",
+   "chips": 32,
+   "duration_s": 2548.78963,
+   "walltime_s": 7467.43401,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 26008001690,
+   "id": "eval-202",
+   "chips": 8,
+   "duration_s": 0.283024912,
+   "walltime_s": 267.313521,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26020662441,
+   "id": "eval-203",
+   "chips": 4,
+   "duration_s": 4.62573747,
+   "walltime_s": 12.0091475,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 26028178687,
+   "id": "eval-204",
+   "chips": 2,
+   "duration_s": 7752.61571,
+   "walltime_s": 9781.5066,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 26062011006,
+   "id": "eval-205",
+   "chips": 2,
+   "duration_s": 108.878005,
+   "walltime_s": 159.857783,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26156938064,
+   "id": "eval-206",
+   "chips": 2,
+   "duration_s": 267.887703,
+   "walltime_s": 1570.30505,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 26273079769,
+   "id": "eval-207",
+   "chips": 8,
+   "duration_s": 401.887976,
+   "walltime_s": 726.623248,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26407991256,
+   "id": "eval-208",
+   "chips": 4,
+   "duration_s": 3.20742894,
+   "walltime_s": 22.2811036,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26413094799,
+   "id": "eval-209",
+   "chips": 1,
+   "duration_s": 12.8788889,
+   "walltime_s": 13.2293516,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 26418830169,
+   "id": "eval-210",
+   "chips": 4,
+   "duration_s": 6084.38153,
+   "walltime_s": 6035.4478,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26483916734,
+   "id": "eval-211",
+   "chips": 4,
+   "duration_s": 217.095141,
+   "walltime_s": 243.566322,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26491380402,
+   "id": "eval-212",
+   "chips": 2,
+   "duration_s": 1075.48238,
+   "walltime_s": 2066.84714,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 26492944308,
+   "id": "eval-213",
+   "chips": 4,
+   "duration_s": 10.5775612,
+   "walltime_s": 12.5612629,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26636723118,
+   "id": "eval-214",
+   "chips": 8,
+   "duration_s": 77.8379564,
+   "walltime_s": 100.469836,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 26664912865,
+   "id": "eval-215",
+   "chips": 1,
+   "duration_s": 3.76529616,
+   "walltime_s": 21.5009544,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26749469477,
+   "id": "eval-216",
+   "chips": 4,
+   "duration_s": 280.75485,
+   "walltime_s": 502.897958,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 26887167926,
+   "id": "eval-217",
+   "chips": 4,
+   "duration_s": 66.2406227,
+   "walltime_s": 153.779567,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 26940000686,
+   "id": "eval-218",
+   "chips": 2,
+   "duration_s": 79.9596368,
+   "walltime_s": 170.287681,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 26957857145,
+   "id": "eval-219",
+   "chips": 8,
+   "duration_s": 38.7283541,
+   "walltime_s": 70.2320399,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 27057963474,
+   "id": "eval-220",
+   "chips": 8,
+   "duration_s": 1.68992481,
+   "walltime_s": 4.13537173,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 27070438281,
+   "id": "eval-221",
+   "chips": 2,
+   "duration_s": 2708.85716,
+   "walltime_s": 4233.32148,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 27494187528,
+   "id": "eval-222",
+   "chips": 1,
+   "duration_s": 98.7560509,
+   "walltime_s": 303.386492,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 27545434057,
+   "id": "eval-223",
+   "chips": 8,
+   "duration_s": 362.16642,
+   "walltime_s": 921.225102,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 27587737644,
+   "id": "eval-224",
+   "chips": 8,
+   "duration_s": 8.42589252,
+   "walltime_s": 255.761731,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 27842914514,
+   "id": "eval-225",
+   "chips": 1,
+   "duration_s": 2.65010972,
+   "walltime_s": 11.9339931,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 27866194459,
+   "id": "eval-226",
+   "chips": 2,
+   "duration_s": 1065.19495,
+   "walltime_s": 2932.75152,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28052712685,
+   "id": "finetune-35",
+   "chips": 16,
+   "duration_s": 4134.66898,
+   "walltime_s": 5088.93849,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28086729781,
+   "id": "eval-227",
+   "chips": 8,
+   "duration_s": 4.58804036,
+   "walltime_s": 10.1068751,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28097964465,
+   "id": "eval-228",
+   "chips": 8,
+   "duration_s": 16667.4765,
+   "walltime_s": 43623.9482,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28218141300,
+   "id": "eval-229",
+   "chips": 1,
+   "duration_s": 5084.09265,
+   "walltime_s": 11646.4659,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28231462658,
+   "id": "eval-230",
+   "chips": 4,
+   "duration_s": 5466.12948,
+   "walltime_s": 6811.049,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 28261449899,
+   "id": "eval-231",
+   "chips": 2,
+   "duration_s": 30.7489906,
+   "walltime_s": 40.8384544,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28309255005,
+   "id": "eval-232",
+   "chips": 2,
+   "duration_s": 115.346756,
+   "walltime_s": 136.786021,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 28320378032,
+   "id": "eval-233",
+   "chips": 1,
+   "duration_s": 52.8966344,
+   "walltime_s": 102.26066,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28337233352,
+   "id": "eval-234",
+   "chips": 1,
+   "duration_s": 0.029184135,
+   "walltime_s": 40.5120941,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28344015111,
+   "id": "eval-235",
+   "chips": 2,
+   "duration_s": 217.120997,
+   "walltime_s": 168.612566,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 28353495714,
+   "id": "finetune-36",
+   "chips": 64,
+   "duration_s": 11968.573,
+   "walltime_s": 41693.0551,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28392580878,
+   "id": "eval-236",
+   "chips": 1,
+   "duration_s": 1.45310107,
+   "walltime_s": 1.75296552,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 28553389144,
+   "id": "eval-237",
+   "chips": 8,
+   "duration_s": 70.7929504,
+   "walltime_s": 50.2928838,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 28630370375,
+   "id": "eval-238",
+   "chips": 2,
+   "duration_s": 0.975036369,
+   "walltime_s": 1.03338499,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 28657410018,
+   "id": "eval-239",
+   "chips": 1,
+   "duration_s": 459.887102,
+   "walltime_s": 861.806109,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 28764522210,
+   "id": "eval-240",
+   "chips": 2,
+   "duration_s": 8.08626872,
+   "walltime_s": 23.8472208,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28774398640,
+   "id": "eval-241",
+   "chips": 1,
+   "duration_s": 685.967024,
+   "walltime_s": 1165.21707,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28827373974,
+   "id": "eval-242",
+   "chips": 1,
+   "duration_s": 2.02660967,
+   "walltime_s": 1.96299003,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 28869923167,
+   "id": "eval-243",
+   "chips": 1,
+   "duration_s": 1.03284905,
+   "walltime_s": 94.0799467,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 28952620438,
+   "id": "eval-244",
+   "chips": 2,
+   "duration_s": 25.9748769,
+   "walltime_s": 56.3504586,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 28992717006,
+   "id": "eval-245",
+   "chips": 4,
+   "duration_s": 111.100702,
+   "walltime_s": 92.0747527,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 28997705479,
+   "id": "eval-246",
+   "chips": 1,
+   "duration_s": 13.7355485,
+   "walltime_s": 17.9176008,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 28999539921,
+   "id": "eval-247",
+   "chips": 4,
+   "duration_s": 226.733308,
+   "walltime_s": 443.511976,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 29083840229,
+   "id": "eval-248",
+   "chips": 4,
+   "duration_s": 356.247943,
+   "walltime_s": 8182.39767,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 29268657123,
+   "id": "eval-249",
+   "chips": 2,
+   "duration_s": 77.7142848,
+   "walltime_s": 193.141746,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 29367903117,
+   "id": "eval-250",
+   "chips": 1,
+   "duration_s": 112.739627,
+   "walltime_s": 690.057852,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 29429617016,
+   "id": "eval-251",
+   "chips": 8,
+   "duration_s": 11.5155626,
+   "walltime_s": 61.9019562,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 29561239512,
+   "id": "finetune-37",
+   "chips": 8,
+   "duration_s": 36019.9697,
+   "walltime_s": 130066.898,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 29666878895,
+   "id": "eval-252",
+   "chips": 8,
+   "duration_s": 69.5099758,
+   "walltime_s": 82.3680294,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 29744097040,
+   "id": "eval-253",
+   "chips": 4,
+   "duration_s": 15.9521791,
+   "walltime_s": 30.1184726,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 29761821884,
+   "id": "eval-254",
+   "chips": 8,
+   "duration_s": 13.7645746,
+   "walltime_s": 22.2062474,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 29791481316,
+   "id": "eval-255",
+   "chips": 8,
+   "duration_s": 428.728977,
+   "walltime_s": 1754.96183,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30127973611,
+   "id": "eval-256",
+   "chips": 8,
+   "duration_s": 1236.18452,
+   "walltime_s": 4470.57902,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30156308521,
+   "id": "eval-257",
+   "chips": 4,
+   "duration_s": 19.758838,
+   "walltime_s": 28.0949343,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30186184545,
+   "id": "eval-258",
+   "chips": 8,
+   "duration_s": 25.2007749,
+   "walltime_s": 23.2295075,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 30363340399,
+   "id": "eval-259",
+   "chips": 8,
+   "duration_s": 36.2343202,
+   "walltime_s": 29.8914836,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 30391397908,
+   "id": "eval-260",
+   "chips": 4,
+   "duration_s": 413.528935,
+   "walltime_s": 1262.48137,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30416663860,
+   "id": "eval-261",
+   "chips": 4,
+   "duration_s": 14.6937719,
+   "walltime_s": 87.1027155,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 30430253449,
+   "id": "eval-262",
+   "chips": 1,
+   "duration_s": 29.019072,
+   "walltime_s": 174.120986,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 30464844379,
+   "id": "eval-263",
+   "chips": 8,
+   "duration_s": 0.10044587,
+   "walltime_s": 3.47834302,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 30522411764,
+   "id": "eval-264",
+   "chips": 8,
+   "duration_s": 881.057378,
+   "walltime_s": 1126.94383,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30772330546,
+   "id": "eval-265",
+   "chips": 2,
+   "duration_s": 753.211613,
+   "walltime_s": 1135.92362,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 30793123670,
+   "id": "eval-266",
+   "chips": 8,
+   "duration_s": 121.350473,
+   "walltime_s": 338.466087,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30795402721,
+   "id": "eval-267",
+   "chips": 2,
+   "duration_s": 4.46296335,
+   "walltime_s": 249.548399,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30801792206,
+   "id": "eval-268",
+   "chips": 2,
+   "duration_s": 81.9840591,
+   "walltime_s": 728.756769,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30910213410,
+   "id": "eval-269",
+   "chips": 2,
+   "duration_s": 14.7762327,
+   "walltime_s": 178.887059,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 30932160780,
+   "id": "eval-270",
+   "chips": 8,
+   "duration_s": 589.372363,
+   "walltime_s": 1028.84577,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 31054838591,
+   "id": "eval-271",
+   "chips": 1,
+   "duration_s": 209.756977,
+   "walltime_s": 393.140141,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 31066785211,
+   "id": "eval-272",
+   "chips": 8,
+   "duration_s": 787.405104,
+   "walltime_s": 2546.47289,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31091055424,
+   "id": "eval-273",
+   "chips": 8,
+   "duration_s": 480.632845,
+   "walltime_s": 372.807114,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 31154654404,
+   "id": "eval-274",
+   "chips": 1,
+   "duration_s": 11.7108597,
+   "walltime_s": 18.9189286,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 31440888365,
+   "id": "eval-275",
+   "chips": 8,
+   "duration_s": 7199.86192,
+   "walltime_s": 5993.76204,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31713470292,
+   "id": "eval-276",
+   "chips": 4,
+   "duration_s": 69.9455987,
+   "walltime_s": 477.439444,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 31777842383,
+   "id": "eval-277",
+   "chips": 2,
+   "duration_s": 451.849586,
+   "walltime_s": 702.809069,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31817399388,
+   "id": "eval-278",
+   "chips": 2,
+   "duration_s": 10073.0318,
+   "walltime_s": 17077.153,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31821582761,
+   "id": "eval-279",
+   "chips": 2,
+   "duration_s": 459.999745,
+   "walltime_s": 221.461777,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31880358135,
+   "id": "eval-280",
+   "chips": 4,
+   "duration_s": 16.3850252,
+   "walltime_s": 14.0963829,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31890609710,
+   "id": "finetune-38",
+   "chips": 32,
+   "duration_s": 12909.1662,
+   "walltime_s": 32145.831,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31910700609,
+   "id": "eval-281",
+   "chips": 2,
+   "duration_s": 33.2627794,
+   "walltime_s": 30.4469575,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 31958792553,
+   "id": "eval-282",
+   "chips": 2,
+   "duration_s": 8.69587868,
+   "walltime_s": 35.2036857,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 32040768336,
+   "id": "eval-283",
+   "chips": 4,
+   "duration_s": 3573.6745,
+   "walltime_s": 53733.4779,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 32169782873,
+   "id": "eval-284",
+   "chips": 1,
+   "duration_s": 10.4083293,
+   "walltime_s": 15.1882123,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 32321582679,
+   "id": "eval-285",
+   "chips": 8,
+   "duration_s": 320.020932,
+   "walltime_s": 684.372177,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 32525642962,
+   "id": "eval-286",
+   "chips": 8,
+   "duration_s": 52.7237296,
+   "walltime_s": 434.280618,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 32715283445,
+   "id": "eval-287",
+   "chips": 2,
+   "duration_s": 59.8903443,
+   "walltime_s": 46.6493224,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 32938204530,
+   "id": "eval-288",
+   "chips": 1,
+   "duration_s": 1884.31476,
+   "walltime_s": 2093.78184,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 33176983632,
+   "id": "eval-289",
+   "chips": 4,
+   "duration_s": 54.4514133,
+   "walltime_s": 39.3181913,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 33288158425,
+   "id": "eval-290",
+   "chips": 8,
+   "duration_s": 15.6556679,
+   "walltime_s": 27.1731671,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 33424279364,
+   "id": "eval-291",
+   "chips": 2,
+   "duration_s": 67.0418897,
+   "walltime_s": 164.149494,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 33445925897,
+   "id": "eval-292",
+   "chips": 8,
+   "duration_s": 3.39767554,
+   "walltime_s": 135.841355,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 33469414428,
+   "id": "eval-293",
+   "chips": 8,
+   "duration_s": 63.397125,
+   "walltime_s": 304.747291,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 33524142294,
+   "id": "eval-294",
+   "chips": 4,
+   "duration_s": 49.4037395,
+   "walltime_s": 56.5560984,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 33532380712,
+   "id": "eval-295",
+   "chips": 8,
+   "duration_s": 10.2350887,
+   "walltime_s": 43.2853435,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 33556325544,
+   "id": "eval-296",
+   "chips": 1,
+   "duration_s": 18.1390299,
+   "walltime_s": 15.3182751,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 33649288170,
+   "id": "eval-297",
+   "chips": 2,
+   "duration_s": 43.0530292,
+   "walltime_s": 85.7583838,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 33701789521,
+   "id": "eval-298",
+   "chips": 1,
+   "duration_s": 141.542882,
+   "walltime_s": 176.096951,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 33728427949,
+   "id": "eval-299",
+   "chips": 1,
+   "duration_s": 135.214569,
+   "walltime_s": 99.7068321,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 33736387784,
+   "id": "eval-300",
+   "chips": 1,
+   "duration_s": 131.288305,
+   "walltime_s": 271.591653,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 33804204575,
+   "id": "eval-301",
+   "chips": 2,
+   "duration_s": 5831.94831,
+   "walltime_s": 4327.0169,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34170602447,
+   "id": "eval-302",
+   "chips": 2,
+   "duration_s": 7.45471949,
+   "walltime_s": 17.0804778,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34206582303,
+   "id": "eval-303",
+   "chips": 4,
+   "duration_s": 134.668628,
+   "walltime_s": 299.656784,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 34291711574,
+   "id": "eval-304",
+   "chips": 1,
+   "duration_s": 6.93680745,
+   "walltime_s": 9.95356478,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 34309437668,
+   "id": "eval-305",
+   "chips": 4,
+   "duration_s": 7.18628274,
+   "walltime_s": 177.442463,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34394503655,
+   "id": "eval-306",
+   "chips": 2,
+   "duration_s": 940.990214,
+   "walltime_s": 1424.5349,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34421610034,
+   "id": "eval-307",
+   "chips": 2,
+   "duration_s": 99.0756197,
+   "walltime_s": 166.633778,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 34431966292,
+   "id": "eval-308",
+   "chips": 4,
+   "duration_s": 8.40234006,
+   "walltime_s": 5.24153925,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 34500153274,
+   "id": "eval-309",
+   "chips": 8,
+   "duration_s": 763.222339,
+   "walltime_s": 1761.72682,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 34531182116,
+   "id": "eval-310",
+   "chips": 2,
+   "duration_s": 1655.99087,
+   "walltime_s": 4637.68025,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34828065456,
+   "id": "eval-311",
+   "chips": 4,
+   "duration_s": 286.38684,
+   "walltime_s": 371.509461,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 34863039259,
+   "id": "eval-312",
+   "chips": 4,
+   "duration_s": 86.7833293,
+   "walltime_s": 843.583221,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 34895556996,
+   "id": "eval-313",
+   "chips": 8,
+   "duration_s": 21.7866719,
+   "walltime_s": 10.1874358,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 34924933554,
+   "id": "eval-314",
+   "chips": 1,
+   "duration_s": 21.1363744,
+   "walltime_s": 41.3973919,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35065209510,
+   "id": "eval-315",
+   "chips": 4,
+   "duration_s": 506.617653,
+   "walltime_s": 176.482442,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 35101814514,
+   "id": "eval-316",
+   "chips": 4,
+   "duration_s": 7.24562847,
+   "walltime_s": 38.8378383,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35205553519,
+   "id": "eval-317",
+   "chips": 8,
+   "duration_s": 401.402716,
+   "walltime_s": 1306.95039,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 35284898027,
+   "id": "eval-318",
+   "chips": 1,
+   "duration_s": 19.4883572,
+   "walltime_s": 148.97855,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 35370598737,
+   "id": "eval-319",
+   "chips": 2,
+   "duration_s": 30097.8072,
+   "walltime_s": 29840.1004,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35393090689,
+   "id": "eval-320",
+   "chips": 2,
+   "duration_s": 29.0117331,
+   "walltime_s": 36.0844539,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 35437995500,
+   "id": "eval-321",
+   "chips": 8,
+   "duration_s": 166.507188,
+   "walltime_s": 298.224458,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35449712148,
+   "id": "eval-322",
+   "chips": 8,
+   "duration_s": 1.8099747,
+   "walltime_s": 5.80014301,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 35463957692,
+   "id": "eval-323",
+   "chips": 4,
+   "duration_s": 138.696051,
+   "walltime_s": 198.994489,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35674071093,
+   "id": "eval-324",
+   "chips": 2,
+   "duration_s": 665.199427,
+   "walltime_s": 454.81935,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 35720062858,
+   "id": "eval-325",
+   "chips": 4,
+   "duration_s": 727.23894,
+   "walltime_s": 1856.63337,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 35736976481,
+   "id": "eval-326",
+   "chips": 4,
+   "duration_s": 17.8216491,
+   "walltime_s": 32.5757905,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 35741167809,
+   "id": "eval-327",
+   "chips": 4,
+   "duration_s": 17.6601254,
+   "walltime_s": 36.9807225,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 35997548384,
+   "id": "eval-328",
+   "chips": 2,
+   "duration_s": 10.0563809,
+   "walltime_s": 51.6010355,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 35999444552,
+   "id": "eval-329",
+   "chips": 1,
+   "duration_s": 7.9104542,
+   "walltime_s": 120.252076,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 36129141559,
+   "id": "eval-330",
+   "chips": 4,
+   "duration_s": 157.360318,
+   "walltime_s": 284.691988,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36207018090,
+   "id": "eval-331",
+   "chips": 1,
+   "duration_s": 280.937614,
+   "walltime_s": 1138.90109,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 36275645697,
+   "id": "eval-332",
+   "chips": 2,
+   "duration_s": 159.889787,
+   "walltime_s": 157.960485,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36275929858,
+   "id": "eval-333",
+   "chips": 2,
+   "duration_s": 71.7921414,
+   "walltime_s": 1112.3782,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 36416223107,
+   "id": "eval-334",
+   "chips": 2,
+   "duration_s": 1010.19713,
+   "walltime_s": 5473.59427,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36440360802,
+   "id": "eval-335",
+   "chips": 1,
+   "duration_s": 99.0618458,
+   "walltime_s": 193.45092,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 36454095500,
+   "id": "eval-336",
+   "chips": 1,
+   "duration_s": 1447.59967,
+   "walltime_s": 1606.55309,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 36618261287,
+   "id": "eval-337",
+   "chips": 4,
+   "duration_s": 3.13648055,
+   "walltime_s": 214.082337,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36639815580,
+   "id": "eval-338",
+   "chips": 8,
+   "duration_s": 11.1666082,
+   "walltime_s": 62.4386576,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 36724677113,
+   "id": "eval-339",
+   "chips": 4,
+   "duration_s": 2.59704333,
+   "walltime_s": 8.41979371,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36793888844,
+   "id": "eval-340",
+   "chips": 8,
+   "duration_s": 143.316429,
+   "walltime_s": 337.856857,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36817900887,
+   "id": "finetune-39",
+   "chips": 64,
+   "duration_s": 9246.62265,
+   "walltime_s": 6681.04059,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 36881570636,
+   "id": "eval-341",
+   "chips": 2,
+   "duration_s": 2103.5992,
+   "walltime_s": 5196.86522,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 36931525797,
+   "id": "eval-342",
+   "chips": 8,
+   "duration_s": 178.926817,
+   "walltime_s": 252.525185,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 37024322529,
+   "id": "eval-343",
+   "chips": 4,
+   "duration_s": 8.42646669,
+   "walltime_s": 30.9018184,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37041428462,
+   "id": "eval-344",
+   "chips": 2,
+   "duration_s": 56.9667981,
+   "walltime_s": 129.390977,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 37151573119,
+   "id": "eval-345",
+   "chips": 4,
+   "duration_s": 3.73399329,
+   "walltime_s": 119.816282,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37282830352,
+   "id": "eval-346",
+   "chips": 2,
+   "duration_s": 51.3210414,
+   "walltime_s": 244.754382,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37287683902,
+   "id": "eval-347",
+   "chips": 2,
+   "duration_s": 272.385948,
+   "walltime_s": 567.848318,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 37341701010,
+   "id": "eval-348",
+   "chips": 4,
+   "duration_s": 70.6056748,
+   "walltime_s": 149.521615,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 37450817288,
+   "id": "eval-349",
+   "chips": 2,
+   "duration_s": 3555.19919,
+   "walltime_s": 6669.75659,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 37518370797,
+   "id": "eval-350",
+   "chips": 1,
+   "duration_s": 707.632021,
+   "walltime_s": 1975.59168,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37534061608,
+   "id": "eval-351",
+   "chips": 4,
+   "duration_s": 81.4444921,
+   "walltime_s": 124.618599,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 37539326466,
+   "id": "eval-352",
+   "chips": 8,
+   "duration_s": 218.124128,
+   "walltime_s": 325.560488,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 37551130810,
+   "id": "eval-353",
+   "chips": 1,
+   "duration_s": 924.008472,
+   "walltime_s": 1000.88275,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37580174055,
+   "id": "eval-354",
+   "chips": 4,
+   "duration_s": 264.552632,
+   "walltime_s": 611.220971,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37655694740,
+   "id": "eval-355",
+   "chips": 1,
+   "duration_s": 13.3643785,
+   "walltime_s": 24.2841697,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37787163942,
+   "id": "eval-356",
+   "chips": 4,
+   "duration_s": 1.93522125,
+   "walltime_s": 3.56787443,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 37793273835,
+   "id": "eval-357",
+   "chips": 2,
+   "duration_s": 18.3216595,
+   "walltime_s": 12809.1594,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37888813559,
+   "id": "eval-358",
+   "chips": 2,
+   "duration_s": 2942.41437,
+   "walltime_s": 14288.796,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 37976450420,
+   "id": "eval-359",
+   "chips": 8,
+   "duration_s": 102.40471,
+   "walltime_s": 130.393802,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 37999733429,
+   "id": "eval-360",
+   "chips": 1,
+   "duration_s": 160.735576,
+   "walltime_s": 395.821872,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 38027236593,
+   "id": "finetune-40",
+   "chips": 64,
+   "duration_s": 3876.93518,
+   "walltime_s": 15723.7053,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38130578101,
+   "id": "eval-361",
+   "chips": 1,
+   "duration_s": 10.607268,
+   "walltime_s": 21.742244,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 38302268584,
+   "id": "eval-362",
+   "chips": 4,
+   "duration_s": 0.0529951776,
+   "walltime_s": 3.07109221,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 38333775862,
+   "id": "eval-363",
+   "chips": 1,
+   "duration_s": 5.62896714,
+   "walltime_s": 10.2475796,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 38446381934,
+   "id": "eval-364",
+   "chips": 8,
+   "duration_s": 1866.37033,
+   "walltime_s": 1142.54647,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38472894192,
+   "id": "eval-365",
+   "chips": 4,
+   "duration_s": 273.288356,
+   "walltime_s": 312.614362,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38521698967,
+   "id": "eval-366",
+   "chips": 2,
+   "duration_s": 12.4879424,
+   "walltime_s": 382.359567,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 38539511865,
+   "id": "eval-367",
+   "chips": 1,
+   "duration_s": 506.720167,
+   "walltime_s": 546.396978,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38582457925,
+   "id": "eval-368",
+   "chips": 8,
+   "duration_s": 828.624797,
+   "walltime_s": 965.969306,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 38603801000,
+   "id": "eval-369",
+   "chips": 8,
+   "duration_s": 90.4341916,
+   "walltime_s": 2397.15529,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38655402710,
+   "id": "eval-370",
+   "chips": 4,
+   "duration_s": 35.6288556,
+   "walltime_s": 1187.24382,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38721414601,
+   "id": "eval-371",
+   "chips": 4,
+   "duration_s": 3.01753845,
+   "walltime_s": 14.9490144,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 38751223958,
+   "id": "eval-372",
+   "chips": 8,
+   "duration_s": 273.540329,
+   "walltime_s": 515.393057,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 38758841745,
+   "id": "eval-373",
+   "chips": 8,
+   "duration_s": 4.88803672,
+   "walltime_s": 32.9720199,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 38773546696,
+   "id": "eval-374",
+   "chips": 2,
+   "duration_s": 98.6405387,
+   "walltime_s": 312.298586,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 38876225375,
+   "id": "eval-375",
+   "chips": 1,
+   "duration_s": 3329.6841,
+   "walltime_s": 4510.65617,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 38995204414,
+   "id": "eval-376",
+   "chips": 1,
+   "duration_s": 39.0676399,
+   "walltime_s": 30.0406936,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 39144840817,
+   "id": "eval-377",
+   "chips": 4,
+   "duration_s": 9.47745808,
+   "walltime_s": 63.7390742,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 39207351715,
+   "id": "eval-378",
+   "chips": 8,
+   "duration_s": 152.956657,
+   "walltime_s": 538.560044,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 39210820815,
+   "id": "eval-379",
+   "chips": 4,
+   "duration_s": 304.722165,
+   "walltime_s": 225.469131,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 39375567257,
+   "id": "eval-380",
+   "chips": 1,
+   "duration_s": 15865.4715,
+   "walltime_s": 45235.945,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 39632770837,
+   "id": "eval-381",
+   "chips": 8,
+   "duration_s": 460.532057,
+   "walltime_s": 730.665807,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 39672562686,
+   "id": "eval-382",
+   "chips": 2,
+   "duration_s": 106.863775,
+   "walltime_s": 638.995343,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 39677110141,
+   "id": "eval-383",
+   "chips": 4,
+   "duration_s": 42.5443414,
+   "walltime_s": 2747.04054,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 39680772177,
+   "id": "eval-384",
+   "chips": 8,
+   "duration_s": 4.03384622,
+   "walltime_s": 13.1230437,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 39813946702,
+   "id": "eval-385",
+   "chips": 1,
+   "duration_s": 1.15389915,
+   "walltime_s": 2.67076049,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 39862986410,
+   "id": "eval-386",
+   "chips": 1,
+   "duration_s": 139.030311,
+   "walltime_s": 263.337892,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 39912310789,
+   "id": "eval-387",
+   "chips": 2,
+   "duration_s": 96.109596,
+   "walltime_s": 49.4339958,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 39920302562,
+   "id": "eval-388",
+   "chips": 1,
+   "duration_s": 32.5912575,
+   "walltime_s": 529.782704,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 39939794120,
+   "id": "eval-389",
+   "chips": 4,
+   "duration_s": 29.4488629,
+   "walltime_s": 30.9514054,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 39988772762,
+   "id": "eval-390",
+   "chips": 1,
+   "duration_s": 26838.4632,
+   "walltime_s": 61900.2332,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 40057749873,
+   "id": "eval-391",
+   "chips": 1,
+   "duration_s": 58.7377981,
+   "walltime_s": 73.6720116,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40108585036,
+   "id": "eval-392",
+   "chips": 1,
+   "duration_s": 26.138724,
+   "walltime_s": 30.994045,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40212066419,
+   "id": "eval-393",
+   "chips": 8,
+   "duration_s": 31.2678012,
+   "walltime_s": 36.9268729,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40247126296,
+   "id": "eval-394",
+   "chips": 1,
+   "duration_s": 2.3851367,
+   "walltime_s": 98.981745,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40255335767,
+   "id": "eval-395",
+   "chips": 4,
+   "duration_s": 437.371035,
+   "walltime_s": 825.74596,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40385465134,
+   "id": "eval-396",
+   "chips": 4,
+   "duration_s": 219.882884,
+   "walltime_s": 299.48584,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40475498286,
+   "id": "eval-397",
+   "chips": 2,
+   "duration_s": 147.76162,
+   "walltime_s": 208.484012,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 40485809451,
+   "id": "eval-398",
+   "chips": 2,
+   "duration_s": 36.2113313,
+   "walltime_s": 2265.11286,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 40500026804,
+   "id": "eval-399",
+   "chips": 8,
+   "duration_s": 68.3656391,
+   "walltime_s": 208.129735,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 40567087417,
+   "id": "eval-400",
+   "chips": 8,
+   "duration_s": 13.293343,
+   "walltime_s": 15.478453,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 40880914625,
+   "id": "eval-401",
+   "chips": 2,
+   "duration_s": 117.793954,
+   "walltime_s": 123.368129,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41000827653,
+   "id": "eval-402",
+   "chips": 4,
+   "duration_s": 273.824891,
+   "walltime_s": 154.06382,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41009486341,
+   "id": "eval-403",
+   "chips": 4,
+   "duration_s": 3.06145724,
+   "walltime_s": 7.56784421,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 41019093924,
+   "id": "eval-404",
+   "chips": 2,
+   "duration_s": 73.8677069,
+   "walltime_s": 199.317474,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41022769337,
+   "id": "eval-405",
+   "chips": 2,
+   "duration_s": 9065.4118,
+   "walltime_s": 9576.96851,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 41055072117,
+   "id": "eval-406",
+   "chips": 4,
+   "duration_s": 122.718212,
+   "walltime_s": 498.938061,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41152914646,
+   "id": "finetune-41",
+   "chips": 16,
+   "duration_s": 27860.2404,
+   "walltime_s": 88464.3671,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 41439096465,
+   "id": "eval-407",
+   "chips": 8,
+   "duration_s": 40.0095266,
+   "walltime_s": 49.1022835,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41502670671,
+   "id": "eval-408",
+   "chips": 1,
+   "duration_s": 5904.70583,
+   "walltime_s": 13860.1599,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 41619143363,
+   "id": "eval-409",
+   "chips": 8,
+   "duration_s": 171.685788,
+   "walltime_s": 139.885781,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41633261444,
+   "id": "eval-410",
+   "chips": 2,
+   "duration_s": 1.79944291,
+   "walltime_s": 2.61495648,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41760968823,
+   "id": "eval-411",
+   "chips": 1,
+   "duration_s": 32.9613001,
+   "walltime_s": 37.7655309,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 41781179630,
+   "id": "eval-412",
+   "chips": 2,
+   "duration_s": 15.808565,
+   "walltime_s": 9.31284254,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 41834655810,
+   "id": "eval-413",
+   "chips": 4,
+   "duration_s": 135.845697,
+   "walltime_s": 146.208091,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 41855695188,
+   "id": "eval-414",
+   "chips": 8,
+   "duration_s": 18.907277,
+   "walltime_s": 198.743285,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 41914180322,
+   "id": "eval-415",
+   "chips": 8,
+   "duration_s": 96.2554771,
+   "walltime_s": 269.514356,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42084343516,
+   "id": "eval-416",
+   "chips": 2,
+   "duration_s": 74.7502789,
+   "walltime_s": 263.30508,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42100501555,
+   "id": "eval-417",
+   "chips": 4,
+   "duration_s": 3737.99205,
+   "walltime_s": 6998.18353,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 42181862912,
+   "id": "eval-418",
+   "chips": 8,
+   "duration_s": 1904.90948,
+   "walltime_s": 2023.21002,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 42330135209,
+   "id": "eval-419",
+   "chips": 8,
+   "duration_s": 36.263281,
+   "walltime_s": 42.4798666,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42472437253,
+   "id": "finetune-42",
+   "chips": 64,
+   "duration_s": 8749.65557,
+   "walltime_s": 3924.31711,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 42519142749,
+   "id": "eval-420",
+   "chips": 8,
+   "duration_s": 371.463401,
+   "walltime_s": 524.882113,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42574037146,
+   "id": "eval-421",
+   "chips": 8,
+   "duration_s": 324.335403,
+   "walltime_s": 310.964027,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 42598719123,
+   "id": "eval-422",
+   "chips": 8,
+   "duration_s": 1482.3213,
+   "walltime_s": 1886.86512,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 42753304528,
+   "id": "eval-423",
+   "chips": 4,
+   "duration_s": 317.568079,
+   "walltime_s": 897.98753,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 42758260166,
+   "id": "eval-424",
+   "chips": 4,
+   "duration_s": 18.7089194,
+   "walltime_s": 149.662286,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42966706965,
+   "id": "eval-425",
+   "chips": 2,
+   "duration_s": 18.9857654,
+   "walltime_s": 58.4712928,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 42975729213,
+   "id": "eval-426",
+   "chips": 2,
+   "duration_s": 416.704612,
+   "walltime_s": 553.203236,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 43287811121,
+   "id": "eval-427",
+   "chips": 1,
+   "duration_s": 6.23383448,
+   "walltime_s": 13.9593986,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 43334205831,
+   "id": "eval-428",
+   "chips": 1,
+   "duration_s": 4801.20364,
+   "walltime_s": 4272.48314,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 43444946820,
+   "id": "eval-429",
+   "chips": 1,
+   "duration_s": 73.0878502,
+   "walltime_s": 91.5843696,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 43456361124,
+   "id": "eval-430",
+   "chips": 1,
+   "duration_s": 887.018285,
+   "walltime_s": 2125.58944,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 43575125172,
+   "id": "eval-431",
+   "chips": 2,
+   "duration_s": 541.649415,
+   "walltime_s": 719.811452,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 43591467472,
+   "id": "eval-432",
+   "chips": 4,
+   "duration_s": 16.4243372,
+   "walltime_s": 266.115225,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 43710534299,
+   "id": "eval-433",
+   "chips": 4,
+   "duration_s": 11.2870904,
+   "walltime_s": 29.0921516,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 43799957930,
+   "id": "eval-434",
+   "chips": 8,
+   "duration_s": 334.482344,
+   "walltime_s": 421.286336,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 43875093349,
+   "id": "eval-435",
+   "chips": 4,
+   "duration_s": 48.1531264,
+   "walltime_s": 97.7667715,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44150222543,
+   "id": "eval-436",
+   "chips": 1,
+   "duration_s": 385.50667,
+   "walltime_s": 1209.95069,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 44309766946,
+   "id": "eval-437",
+   "chips": 2,
+   "duration_s": 97.5800375,
+   "walltime_s": 438.835112,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44314488144,
+   "id": "eval-438",
+   "chips": 4,
+   "duration_s": 400.576814,
+   "walltime_s": 538.286413,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 44533867964,
+   "id": "finetune-43",
+   "chips": 32,
+   "duration_s": 3361.03508,
+   "walltime_s": 5862.17862,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 44575403541,
+   "id": "eval-439",
+   "chips": 2,
+   "duration_s": 4.48122692,
+   "walltime_s": 99.5504628,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 44724503298,
+   "id": "eval-440",
+   "chips": 8,
+   "duration_s": 16.6462997,
+   "walltime_s": 36.018178,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 44764859399,
+   "id": "eval-441",
+   "chips": 1,
+   "duration_s": 20.6071707,
+   "walltime_s": 57.2822869,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44815210112,
+   "id": "eval-442",
+   "chips": 8,
+   "duration_s": 29.4089761,
+   "walltime_s": 157.93039,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44833431599,
+   "id": "eval-443",
+   "chips": 1,
+   "duration_s": 982.389646,
+   "walltime_s": 1626.18999,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44860398234,
+   "id": "eval-444",
+   "chips": 4,
+   "duration_s": 122.424996,
+   "walltime_s": 169.81704,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 44911351123,
+   "id": "finetune-44",
+   "chips": 16,
+   "duration_s": 18751.3097,
+   "walltime_s": 18726.8865,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 45003808247,
+   "id": "eval-445",
+   "chips": 8,
+   "duration_s": 188.300336,
+   "walltime_s": 71.0991707,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45017837961,
+   "id": "eval-446",
+   "chips": 2,
+   "duration_s": 1166.10967,
+   "walltime_s": 907.413409,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 45146926440,
+   "id": "eval-447",
+   "chips": 4,
+   "duration_s": 17.6071591,
+   "walltime_s": 437.138072,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 45209409995,
+   "id": "eval-448",
+   "chips": 4,
+   "duration_s": 790.425325,
+   "walltime_s": 3039.08137,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45228406557,
+   "id": "eval-449",
+   "chips": 1,
+   "duration_s": 1150.9931,
+   "walltime_s": 2200.31915,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45254172865,
+   "id": "eval-450",
+   "chips": 8,
+   "duration_s": 11.6020886,
+   "walltime_s": 38.7368624,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45281884251,
+   "id": "eval-451",
+   "chips": 4,
+   "duration_s": 90.6908956,
+   "walltime_s": 138.300704,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45318812953,
+   "id": "eval-452",
+   "chips": 4,
+   "duration_s": 9.38440721,
+   "walltime_s": 24.4690854,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45411546662,
+   "id": "eval-453",
+   "chips": 4,
+   "duration_s": 14.9142246,
+   "walltime_s": 25.4596579,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 45438577407,
+   "id": "eval-454",
+   "chips": 4,
+   "duration_s": 40.1408476,
+   "walltime_s": 70.7876186,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 45477835264,
+   "id": "eval-455",
+   "chips": 1,
+   "duration_s": 1.73445742,
+   "walltime_s": 235.526684,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45655749487,
+   "id": "eval-456",
+   "chips": 8,
+   "duration_s": 83.6025792,
+   "walltime_s": 120.343954,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45760416053,
+   "id": "eval-457",
+   "chips": 8,
+   "duration_s": 19.2017159,
+   "walltime_s": 1527.75358,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 45786197117,
+   "id": "eval-458",
+   "chips": 8,
+   "duration_s": 0.981926686,
+   "walltime_s": 38.4824807,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 45800627426,
+   "id": "eval-459",
+   "chips": 2,
+   "duration_s": 20.2769623,
+   "walltime_s": 19.647965,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 45833032414,
+   "id": "eval-460",
+   "chips": 4,
+   "duration_s": 726.344657,
+   "walltime_s": 788.707372,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 45847322399,
+   "id": "eval-461",
+   "chips": 4,
+   "duration_s": 44.5694137,
+   "walltime_s": 65.868736,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 45873329001,
+   "id": "eval-462",
+   "chips": 2,
+   "duration_s": 34.342339,
+   "walltime_s": 41.1826684,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 46035280215,
+   "id": "eval-463",
+   "chips": 8,
+   "duration_s": 173.101112,
+   "walltime_s": 113.031788,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 46217893571,
+   "id": "eval-464",
+   "chips": 2,
+   "duration_s": 478.256744,
+   "walltime_s": 956.216596,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 46329729345,
+   "id": "eval-465",
+   "chips": 4,
+   "duration_s": 2468.95622,
+   "walltime_s": 519.491195,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 46464996107,
+   "id": "eval-466",
+   "chips": 4,
+   "duration_s": 32.9730989,
+   "walltime_s": 89.8224682,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 46498931300,
+   "id": "eval-467",
+   "chips": 1,
+   "duration_s": 99.8825054,
+   "walltime_s": 113.802548,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 46517770713,
+   "id": "eval-468",
+   "chips": 8,
+   "duration_s": 7.17562533,
+   "walltime_s": 7.63941487,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 46627870024,
+   "id": "eval-469",
+   "chips": 2,
+   "duration_s": 15564.562,
+   "walltime_s": 14798.2573,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 46804962951,
+   "id": "eval-470",
+   "chips": 2,
+   "duration_s": 908.082316,
+   "walltime_s": 3510.21116,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 46879038168,
+   "id": "eval-471",
+   "chips": 1,
+   "duration_s": 1105.90589,
+   "walltime_s": 2887.96219,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 46985122099,
+   "id": "finetune-45",
+   "chips": 8,
+   "duration_s": 4431.41146,
+   "walltime_s": 9247.09073,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 47020787122,
+   "id": "eval-472",
+   "chips": 8,
+   "duration_s": 78.5165823,
+   "walltime_s": 212.581122,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47189334666,
+   "id": "eval-473",
+   "chips": 4,
+   "duration_s": 48.2410701,
+   "walltime_s": 1284.4055,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47316271831,
+   "id": "eval-474",
+   "chips": 8,
+   "duration_s": 25.0125341,
+   "walltime_s": 64.0201397,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 47407625796,
+   "id": "eval-475",
+   "chips": 1,
+   "duration_s": 498.86521,
+   "walltime_s": 841.907652,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47561265234,
+   "id": "eval-476",
+   "chips": 8,
+   "duration_s": 93.6221846,
+   "walltime_s": 2094.24279,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 47576946494,
+   "id": "eval-477",
+   "chips": 8,
+   "duration_s": 38.2814105,
+   "walltime_s": 419.014926,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47631025833,
+   "id": "eval-478",
+   "chips": 4,
+   "duration_s": 7.08295013,
+   "walltime_s": 83.1862012,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 47652628268,
+   "id": "eval-479",
+   "chips": 8,
+   "duration_s": 15.1589239,
+   "walltime_s": 31.0382535,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 47683049854,
+   "id": "eval-480",
+   "chips": 4,
+   "duration_s": 251.446477,
+   "walltime_s": 271.231066,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47692800641,
+   "id": "eval-481",
+   "chips": 4,
+   "duration_s": 20.1113596,
+   "walltime_s": 40.1030052,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 47715907009,
+   "id": "eval-482",
+   "chips": 8,
+   "duration_s": 20.5762542,
+   "walltime_s": 13.7024587,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 47753899632,
+   "id": "eval-483",
+   "chips": 1,
+   "duration_s": 44.8079377,
+   "walltime_s": 50.603125,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 47760406151,
+   "id": "eval-484",
+   "chips": 8,
+   "duration_s": 562.547475,
+   "walltime_s": 562.683768,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 47844750449,
+   "id": "eval-485",
+   "chips": 2,
+   "duration_s": 0.146616142,
+   "walltime_s": 3.19388949,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 48050155992,
+   "id": "eval-486",
+   "chips": 1,
+   "duration_s": 5184.33167,
+   "walltime_s": 14465.5349,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 48190002639,
+   "id": "eval-487",
+   "chips": 2,
+   "duration_s": 1.80315181,
+   "walltime_s": 4.14088295,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 48234067718,
+   "id": "eval-488",
+   "chips": 2,
+   "duration_s": 6123.22587,
+   "walltime_s": 9722.01837,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 48322264372,
+   "id": "eval-489",
+   "chips": 2,
+   "duration_s": 169.42955,
+   "walltime_s": 283.464624,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 48378027898,
+   "id": "eval-490",
+   "chips": 2,
+   "duration_s": 62.2632814,
+   "walltime_s": 50.8606577,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 48563047776,
+   "id": "eval-491",
+   "chips": 1,
+   "duration_s": 1213.24118,
+   "walltime_s": 1149.47283,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 48753576758,
+   "id": "eval-492",
+   "chips": 8,
+   "duration_s": 62.656923,
+   "walltime_s": 61.0239408,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 48851751758,
+   "id": "eval-493",
+   "chips": 8,
+   "duration_s": 126.739925,
+   "walltime_s": 381.007075,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 48874676301,
+   "id": "eval-494",
+   "chips": 2,
+   "duration_s": 0.317087198,
+   "walltime_s": 4.12630044,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 48914772153,
+   "id": "eval-495",
+   "chips": 1,
+   "duration_s": 604.58262,
+   "walltime_s": 1041.35826,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 48987594906,
+   "id": "eval-496",
+   "chips": 8,
+   "duration_s": 166.66112,
+   "walltime_s": 585.927436,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 49066955856,
+   "id": "eval-497",
+   "chips": 8,
+   "duration_s": 82.7529301,
+   "walltime_s": 95.3999071,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49125529254,
+   "id": "eval-498",
+   "chips": 8,
+   "duration_s": 183.748167,
+   "walltime_s": 135.599165,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 49165331447,
+   "id": "eval-499",
+   "chips": 4,
+   "duration_s": 1723.3678,
+   "walltime_s": 3511.50266,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 49191229033,
+   "id": "eval-500",
+   "chips": 8,
+   "duration_s": 117.573078,
+   "walltime_s": 84.1496831,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49271421368,
+   "id": "finetune-46",
+   "chips": 8,
+   "duration_s": 13378.0465,
+   "walltime_s": 57940.567,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 49303511682,
+   "id": "eval-501",
+   "chips": 8,
+   "duration_s": 730.84104,
+   "walltime_s": 1467.80546,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 49306839309,
+   "id": "eval-502",
+   "chips": 4,
+   "duration_s": 17.3111877,
+   "walltime_s": 498.304243,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49395198863,
+   "id": "eval-503",
+   "chips": 2,
+   "duration_s": 44.5002275,
+   "walltime_s": 248.125607,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49412712788,
+   "id": "eval-504",
+   "chips": 8,
+   "duration_s": 11.2800907,
+   "walltime_s": 8.40798715,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 49548759077,
+   "id": "finetune-47",
+   "chips": 16,
+   "duration_s": 8008.18642,
+   "walltime_s": 20402.9298,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49560565806,
+   "id": "eval-505",
+   "chips": 8,
+   "duration_s": 27.551785,
+   "walltime_s": 43.9671245,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49668987342,
+   "id": "eval-506",
+   "chips": 2,
+   "duration_s": 542.515185,
+   "walltime_s": 1243.76114,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 49720968822,
+   "id": "eval-507",
+   "chips": 8,
+   "duration_s": 29.4477675,
+   "walltime_s": 55.998701,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 49818507076,
+   "id": "eval-508",
+   "chips": 2,
+   "duration_s": 1.2400343,
+   "walltime_s": 35.4593362,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 49820458609,
+   "id": "eval-509",
+   "chips": 1,
+   "duration_s": 0.0326870652,
+   "walltime_s": 19.36373,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 49895739337,
+   "id": "eval-510",
+   "chips": 1,
+   "duration_s": 69.5322667,
+   "walltime_s": 125.827092,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 50140138836,
+   "id": "finetune-48",
+   "chips": 8,
+   "duration_s": 5968.90598,
+   "walltime_s": 11724.0162,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 50150004094,
+   "id": "eval-511",
+   "chips": 4,
+   "duration_s": 175.65561,
+   "walltime_s": 216.472768,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 50290369499,
+   "id": "eval-512",
+   "chips": 1,
+   "duration_s": 333.100285,
+   "walltime_s": 716.507457,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 50384641368,
+   "id": "eval-513",
+   "chips": 2,
+   "duration_s": 3.06232,
+   "walltime_s": 2.44638032,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 50406484179,
+   "id": "eval-514",
+   "chips": 4,
+   "duration_s": 26.8054066,
+   "walltime_s": 25.5189683,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 50583856929,
+   "id": "eval-515",
+   "chips": 2,
+   "duration_s": 1.73555597,
+   "walltime_s": 19.7618795,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 50594456385,
+   "id": "eval-516",
+   "chips": 4,
+   "duration_s": 13.6647389,
+   "walltime_s": 332.11646,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 50599818355,
+   "id": "eval-517",
+   "chips": 2,
+   "duration_s": 18.0297269,
+   "walltime_s": 39.194345,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 50601461973,
+   "id": "eval-518",
+   "chips": 1,
+   "duration_s": 216.916666,
+   "walltime_s": 494.828436,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 50742858216,
+   "id": "finetune-49",
+   "chips": 8,
+   "duration_s": 1428.2453,
+   "walltime_s": 43442.2368,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 50872544366,
+   "id": "eval-519",
+   "chips": 8,
+   "duration_s": 12.5220987,
+   "walltime_s": 74.4268321,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 50905094543,
+   "id": "eval-520",
+   "chips": 1,
+   "duration_s": 1303.84498,
+   "walltime_s": 2315.44406,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 50988729207,
+   "id": "finetune-50",
+   "chips": 32,
+   "duration_s": 43709.6517,
+   "walltime_s": 147650.488,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 51002958218,
+   "id": "finetune-51",
+   "chips": 64,
+   "duration_s": 7758.92628,
+   "walltime_s": 87620.1839,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 51041810977,
+   "id": "eval-521",
+   "chips": 1,
+   "duration_s": 348.091183,
+   "walltime_s": 412.856188,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51185763921,
+   "id": "eval-522",
+   "chips": 4,
+   "duration_s": 13.5307359,
+   "walltime_s": 349.841823,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 51204673168,
+   "id": "eval-523",
+   "chips": 2,
+   "duration_s": 335.098851,
+   "walltime_s": 430.948513,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51290704902,
+   "id": "eval-524",
+   "chips": 8,
+   "duration_s": 24.6053314,
+   "walltime_s": 47.337827,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51351413467,
+   "id": "eval-525",
+   "chips": 1,
+   "duration_s": 13.9921112,
+   "walltime_s": 13.6605259,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51357959507,
+   "id": "eval-526",
+   "chips": 2,
+   "duration_s": 140.934724,
+   "walltime_s": 145.53761,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 51440075703,
+   "id": "eval-527",
+   "chips": 1,
+   "duration_s": 5.58631594,
+   "walltime_s": 15.2126459,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 51657893947,
+   "id": "eval-528",
+   "chips": 1,
+   "duration_s": 1.92795124,
+   "walltime_s": 5.58611,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51685122838,
+   "id": "eval-529",
+   "chips": 1,
+   "duration_s": 15.1071216,
+   "walltime_s": 19.6164427,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 51847091652,
+   "id": "eval-530",
+   "chips": 2,
+   "duration_s": 2.48090448,
+   "walltime_s": 3.03982594,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51915480577,
+   "id": "eval-531",
+   "chips": 4,
+   "duration_s": 156.562052,
+   "walltime_s": 463.670309,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 51915930368,
+   "id": "eval-532",
+   "chips": 8,
+   "duration_s": 359.180099,
+   "walltime_s": 344.534441,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 51979520001,
+   "id": "eval-533",
+   "chips": 2,
+   "duration_s": 64.6405572,
+   "walltime_s": 475.860417,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 51994286001,
+   "id": "eval-534",
+   "chips": 2,
+   "duration_s": 344.414857,
+   "walltime_s": 655.175169,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 52179645538,
+   "id": "eval-535",
+   "chips": 4,
+   "duration_s": 27.9340417,
+   "walltime_s": 73.0065,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 52374174571,
+   "id": "eval-536",
+   "chips": 2,
+   "duration_s": 182.217107,
+   "walltime_s": 443.643416,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 52406732649,
+   "id": "eval-537",
+   "chips": 2,
+   "duration_s": 94.5994513,
+   "walltime_s": 1558.14475,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 52610829561,
+   "id": "eval-538",
+   "chips": 4,
+   "duration_s": 514.133198,
+   "walltime_s": 138.825456,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 52704236052,
+   "id": "eval-539",
+   "chips": 4,
+   "duration_s": 15.4814148,
+   "walltime_s": 24.5175462,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 52713496662,
+   "id": "eval-540",
+   "chips": 2,
+   "duration_s": 872.858281,
+   "walltime_s": 2933.49197,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 52870363140,
+   "id": "eval-541",
+   "chips": 2,
+   "duration_s": 884.718585,
+   "walltime_s": 889.855452,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 52941482012,
+   "id": "eval-542",
+   "chips": 1,
+   "duration_s": 1984.13979,
+   "walltime_s": 4534.52883,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 52950891073,
+   "id": "eval-543",
+   "chips": 4,
+   "duration_s": 163.459853,
+   "walltime_s": 305.346102,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 52984106136,
+   "id": "eval-544",
+   "chips": 1,
+   "duration_s": 287.23932,
+   "walltime_s": 688.918001,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53056475630,
+   "id": "eval-545",
+   "chips": 1,
+   "duration_s": 5.79056699,
+   "walltime_s": 86.3431741,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 53090154781,
+   "id": "eval-546",
+   "chips": 4,
+   "duration_s": 161.075812,
+   "walltime_s": 220.363012,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53106606233,
+   "id": "eval-547",
+   "chips": 4,
+   "duration_s": 41.7574642,
+   "walltime_s": 280.297328,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 53205498636,
+   "id": "eval-548",
+   "chips": 8,
+   "duration_s": 9.15692919,
+   "walltime_s": 13.1629916,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53274328525,
+   "id": "finetune-52",
+   "chips": 64,
+   "duration_s": 772.686722,
+   "walltime_s": 6592.54218,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53346438047,
+   "id": "eval-549",
+   "chips": 2,
+   "duration_s": 6.96867644,
+   "walltime_s": 23.9236119,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53389369950,
+   "id": "eval-550",
+   "chips": 2,
+   "duration_s": 99.2344034,
+   "walltime_s": 167.061628,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53416702815,
+   "id": "eval-551",
+   "chips": 8,
+   "duration_s": 41.4881552,
+   "walltime_s": 210.107424,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 53475308053,
+   "id": "eval-552",
+   "chips": 8,
+   "duration_s": 322.044872,
+   "walltime_s": 465.799032,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 53518281889,
+   "id": "eval-553",
+   "chips": 1,
+   "duration_s": 961.755496,
+   "walltime_s": 1622.03992,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 53897011003,
+   "id": "eval-554",
+   "chips": 8,
+   "duration_s": 5.56237587,
+   "walltime_s": 14.9475861,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 53955894046,
+   "id": "eval-555",
+   "chips": 2,
+   "duration_s": 23.1099991,
+   "walltime_s": 183.832013,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54151644602,
+   "id": "eval-556",
+   "chips": 2,
+   "duration_s": 11.510341,
+   "walltime_s": 35.7286119,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 54208894717,
+   "id": "eval-557",
+   "chips": 8,
+   "duration_s": 3667.73312,
+   "walltime_s": 5052.39605,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 54261530018,
+   "id": "eval-558",
+   "chips": 8,
+   "duration_s": 177.796646,
+   "walltime_s": 357.650298,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54275586695,
+   "id": "eval-559",
+   "chips": 2,
+   "duration_s": 226.301976,
+   "walltime_s": 413.844985,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54297142885,
+   "id": "finetune-53",
+   "chips": 16,
+   "duration_s": 30565.1425,
+   "walltime_s": 79647.1382,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54407788409,
+   "id": "eval-560",
+   "chips": 8,
+   "duration_s": 23.2071801,
+   "walltime_s": 50.3401189,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54437219984,
+   "id": "eval-561",
+   "chips": 2,
+   "duration_s": 225.094593,
+   "walltime_s": 220.660578,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 54545415483,
+   "id": "finetune-54",
+   "chips": 32,
+   "duration_s": 20272.9228,
+   "walltime_s": 65200.8305,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 54566405546,
+   "id": "eval-562",
+   "chips": 2,
+   "duration_s": 1499.12042,
+   "walltime_s": 3734.00137,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 54629074488,
+   "id": "eval-563",
+   "chips": 1,
+   "duration_s": 58.8440173,
+   "walltime_s": 129.48513,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 54634902597,
+   "id": "eval-564",
+   "chips": 1,
+   "duration_s": 159.440343,
+   "walltime_s": 392.57288,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 54641410793,
+   "id": "eval-565",
+   "chips": 4,
+   "duration_s": 16.7380134,
+   "walltime_s": 61.3337377,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 54879025178,
+   "id": "eval-566",
+   "chips": 2,
+   "duration_s": 144.827773,
+   "walltime_s": 130.884677,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 55069506945,
+   "id": "eval-567",
+   "chips": 8,
+   "duration_s": 3253.50242,
+   "walltime_s": 12971.0213,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 55100629691,
+   "id": "eval-568",
+   "chips": 4,
+   "duration_s": 24.1776229,
+   "walltime_s": 25.2387033,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 55253248281,
+   "id": "eval-569",
+   "chips": 2,
+   "duration_s": 1307.40512,
+   "walltime_s": 1035.2511,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 55268906972,
+   "id": "eval-570",
+   "chips": 2,
+   "duration_s": 43.72166,
+   "walltime_s": 63.806019,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 55349571344,
+   "id": "eval-571",
+   "chips": 1,
+   "duration_s": 1214.12424,
+   "walltime_s": 4092.07275,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 55413336527,
+   "id": "eval-572",
+   "chips": 1,
+   "duration_s": 1.96180335,
+   "walltime_s": 1.69905465,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 55417357332,
+   "id": "eval-573",
+   "chips": 8,
+   "duration_s": 5.7509285,
+   "walltime_s": 28.1319362,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 55459260752,
+   "id": "eval-574",
+   "chips": 2,
+   "duration_s": 1.21777296,
+   "walltime_s": 72.9123853,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 55585913319,
+   "id": "eval-575",
+   "chips": 1,
+   "duration_s": 101.243739,
+   "walltime_s": 166.251498,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 55638640524,
+   "id": "eval-576",
+   "chips": 4,
+   "duration_s": 55.104141,
+   "walltime_s": 22.9929597,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 55670473464,
+   "id": "eval-577",
+   "chips": 2,
+   "duration_s": 41.1372846,
+   "walltime_s": 62.3684439,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 55862596981,
+   "id": "finetune-55",
+   "chips": 32,
+   "duration_s": 3807.7103,
+   "walltime_s": 2979.75915,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 55923427126,
+   "id": "eval-578",
+   "chips": 1,
+   "duration_s": 3.83793742,
+   "walltime_s": 18.7020405,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 55962013598,
+   "id": "eval-579",
+   "chips": 8,
+   "duration_s": 3.81565182,
+   "walltime_s": 176.616625,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 56451088472,
+   "id": "eval-580",
+   "chips": 2,
+   "duration_s": 739.519743,
+   "walltime_s": 1680.69568,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 56453002710,
+   "id": "eval-581",
+   "chips": 2,
+   "duration_s": 105.483078,
+   "walltime_s": 169.339431,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 56461283101,
+   "id": "eval-582",
+   "chips": 1,
+   "duration_s": 28.7849768,
+   "walltime_s": 78.9146237,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 56520954705,
+   "id": "finetune-56",
+   "chips": 8,
+   "duration_s": 27314.0572,
+   "walltime_s": 53400.2431,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 56700262482,
+   "id": "eval-583",
+   "chips": 4,
+   "duration_s": 1095.95779,
+   "walltime_s": 534.955879,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 56757850385,
+   "id": "eval-584",
+   "chips": 1,
+   "duration_s": 2639.71487,
+   "walltime_s": 4050.60068,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 56877540315,
+   "id": "eval-585",
+   "chips": 8,
+   "duration_s": 256.934692,
+   "walltime_s": 399.891363,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 56979223353,
+   "id": "eval-586",
+   "chips": 4,
+   "duration_s": 134.846977,
+   "walltime_s": 362.204796,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57001977532,
+   "id": "eval-587",
+   "chips": 2,
+   "duration_s": 10.1397438,
+   "walltime_s": 96.8029656,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 57052382095,
+   "id": "eval-588",
+   "chips": 8,
+   "duration_s": 102.196481,
+   "walltime_s": 628.913458,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57054678151,
+   "id": "eval-589",
+   "chips": 4,
+   "duration_s": 629.708425,
+   "walltime_s": 1000.85763,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57100612333,
+   "id": "eval-590",
+   "chips": 2,
+   "duration_s": 1.11568833,
+   "walltime_s": 98.2275735,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57190074717,
+   "id": "eval-591",
+   "chips": 2,
+   "duration_s": 259.570579,
+   "walltime_s": 462.459932,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57370298262,
+   "id": "eval-592",
+   "chips": 8,
+   "duration_s": 4.29719089,
+   "walltime_s": 4322.11586,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57437779582,
+   "id": "eval-593",
+   "chips": 2,
+   "duration_s": 5.50033306,
+   "walltime_s": 5.72328882,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57488086314,
+   "id": "eval-594",
+   "chips": 4,
+   "duration_s": 0.386610275,
+   "walltime_s": 28.4324512,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 57543125350,
+   "id": "eval-595",
+   "chips": 8,
+   "duration_s": 547.895144,
+   "walltime_s": 498.385677,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57554816175,
+   "id": "eval-596",
+   "chips": 1,
+   "duration_s": 36.042825,
+   "walltime_s": 74.7173938,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 57574452430,
+   "id": "eval-597",
+   "chips": 4,
+   "duration_s": 685.85434,
+   "walltime_s": 1488.76198,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 57651385607,
+   "id": "eval-598",
+   "chips": 2,
+   "duration_s": 143.023458,
+   "walltime_s": 197.220583,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 57891644568,
+   "id": "eval-599",
+   "chips": 1,
+   "duration_s": 44.9129271,
+   "walltime_s": 480.760177,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 57897946088,
+   "id": "eval-600",
+   "chips": 8,
+   "duration_s": 23.3263264,
+   "walltime_s": 115.72156,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 58019209309,
+   "id": "finetune-57",
+   "chips": 8,
+   "duration_s": 12854.4664,
+   "walltime_s": 41670.4662,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58065843128,
+   "id": "eval-601",
+   "chips": 1,
+   "duration_s": 126.004775,
+   "walltime_s": 126.146721,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 58132783207,
+   "id": "eval-602",
+   "chips": 2,
+   "duration_s": 394.920351,
+   "walltime_s": 339.535473,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58205032589,
+   "id": "eval-603",
+   "chips": 4,
+   "duration_s": 4688.21415,
+   "walltime_s": 14371.2336,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58478444747,
+   "id": "eval-604",
+   "chips": 4,
+   "duration_s": 1705.92384,
+   "walltime_s": 1503.69482,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 58482330315,
+   "id": "eval-605",
+   "chips": 2,
+   "duration_s": 5.15308094,
+   "walltime_s": 106.00376,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58522027285,
+   "id": "eval-606",
+   "chips": 4,
+   "duration_s": 25.375717,
+   "walltime_s": 57.1941799,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 58543720941,
+   "id": "eval-607",
+   "chips": 4,
+   "duration_s": 178.236721,
+   "walltime_s": 449.887248,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58552422058,
+   "id": "eval-608",
+   "chips": 8,
+   "duration_s": 52.7317304,
+   "walltime_s": 116.823152,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58638227145,
+   "id": "eval-609",
+   "chips": 8,
+   "duration_s": 61.6440335,
+   "walltime_s": 99.7032813,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 58657110309,
+   "id": "eval-610",
+   "chips": 1,
+   "duration_s": 9225.4199,
+   "walltime_s": 15857.2276,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58660664429,
+   "id": "eval-611",
+   "chips": 8,
+   "duration_s": 523.868138,
+   "walltime_s": 524.48735,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 58666117712,
+   "id": "eval-612",
+   "chips": 2,
+   "duration_s": 113.290509,
+   "walltime_s": 290.361825,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 58816629083,
+   "id": "eval-613",
+   "chips": 2,
+   "duration_s": 821.147871,
+   "walltime_s": 1078.90937,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 58820508825,
+   "id": "eval-614",
+   "chips": 4,
+   "duration_s": 172.812756,
+   "walltime_s": 521.166277,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 58915178181,
+   "id": "eval-615",
+   "chips": 8,
+   "duration_s": 19.150777,
+   "walltime_s": 21.5162115,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 59029675667,
+   "id": "eval-616",
+   "chips": 2,
+   "duration_s": 5.22543148,
+   "walltime_s": 28.7869079,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 59225724180,
+   "id": "eval-617",
+   "chips": 4,
+   "duration_s": 0.633909534,
+   "walltime_s": 17.7677253,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 59265850876,
+   "id": "eval-618",
+   "chips": 1,
+   "duration_s": 137.152709,
+   "walltime_s": 344.937487,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 59267258350,
+   "id": "eval-619",
+   "chips": 2,
+   "duration_s": 148.122169,
+   "walltime_s": 130.112955,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59343872312,
+   "id": "eval-620",
+   "chips": 4,
+   "duration_s": 684.315622,
+   "walltime_s": 1144.42094,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 59427646372,
+   "id": "eval-621",
+   "chips": 2,
+   "duration_s": 36.6134714,
+   "walltime_s": 3029.66599,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59429395936,
+   "id": "eval-622",
+   "chips": 2,
+   "duration_s": 103.598426,
+   "walltime_s": 134.128981,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59465887690,
+   "id": "eval-623",
+   "chips": 8,
+   "duration_s": 20.7014062,
+   "walltime_s": 57.3828756,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 59502199666,
+   "id": "eval-624",
+   "chips": 2,
+   "duration_s": 19.5832125,
+   "walltime_s": 47.9013353,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59595165915,
+   "id": "eval-625",
+   "chips": 1,
+   "duration_s": 842.968877,
+   "walltime_s": 1722.98919,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 59621300035,
+   "id": "eval-626",
+   "chips": 1,
+   "duration_s": 53.5677205,
+   "walltime_s": 523.433378,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 59647633315,
+   "id": "eval-627",
+   "chips": 8,
+   "duration_s": 69133.9722,
+   "walltime_s": 218302.782,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 59695536071,
+   "id": "eval-628",
+   "chips": 4,
+   "duration_s": 278.449303,
+   "walltime_s": 469.629408,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 59763390079,
+   "id": "eval-629",
+   "chips": 8,
+   "duration_s": 2.53604254,
+   "walltime_s": 3.93432125,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59827629725,
+   "id": "eval-630",
+   "chips": 4,
+   "duration_s": 2740.53349,
+   "walltime_s": 2445.95498,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59831285045,
+   "id": "eval-631",
+   "chips": 2,
+   "duration_s": 81.805681,
+   "walltime_s": 142.625067,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59854787666,
+   "id": "eval-632",
+   "chips": 2,
+   "duration_s": 2687.70105,
+   "walltime_s": 8126.57015,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59899170287,
+   "id": "eval-633",
+   "chips": 1,
+   "duration_s": 312.770066,
+   "walltime_s": 887.714297,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 59952116253,
+   "id": "eval-634",
+   "chips": 2,
+   "duration_s": 177.87376,
+   "walltime_s": 1462.06258,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 60138203291,
+   "id": "eval-635",
+   "chips": 2,
+   "duration_s": 269.502775,
+   "walltime_s": 473.69993,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 60255107409,
+   "id": "eval-636",
+   "chips": 8,
+   "duration_s": 5.65503706,
+   "walltime_s": 11.1822494,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 60273290775,
+   "id": "eval-637",
+   "chips": 4,
+   "duration_s": 62.1844049,
+   "walltime_s": 89.9696568,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 60275122850,
+   "id": "eval-638",
+   "chips": 4,
+   "duration_s": 1433.25518,
+   "walltime_s": 1642.94008,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 60275496129,
+   "id": "eval-639",
+   "chips": 8,
+   "duration_s": 356.028349,
+   "walltime_s": 623.196347,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 60728889666,
+   "id": "eval-640",
+   "chips": 8,
+   "duration_s": 70059.6132,
+   "walltime_s": 183719.63,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 60769617408,
+   "id": "eval-641",
+   "chips": 1,
+   "duration_s": 42.661945,
+   "walltime_s": 87.2833811,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 60771672319,
+   "id": "finetune-58",
+   "chips": 64,
+   "duration_s": 5763.69571,
+   "walltime_s": 174670.0,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 60830168761,
+   "id": "eval-642",
+   "chips": 4,
+   "duration_s": 412.856676,
+   "walltime_s": 205.127812,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 60902516147,
+   "id": "eval-643",
+   "chips": 4,
+   "duration_s": 5.98442734,
+   "walltime_s": 7.07678562,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 60920010482,
+   "id": "eval-644",
+   "chips": 8,
+   "duration_s": 12.5213068,
+   "walltime_s": 27.7255157,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 61084859892,
+   "id": "eval-645",
+   "chips": 1,
+   "duration_s": 125.620037,
+   "walltime_s": 80.1030367,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 61146074603,
+   "id": "eval-646",
+   "chips": 1,
+   "duration_s": 3.91892382,
+   "walltime_s": 31.2611636,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 61259106085,
+   "id": "eval-647",
+   "chips": 2,
+   "duration_s": 73414.8121,
+   "walltime_s": 213141.986,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61457840246,
+   "id": "eval-648",
+   "chips": 4,
+   "duration_s": 192.680738,
+   "walltime_s": 150.133399,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61461687743,
+   "id": "eval-649",
+   "chips": 8,
+   "duration_s": 205.609361,
+   "walltime_s": 2640.93113,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61479113233,
+   "id": "eval-650",
+   "chips": 2,
+   "duration_s": 62.7428268,
+   "walltime_s": 146.628308,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61526280370,
+   "id": "eval-651",
+   "chips": 4,
+   "duration_s": 23.7540236,
+   "walltime_s": 37.6247457,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 61719124209,
+   "id": "eval-652",
+   "chips": 4,
+   "duration_s": 60.7154443,
+   "walltime_s": 138.252708,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61752248003,
+   "id": "eval-653",
+   "chips": 8,
+   "duration_s": 246.813968,
+   "walltime_s": 805.55043,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 61849695170,
+   "id": "eval-654",
+   "chips": 1,
+   "duration_s": 187.729066,
+   "walltime_s": 508.797898,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 61895912824,
+   "id": "eval-655",
+   "chips": 2,
+   "duration_s": 133.211908,
+   "walltime_s": 281.98885,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 61905504441,
+   "id": "eval-656",
+   "chips": 2,
+   "duration_s": 101.252124,
+   "walltime_s": 469.834613,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 61989803374,
+   "id": "eval-657",
+   "chips": 8,
+   "duration_s": 4.95227238,
+   "walltime_s": 13.7821065,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 62113275538,
+   "id": "finetune-59",
+   "chips": 16,
+   "duration_s": 40517.3703,
+   "walltime_s": 66973.4557,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 62145726461,
+   "id": "eval-658",
+   "chips": 4,
+   "duration_s": 321.992274,
+   "walltime_s": 257.951632,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 62168426239,
+   "id": "eval-659",
+   "chips": 2,
+   "duration_s": 1371.93381,
+   "walltime_s": 3561.42635,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 62250824415,
+   "id": "eval-660",
+   "chips": 2,
+   "duration_s": 213.168761,
+   "walltime_s": 26257.2365,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 62577530599,
+   "id": "eval-661",
+   "chips": 1,
+   "duration_s": 36.887021,
+   "walltime_s": 49.9748218,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 62588920291,
+   "id": "eval-662",
+   "chips": 2,
+   "duration_s": 534.615057,
+   "walltime_s": 1565.20907,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 62712253960,
+   "id": "eval-663",
+   "chips": 2,
+   "duration_s": 301.832445,
+   "walltime_s": 1166.03641,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 62869838901,
+   "id": "eval-664",
+   "chips": 2,
+   "duration_s": 294.561242,
+   "walltime_s": 2167.16538,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 62875193854,
+   "id": "eval-665",
+   "chips": 8,
+   "duration_s": 0.355914977,
+   "walltime_s": 0.551465403,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 63007637441,
+   "id": "eval-666",
+   "chips": 2,
+   "duration_s": 1061.99696,
+   "walltime_s": 1110.65618,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 63045945552,
+   "id": "eval-667",
+   "chips": 8,
+   "duration_s": 755.606149,
+   "walltime_s": 1052.02769,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 63051748051,
+   "id": "eval-668",
+   "chips": 1,
+   "duration_s": 19.6439318,
+   "walltime_s": 27.6684114,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 63068619667,
+   "id": "eval-669",
+   "chips": 1,
+   "duration_s": 913.150916,
+   "walltime_s": 789.781298,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 63296898844,
+   "id": "eval-670",
+   "chips": 1,
+   "duration_s": 17.1333332,
+   "walltime_s": 10.734702,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 63343639155,
+   "id": "eval-671",
+   "chips": 1,
+   "duration_s": 24.9257009,
+   "walltime_s": 47.634137,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 63550709493,
+   "id": "eval-672",
+   "chips": 1,
+   "duration_s": 0.452722553,
+   "walltime_s": 1.55538906,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 63553402225,
+   "id": "eval-673",
+   "chips": 4,
+   "duration_s": 338.820618,
+   "walltime_s": 409.93316,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 63609740539,
+   "id": "eval-674",
+   "chips": 2,
+   "duration_s": 100.484199,
+   "walltime_s": 147.34209,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 63954752311,
+   "id": "eval-675",
+   "chips": 1,
+   "duration_s": 3.20508758,
+   "walltime_s": 24.0812209,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 63964005529,
+   "id": "eval-676",
+   "chips": 1,
+   "duration_s": 7.33157582,
+   "walltime_s": 18.6777765,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 63981210486,
+   "id": "eval-677",
+   "chips": 4,
+   "duration_s": 3.07578884,
+   "walltime_s": 485.064434,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 63994331890,
+   "id": "eval-678",
+   "chips": 1,
+   "duration_s": 866.987454,
+   "walltime_s": 669.423095,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 64182223134,
+   "id": "eval-679",
+   "chips": 4,
+   "duration_s": 1.66194358,
+   "walltime_s": 2.26391978,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 64222982562,
+   "id": "eval-680",
+   "chips": 4,
+   "duration_s": 371.315569,
+   "walltime_s": 197.918324,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 64390471297,
+   "id": "eval-681",
+   "chips": 2,
+   "duration_s": 356.641016,
+   "walltime_s": 280.363727,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 64390806998,
+   "id": "eval-682",
+   "chips": 8,
+   "duration_s": 354.072147,
+   "walltime_s": 458.859041,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 64549944299,
+   "id": "eval-683",
+   "chips": 4,
+   "duration_s": 4525.20427,
+   "walltime_s": 5252.72739,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 64599642220,
+   "id": "eval-684",
+   "chips": 8,
+   "duration_s": 20.4566821,
+   "walltime_s": 38.6224875,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 64659840881,
+   "id": "eval-685",
+   "chips": 8,
+   "duration_s": 12.5341332,
+   "walltime_s": 28.847606,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 64723170134,
+   "id": "eval-686",
+   "chips": 1,
+   "duration_s": 7.94978588,
+   "walltime_s": 388.144448,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 64799291044,
+   "id": "eval-687",
+   "chips": 4,
+   "duration_s": 20.1966225,
+   "walltime_s": 24.2769106,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 64988643031,
+   "id": "finetune-60",
+   "chips": 32,
+   "duration_s": 8126.65887,
+   "walltime_s": 8934.78911,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 65042083768,
+   "id": "eval-688",
+   "chips": 1,
+   "duration_s": 1147.59508,
+   "walltime_s": 680.65656,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 65133851600,
+   "id": "eval-689",
+   "chips": 1,
+   "duration_s": 362.891905,
+   "walltime_s": 189.380375,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 65243233292,
+   "id": "eval-690",
+   "chips": 1,
+   "duration_s": 227.057649,
+   "walltime_s": 116.53046,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 65285730083,
+   "id": "finetune-61",
+   "chips": 16,
+   "duration_s": 2281.00528,
+   "walltime_s": 4939.095,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 65414842532,
+   "id": "eval-691",
+   "chips": 4,
+   "duration_s": 231.481667,
+   "walltime_s": 89.162502,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 65554871010,
+   "id": "eval-692",
+   "chips": 8,
+   "duration_s": 493.921806,
+   "walltime_s": 1701.69803,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 65600036296,
+   "id": "eval-693",
+   "chips": 2,
+   "duration_s": 888.240853,
+   "walltime_s": 1483.71145,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 65713168809,
+   "id": "eval-694",
+   "chips": 2,
+   "duration_s": 17.2621314,
+   "walltime_s": 26.8995287,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 65890382204,
+   "id": "eval-695",
+   "chips": 2,
+   "duration_s": 0.169591599,
+   "walltime_s": 0.181817553,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66013378495,
+   "id": "eval-696",
+   "chips": 2,
+   "duration_s": 91.9562528,
+   "walltime_s": 228.744354,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 66024118601,
+   "id": "eval-697",
+   "chips": 8,
+   "duration_s": 1270.75688,
+   "walltime_s": 1339.44566,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66052502052,
+   "id": "eval-698",
+   "chips": 1,
+   "duration_s": 265.713774,
+   "walltime_s": 539.568466,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 66054073633,
+   "id": "eval-699",
+   "chips": 1,
+   "duration_s": 3283.09954,
+   "walltime_s": 7066.98176,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66116469271,
+   "id": "eval-700",
+   "chips": 4,
+   "duration_s": 247.813806,
+   "walltime_s": 426.541668,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 66171800100,
+   "id": "eval-701",
+   "chips": 8,
+   "duration_s": 363.127346,
+   "walltime_s": 687.678964,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 66211528375,
+   "id": "eval-702",
+   "chips": 1,
+   "duration_s": 171.962423,
+   "walltime_s": 616.626569,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66263696563,
+   "id": "eval-703",
+   "chips": 8,
+   "duration_s": 33.2515913,
+   "walltime_s": 20.456064,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66305775992,
+   "id": "eval-704",
+   "chips": 1,
+   "duration_s": 1087.9126,
+   "walltime_s": 1129.96397,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66753021133,
+   "id": "eval-705",
+   "chips": 2,
+   "duration_s": 3.83976789,
+   "walltime_s": 16.3626415,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 66762197267,
+   "id": "eval-706",
+   "chips": 1,
+   "duration_s": 364.977625,
+   "walltime_s": 556.328851,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66784600811,
+   "id": "eval-707",
+   "chips": 4,
+   "duration_s": 239.017236,
+   "walltime_s": 421.620028,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66862507653,
+   "id": "eval-708",
+   "chips": 8,
+   "duration_s": 157.836891,
+   "walltime_s": 259.788584,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 66994999269,
+   "id": "eval-709",
+   "chips": 2,
+   "duration_s": 530.565792,
+   "walltime_s": 365.270159,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67046064182,
+   "id": "eval-710",
+   "chips": 4,
+   "duration_s": 93.3095477,
+   "walltime_s": 90.712632,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 67153009546,
+   "id": "eval-711",
+   "chips": 4,
+   "duration_s": 5.4521432,
+   "walltime_s": 73.272732,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 67220339625,
+   "id": "eval-712",
+   "chips": 2,
+   "duration_s": 34.9765563,
+   "walltime_s": 44.7702645,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67235560785,
+   "id": "eval-713",
+   "chips": 8,
+   "duration_s": 7.67884704,
+   "walltime_s": 40.1005092,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 67311154216,
+   "id": "eval-714",
+   "chips": 1,
+   "duration_s": 101.238881,
+   "walltime_s": 210.040089,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67348662176,
+   "id": "eval-715",
+   "chips": 8,
+   "duration_s": 131.492388,
+   "walltime_s": 354.121365,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67458777824,
+   "id": "eval-716",
+   "chips": 4,
+   "duration_s": 11.2249204,
+   "walltime_s": 8.59729446,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 67643038636,
+   "id": "finetune-62",
+   "chips": 32,
+   "duration_s": 52396.468,
+   "walltime_s": 75181.9756,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 67739296887,
+   "id": "finetune-63",
+   "chips": 8,
+   "duration_s": 12916.7086,
+   "walltime_s": 40909.3463,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 67782163861,
+   "id": "eval-717",
+   "chips": 1,
+   "duration_s": 3.9754859,
+   "walltime_s": 35.711723,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67813382056,
+   "id": "finetune-64",
+   "chips": 64,
+   "duration_s": 5681.23755,
+   "walltime_s": 10774.9834,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 67828963951,
+   "id": "eval-718",
+   "chips": 4,
+   "duration_s": 573.455539,
+   "walltime_s": 392.490371,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 67849072082,
+   "id": "eval-719",
+   "chips": 1,
+   "duration_s": 20.1740844,
+   "walltime_s": 34.7048469,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 67995566809,
+   "id": "eval-720",
+   "chips": 4,
+   "duration_s": 302.818613,
+   "walltime_s": 656.052427,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 68079085507,
+   "id": "eval-721",
+   "chips": 1,
+   "duration_s": 3.58711544,
+   "walltime_s": 12.7562438,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 68212551366,
+   "id": "eval-722",
+   "chips": 2,
+   "duration_s": 33.9948626,
+   "walltime_s": 51.3110344,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 68283582455,
+   "id": "eval-723",
+   "chips": 4,
+   "duration_s": 1026.14237,
+   "walltime_s": 709.841476,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 68378980156,
+   "id": "eval-724",
+   "chips": 2,
+   "duration_s": 71.3697533,
+   "walltime_s": 130.781298,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 68381114831,
+   "id": "eval-725",
+   "chips": 1,
+   "duration_s": 734.231353,
+   "walltime_s": 2107.16004,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 68430050744,
+   "id": "eval-726",
+   "chips": 4,
+   "duration_s": 1606.9275,
+   "walltime_s": 3656.01355,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 68493302260,
+   "id": "eval-727",
+   "chips": 2,
+   "duration_s": 2669.66815,
+   "walltime_s": 6346.68464,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 68568096542,
+   "id": "eval-728",
+   "chips": 1,
+   "duration_s": 290.012478,
+   "walltime_s": 577.916997,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 68761023534,
+   "id": "eval-729",
+   "chips": 8,
+   "duration_s": 28.4697413,
+   "walltime_s": 70.263041,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 68797908578,
+   "id": "eval-730",
+   "chips": 1,
+   "duration_s": 16.9515687,
+   "walltime_s": 22.2438453,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 68803608798,
+   "id": "eval-731",
+   "chips": 8,
+   "duration_s": 0.0942875901,
+   "walltime_s": 191.416124,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 68879617433,
+   "id": "eval-732",
+   "chips": 1,
+   "duration_s": 94.752962,
+   "walltime_s": 167.822842,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 69057527478,
+   "id": "eval-733",
+   "chips": 4,
+   "duration_s": 497.36407,
+   "walltime_s": 816.520498,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 69104251242,
+   "id": "eval-734",
+   "chips": 8,
+   "duration_s": 698.938101,
+   "walltime_s": 934.570164,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 69145907237,
+   "id": "eval-735",
+   "chips": 8,
+   "duration_s": 87.1399441,
+   "walltime_s": 248.303936,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 69171419960,
+   "id": "eval-736",
+   "chips": 4,
+   "duration_s": 59.4373597,
+   "walltime_s": 68.2066919,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 69346756930,
+   "id": "eval-737",
+   "chips": 4,
+   "duration_s": 1272.51642,
+   "walltime_s": 2903.77165,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 69375486273,
+   "id": "eval-738",
+   "chips": 2,
+   "duration_s": 200.638943,
+   "walltime_s": 396.615305,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 69382049862,
+   "id": "finetune-65",
+   "chips": 64,
+   "duration_s": 116278.993,
+   "walltime_s": 171093.445,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 69494615228,
+   "id": "finetune-66",
+   "chips": 32,
+   "duration_s": 1483.78517,
+   "walltime_s": 1072.71944,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 69579311683,
+   "id": "finetune-67",
+   "chips": 8,
+   "duration_s": 111983.269,
+   "walltime_s": 69187.4364,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 69586735364,
+   "id": "finetune-68",
+   "chips": 64,
+   "duration_s": 57348.7753,
+   "walltime_s": 85833.0651,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 69709854791,
+   "id": "eval-739",
+   "chips": 2,
+   "duration_s": 2.07739928,
+   "walltime_s": 7.32219629,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 69771615251,
+   "id": "eval-740",
+   "chips": 2,
+   "duration_s": 9.69166875,
+   "walltime_s": 14.5655228,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 69821204004,
+   "id": "finetune-69",
+   "chips": 32,
+   "duration_s": 9896.3817,
+   "walltime_s": 7896.6703,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 69905563311,
+   "id": "eval-741",
+   "chips": 4,
+   "duration_s": 11.3375987,
+   "walltime_s": 283.247998,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 69925858940,
+   "id": "eval-742",
+   "chips": 2,
+   "duration_s": 25.3080466,
+   "walltime_s": 34.2312611,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 69974488119,
+   "id": "eval-743",
+   "chips": 8,
+   "duration_s": 6.20555266,
+   "walltime_s": 14.4468238,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 70039003532,
+   "id": "eval-744",
+   "chips": 8,
+   "duration_s": 3.73157686,
+   "walltime_s": 19.9064171,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 70126567987,
+   "id": "eval-745",
+   "chips": 4,
+   "duration_s": 6245.87018,
+   "walltime_s": 7239.37938,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 70142080916,
+   "id": "eval-746",
+   "chips": 8,
+   "duration_s": 138.083301,
+   "walltime_s": 303.884563,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 70335649978,
+   "id": "eval-747",
+   "chips": 1,
+   "duration_s": 153.884268,
+   "walltime_s": 113.077487,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 70493017583,
+   "id": "eval-748",
+   "chips": 1,
+   "duration_s": 2.9893376,
+   "walltime_s": 42.3719135,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 70506246548,
+   "id": "eval-749",
+   "chips": 4,
+   "duration_s": 2.9537612,
+   "walltime_s": 19.6205797,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 70524012788,
+   "id": "eval-750",
+   "chips": 4,
+   "duration_s": 2.05274102,
+   "walltime_s": 3.33532763,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 70535803595,
+   "id": "eval-751",
+   "chips": 2,
+   "duration_s": 26.0404697,
+   "walltime_s": 68.4701755,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 70591257780,
+   "id": "eval-752",
+   "chips": 2,
+   "duration_s": 8.07048658,
+   "walltime_s": 84.1085811,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 70703584226,
+   "id": "eval-753",
+   "chips": 4,
+   "duration_s": 78.1922916,
+   "walltime_s": 231.445505,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 70833030329,
+   "id": "eval-754",
+   "chips": 8,
+   "duration_s": 1.89628112,
+   "walltime_s": 8.02743298,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 70856557460,
+   "id": "eval-755",
+   "chips": 1,
+   "duration_s": 9.20208621,
+   "walltime_s": 24.1996374,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 70939357235,
+   "id": "eval-756",
+   "chips": 2,
+   "duration_s": 0.132716208,
+   "walltime_s": 0.215423615,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71075152522,
+   "id": "eval-757",
+   "chips": 2,
+   "duration_s": 1.7091329,
+   "walltime_s": 2.63253115,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 71183826604,
+   "id": "finetune-70",
+   "chips": 32,
+   "duration_s": 4353.98812,
+   "walltime_s": 3643.38671,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 71224832723,
+   "id": "eval-758",
+   "chips": 8,
+   "duration_s": 2744.89735,
+   "walltime_s": 5709.86463,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71230850391,
+   "id": "eval-759",
+   "chips": 4,
+   "duration_s": 2541.69546,
+   "walltime_s": 5963.73635,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 71283121362,
+   "id": "eval-760",
+   "chips": 1,
+   "duration_s": 125.76632,
+   "walltime_s": 310.192688,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 71311999643,
+   "id": "eval-761",
+   "chips": 1,
+   "duration_s": 249.807517,
+   "walltime_s": 316.78001,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 71333141648,
+   "id": "eval-762",
+   "chips": 4,
+   "duration_s": 776.486992,
+   "walltime_s": 994.052651,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71360638489,
+   "id": "eval-763",
+   "chips": 2,
+   "duration_s": 149.799185,
+   "walltime_s": 373.352661,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71434963392,
+   "id": "eval-764",
+   "chips": 2,
+   "duration_s": 41.5887399,
+   "walltime_s": 53.7919416,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71559697849,
+   "id": "finetune-71",
+   "chips": 32,
+   "duration_s": 33962.9315,
+   "walltime_s": 200543.288,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71560366808,
+   "id": "eval-765",
+   "chips": 2,
+   "duration_s": 1.43267988,
+   "walltime_s": 431.603145,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 71587515962,
+   "id": "eval-766",
+   "chips": 2,
+   "duration_s": 234.412355,
+   "walltime_s": 754.41304,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 71594166268,
+   "id": "eval-767",
+   "chips": 8,
+   "duration_s": 9.88780094,
+   "walltime_s": 13.3245654,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 71620006670,
+   "id": "eval-768",
+   "chips": 4,
+   "duration_s": 4251.26237,
+   "walltime_s": 4864.57306,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 71669009617,
+   "id": "eval-769",
+   "chips": 8,
+   "duration_s": 7.99823542,
+   "walltime_s": 120.881199,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71713378036,
+   "id": "eval-770",
+   "chips": 1,
+   "duration_s": 44.6320736,
+   "walltime_s": 83.9957187,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71857708886,
+   "id": "eval-771",
+   "chips": 4,
+   "duration_s": 173.207782,
+   "walltime_s": 308.361202,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 71897978383,
+   "id": "eval-772",
+   "chips": 2,
+   "duration_s": 11.9045718,
+   "walltime_s": 12.2509396,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 71907945664,
+   "id": "eval-773",
+   "chips": 4,
+   "duration_s": 55.6603623,
+   "walltime_s": 99.750946,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72020297954,
+   "id": "eval-774",
+   "chips": 4,
+   "duration_s": 0.162548746,
+   "walltime_s": 1.38187541,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72108001186,
+   "id": "eval-775",
+   "chips": 4,
+   "duration_s": 15.6182086,
+   "walltime_s": 13.027579,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 72217846315,
+   "id": "eval-776",
+   "chips": 1,
+   "duration_s": 12.4525015,
+   "walltime_s": 16.6813455,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 72276053561,
+   "id": "eval-777",
+   "chips": 4,
+   "duration_s": 12.6612359,
+   "walltime_s": 29.775772,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72277345567,
+   "id": "eval-778",
+   "chips": 1,
+   "duration_s": 1199.06594,
+   "walltime_s": 2027.63857,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 72338312126,
+   "id": "eval-779",
+   "chips": 1,
+   "duration_s": 445.870038,
+   "walltime_s": 194.117911,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 72423664891,
+   "id": "eval-780",
+   "chips": 8,
+   "duration_s": 23.7931463,
+   "walltime_s": 12.4178702,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72436621095,
+   "id": "eval-781",
+   "chips": 2,
+   "duration_s": 366.347434,
+   "walltime_s": 470.588318,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 72485645284,
+   "id": "eval-782",
+   "chips": 2,
+   "duration_s": 45.0083672,
+   "walltime_s": 47.1386771,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 72540553921,
+   "id": "eval-783",
+   "chips": 1,
+   "duration_s": 10808.4973,
+   "walltime_s": 13224.1105,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 72621439085,
+   "id": "eval-784",
+   "chips": 2,
+   "duration_s": 139.738342,
+   "walltime_s": 187.538735,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72704311471,
+   "id": "eval-785",
+   "chips": 1,
+   "duration_s": 1.23782424,
+   "walltime_s": 3.11809322,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 72816610937,
+   "id": "finetune-72",
+   "chips": 8,
+   "duration_s": 2786.07276,
+   "walltime_s": 3764.67103,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 72934523695,
+   "id": "eval-786",
+   "chips": 8,
+   "duration_s": 303.963456,
+   "walltime_s": 375.329241,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 72996816078,
+   "id": "finetune-73",
+   "chips": 16,
+   "duration_s": 42852.8433,
+   "walltime_s": 57697.9207,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73025606090,
+   "id": "eval-787",
+   "chips": 1,
+   "duration_s": 33.8445432,
+   "walltime_s": 46.4240913,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 73097808948,
+   "id": "eval-788",
+   "chips": 2,
+   "duration_s": 206.524542,
+   "walltime_s": 123.729717,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 73329741869,
+   "id": "eval-789",
+   "chips": 1,
+   "duration_s": 989.218363,
+   "walltime_s": 5619.22685,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 73334453595,
+   "id": "eval-790",
+   "chips": 4,
+   "duration_s": 34.3513521,
+   "walltime_s": 95.816271,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73459054553,
+   "id": "eval-791",
+   "chips": 2,
+   "duration_s": 3130.88869,
+   "walltime_s": 5661.2348,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73463484338,
+   "id": "finetune-74",
+   "chips": 64,
+   "duration_s": 33437.3136,
+   "walltime_s": 69161.6015,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 73639465708,
+   "id": "eval-792",
+   "chips": 1,
+   "duration_s": 1736.39213,
+   "walltime_s": 2136.7741,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73863398577,
+   "id": "eval-793",
+   "chips": 2,
+   "duration_s": 6.56260529,
+   "walltime_s": 25.9339035,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73952951145,
+   "id": "eval-794",
+   "chips": 2,
+   "duration_s": 3297.6308,
+   "walltime_s": 2406.47644,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 73969215091,
+   "id": "eval-795",
+   "chips": 1,
+   "duration_s": 70.8098266,
+   "walltime_s": 92.8889346,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 73981505614,
+   "id": "eval-796",
+   "chips": 2,
+   "duration_s": 0.590335897,
+   "walltime_s": 1.65736358,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74067458320,
+   "id": "eval-797",
+   "chips": 2,
+   "duration_s": 4537.31382,
+   "walltime_s": 7251.82887,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 74086847035,
+   "id": "eval-798",
+   "chips": 2,
+   "duration_s": 232.669059,
+   "walltime_s": 158.335177,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 74088614994,
+   "id": "eval-799",
+   "chips": 1,
+   "duration_s": 2116.0153,
+   "walltime_s": 2104.99083,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74131461323,
+   "id": "eval-800",
+   "chips": 4,
+   "duration_s": 186.159964,
+   "walltime_s": 253.148799,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74440139952,
+   "id": "eval-801",
+   "chips": 4,
+   "duration_s": 175.334546,
+   "walltime_s": 472.985888,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74446051557,
+   "id": "eval-802",
+   "chips": 1,
+   "duration_s": 3.47002747,
+   "walltime_s": 4.6576406,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 74467450493,
+   "id": "finetune-75",
+   "chips": 64,
+   "duration_s": 1575.31522,
+   "walltime_s": 11752.1353,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 74516205408,
+   "id": "eval-803",
+   "chips": 8,
+   "duration_s": 9.83302876,
+   "walltime_s": 20.4542867,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 74526598251,
+   "id": "eval-804",
+   "chips": 1,
+   "duration_s": 430.523415,
+   "walltime_s": 495.872565,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74560193910,
+   "id": "eval-805",
+   "chips": 2,
+   "duration_s": 15.8668188,
+   "walltime_s": 169.125158,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74630353413,
+   "id": "finetune-76",
+   "chips": 64,
+   "duration_s": 106655.467,
+   "walltime_s": 268094.431,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74717235554,
+   "id": "eval-806",
+   "chips": 8,
+   "duration_s": 4.32915607,
+   "walltime_s": 78.1197511,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 74754457449,
+   "id": "eval-807",
+   "chips": 4,
+   "duration_s": 325.412238,
+   "walltime_s": 547.973166,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74788198359,
+   "id": "eval-808",
+   "chips": 4,
+   "duration_s": 5.74276629,
+   "walltime_s": 7.83319891,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 74897657557,
+   "id": "eval-809",
+   "chips": 4,
+   "duration_s": 416.291914,
+   "walltime_s": 8984.81066,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 74933309239,
+   "id": "eval-810",
+   "chips": 1,
+   "duration_s": 111.586735,
+   "walltime_s": 159.467762,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 74957535725,
+   "id": "eval-811",
+   "chips": 1,
+   "duration_s": 125.799361,
+   "walltime_s": 388.798889,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75349704129,
+   "id": "eval-812",
+   "chips": 1,
+   "duration_s": 269.866663,
+   "walltime_s": 599.19374,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75377666878,
+   "id": "eval-813",
+   "chips": 4,
+   "duration_s": 38.4102263,
+   "walltime_s": 176.893395,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 75487757495,
+   "id": "eval-814",
+   "chips": 8,
+   "duration_s": 172.125088,
+   "walltime_s": 248.025884,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 75514410677,
+   "id": "eval-815",
+   "chips": 1,
+   "duration_s": 13.6913052,
+   "walltime_s": 35.701241,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75728282777,
+   "id": "eval-816",
+   "chips": 2,
+   "duration_s": 54.6243718,
+   "walltime_s": 55.318344,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 75784780253,
+   "id": "eval-817",
+   "chips": 4,
+   "duration_s": 9.81826671,
+   "walltime_s": 10.618615,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75814156709,
+   "id": "eval-818",
+   "chips": 8,
+   "duration_s": 56.3741597,
+   "walltime_s": 27.06998,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75959126379,
+   "id": "eval-819",
+   "chips": 4,
+   "duration_s": 3785.70754,
+   "walltime_s": 4996.90994,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 75970197619,
+   "id": "eval-820",
+   "chips": 8,
+   "duration_s": 92.6479993,
+   "walltime_s": 356.141499,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 76019958706,
+   "id": "eval-821",
+   "chips": 8,
+   "duration_s": 63.5112706,
+   "walltime_s": 166.54315,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 76029435838,
+   "id": "finetune-77",
+   "chips": 8,
+   "duration_s": 3355.73786,
+   "walltime_s": 5087.27419,
+   "outcome": "None",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 76088953037,
+   "id": "eval-822",
+   "chips": 8,
+   "duration_s": 106.403746,
+   "walltime_s": 2229.52805,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 76182551008,
+   "id": "eval-823",
+   "chips": 4,
+   "duration_s": 368.057586,
+   "walltime_s": 3012.7301,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 76275676894,
+   "id": "eval-824",
+   "chips": 2,
+   "duration_s": 25.3052071,
+   "walltime_s": 101.418358,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 76325722012,
+   "id": "eval-825",
+   "chips": 4,
+   "duration_s": 65.0125554,
+   "walltime_s": 69.1167807,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 76438317706,
+   "id": "eval-826",
+   "chips": 4,
+   "duration_s": 4.49991862,
+   "walltime_s": 1444.7887,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 76590564086,
+   "id": "eval-827",
+   "chips": 8,
+   "duration_s": 158.69977,
+   "walltime_s": 195.864749,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 76653404265,
+   "id": "eval-828",
+   "chips": 1,
+   "duration_s": 214.311169,
+   "walltime_s": 265.251458,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 76780051213,
+   "id": "finetune-78",
+   "chips": 16,
+   "duration_s": 13969.2338,
+   "walltime_s": 38479.1014,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 76875995616,
+   "id": "eval-829",
+   "chips": 1,
+   "duration_s": 2142.16358,
+   "walltime_s": 7280.80469,
+   "outcome": "None",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 76895454370,
+   "id": "finetune-79",
+   "chips": 32,
+   "duration_s": 3956.87792,
+   "walltime_s": 6087.18834,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 76917391963,
+   "id": "eval-830",
+   "chips": 8,
+   "duration_s": 0.00101296676,
+   "walltime_s": 18.0927147,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 76918391010,
+   "id": "eval-831",
+   "chips": 4,
+   "duration_s": 3.75050582,
+   "walltime_s": 34.0007668,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 76933088049,
+   "id": "eval-832",
+   "chips": 2,
+   "duration_s": 269.182427,
+   "walltime_s": 420.146279,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 76961741571,
+   "id": "finetune-80",
+   "chips": 32,
+   "duration_s": 49625.2036,
+   "walltime_s": 78340.5198,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77054673558,
+   "id": "eval-833",
+   "chips": 8,
+   "duration_s": 2291.82292,
+   "walltime_s": 3873.36978,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77112855131,
+   "id": "eval-834",
+   "chips": 1,
+   "duration_s": 5.44451431,
+   "walltime_s": 11.2229404,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77149165926,
+   "id": "eval-835",
+   "chips": 4,
+   "duration_s": 5.67951413,
+   "walltime_s": 89.8194935,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77188627989,
+   "id": "eval-836",
+   "chips": 8,
+   "duration_s": 269.845224,
+   "walltime_s": 4667.44992,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77271404850,
+   "id": "eval-837",
+   "chips": 1,
+   "duration_s": 44.0764609,
+   "walltime_s": 143.349221,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 77271701843,
+   "id": "eval-838",
+   "chips": 1,
+   "duration_s": 8.64909918,
+   "walltime_s": 11.3741306,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77319547478,
+   "id": "eval-839",
+   "chips": 1,
+   "duration_s": 434.859991,
+   "walltime_s": 874.396327,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 77489733218,
+   "id": "eval-840",
+   "chips": 8,
+   "duration_s": 50.4497434,
+   "walltime_s": 2596.13946,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 77580784474,
+   "id": "eval-841",
+   "chips": 2,
+   "duration_s": 28.8454552,
+   "walltime_s": 27.5625152,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 77704772429,
+   "id": "eval-842",
+   "chips": 4,
+   "duration_s": 303.623751,
+   "walltime_s": 220.985504,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77759536690,
+   "id": "eval-843",
+   "chips": 8,
+   "duration_s": 338.728809,
+   "walltime_s": 575.65695,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 77776213890,
+   "id": "eval-844",
+   "chips": 8,
+   "duration_s": 592.102056,
+   "walltime_s": 790.059555,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 77840550956,
+   "id": "eval-845",
+   "chips": 4,
+   "duration_s": 1279.09125,
+   "walltime_s": 1908.47506,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 77938090156,
+   "id": "finetune-81",
+   "chips": 16,
+   "duration_s": 5912.76335,
+   "walltime_s": 124697.604,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 77943396987,
+   "id": "eval-846",
+   "chips": 8,
+   "duration_s": 454.602446,
+   "walltime_s": 616.014889,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78065618518,
+   "id": "eval-847",
+   "chips": 1,
+   "duration_s": 29.8046885,
+   "walltime_s": 70.7626966,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 78208083232,
+   "id": "eval-848",
+   "chips": 1,
+   "duration_s": 0.00796305643,
+   "walltime_s": 9.66360397,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t6"
+  },
+  {
+   "t_us": 78238717315,
+   "id": "eval-849",
+   "chips": 4,
+   "duration_s": 49.8634297,
+   "walltime_s": 67.9008226,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 78249304687,
+   "id": "eval-850",
+   "chips": 1,
+   "duration_s": 1490.62843,
+   "walltime_s": 1192.61488,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78257403621,
+   "id": "eval-851",
+   "chips": 1,
+   "duration_s": 19.6061899,
+   "walltime_s": 62.3804242,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78267734960,
+   "id": "eval-852",
+   "chips": 8,
+   "duration_s": 13.0070552,
+   "walltime_s": 153.037317,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 78272539349,
+   "id": "eval-853",
+   "chips": 4,
+   "duration_s": 51.0737041,
+   "walltime_s": 107.198859,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78278686075,
+   "id": "eval-854",
+   "chips": 1,
+   "duration_s": 4347.8995,
+   "walltime_s": 7034.15781,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 78320424529,
+   "id": "finetune-82",
+   "chips": 16,
+   "duration_s": 24724.692,
+   "walltime_s": 46677.777,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 78382972354,
+   "id": "eval-855",
+   "chips": 8,
+   "duration_s": 861.498205,
+   "walltime_s": 1485.25568,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78388722625,
+   "id": "finetune-83",
+   "chips": 32,
+   "duration_s": 535290.976,
+   "walltime_s": 554982.51,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78403770738,
+   "id": "eval-856",
+   "chips": 1,
+   "duration_s": 0.409097364,
+   "walltime_s": 16.0127909,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78610622471,
+   "id": "eval-857",
+   "chips": 4,
+   "duration_s": 54.6012677,
+   "walltime_s": 100.145159,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 78674163344,
+   "id": "eval-858",
+   "chips": 1,
+   "duration_s": 24.9868084,
+   "walltime_s": 42.8942216,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78679140472,
+   "id": "eval-859",
+   "chips": 1,
+   "duration_s": 15.8228822,
+   "walltime_s": 89.1886271,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78701106619,
+   "id": "finetune-84",
+   "chips": 16,
+   "duration_s": 163540.994,
+   "walltime_s": 106548.418,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 78716972706,
+   "id": "eval-860",
+   "chips": 2,
+   "duration_s": 459.427686,
+   "walltime_s": 963.385575,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 78781765848,
+   "id": "eval-861",
+   "chips": 1,
+   "duration_s": 3.89194839,
+   "walltime_s": 4.88649798,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 78787012821,
+   "id": "eval-862",
+   "chips": 8,
+   "duration_s": 195.26561,
+   "walltime_s": 2852.7228,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 78954862269,
+   "id": "finetune-85",
+   "chips": 8,
+   "duration_s": 15096.7365,
+   "walltime_s": 18993.6011,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79070833935,
+   "id": "eval-863",
+   "chips": 2,
+   "duration_s": 59.8015885,
+   "walltime_s": 58.9170023,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 79109019864,
+   "id": "eval-864",
+   "chips": 2,
+   "duration_s": 0.000683115575,
+   "walltime_s": 569.724928,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 79187578282,
+   "id": "finetune-86",
+   "chips": 8,
+   "duration_s": 36513.2887,
+   "walltime_s": 91425.1607,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 79244372808,
+   "id": "eval-865",
+   "chips": 2,
+   "duration_s": 330.212879,
+   "walltime_s": 997.141328,
+   "outcome": "None",
+   "tenant": "t7"
+  },
+  {
+   "t_us": 79295534459,
+   "id": "eval-866",
+   "chips": 2,
+   "duration_s": 15.5911147,
+   "walltime_s": 34.1727318,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79310970507,
+   "id": "eval-867",
+   "chips": 4,
+   "duration_s": 36.1625927,
+   "walltime_s": 25.1292524,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 79357700557,
+   "id": "finetune-87",
+   "chips": 8,
+   "duration_s": 19311.5519,
+   "walltime_s": 18891.531,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 79358696748,
+   "id": "eval-868",
+   "chips": 4,
+   "duration_s": 28.2508685,
+   "walltime_s": 41.740899,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79463355308,
+   "id": "eval-869",
+   "chips": 1,
+   "duration_s": 0.190795971,
+   "walltime_s": 33.5148627,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 79528046435,
+   "id": "eval-870",
+   "chips": 1,
+   "duration_s": 63.7351034,
+   "walltime_s": 244.017157,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 79551229389,
+   "id": "eval-871",
+   "chips": 2,
+   "duration_s": 71.5841103,
+   "walltime_s": 206.435324,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79604109582,
+   "id": "finetune-88",
+   "chips": 64,
+   "duration_s": 5186.47174,
+   "walltime_s": 4679.64056,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 79695750303,
+   "id": "eval-872",
+   "chips": 4,
+   "duration_s": 111.010489,
+   "walltime_s": 198.571291,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79699311880,
+   "id": "eval-873",
+   "chips": 2,
+   "duration_s": 49.101065,
+   "walltime_s": 5999.60615,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 79703395050,
+   "id": "eval-874",
+   "chips": 8,
+   "duration_s": 278.793603,
+   "walltime_s": 364.251643,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 79726184130,
+   "id": "eval-875",
+   "chips": 4,
+   "duration_s": 1191.03752,
+   "walltime_s": 3323.86872,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79828188207,
+   "id": "eval-876",
+   "chips": 8,
+   "duration_s": 3.30832478,
+   "walltime_s": 17.6136584,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 79950208392,
+   "id": "finetune-89",
+   "chips": 8,
+   "duration_s": 13233.3672,
+   "walltime_s": 12609.7619,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 79965214685,
+   "id": "eval-877",
+   "chips": 1,
+   "duration_s": 165.623931,
+   "walltime_s": 190.556045,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 80001572877,
+   "id": "eval-878",
+   "chips": 1,
+   "duration_s": 139.452126,
+   "walltime_s": 417.383013,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 80090986747,
+   "id": "eval-879",
+   "chips": 1,
+   "duration_s": 58.3617517,
+   "walltime_s": 223.190049,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 80134156379,
+   "id": "finetune-90",
+   "chips": 16,
+   "duration_s": 80604.4821,
+   "walltime_s": 168818.682,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 80170974528,
+   "id": "eval-880",
+   "chips": 8,
+   "duration_s": 0.614841798,
+   "walltime_s": 1.67023306,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 80197202931,
+   "id": "eval-881",
+   "chips": 8,
+   "duration_s": 4.89438362,
+   "walltime_s": 285.013674,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 80205110854,
+   "id": "eval-882",
+   "chips": 1,
+   "duration_s": 16.1691698,
+   "walltime_s": 44.1781597,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 80251750082,
+   "id": "eval-883",
+   "chips": 8,
+   "duration_s": 133.244387,
+   "walltime_s": 583.145695,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 80389030370,
+   "id": "eval-884",
+   "chips": 2,
+   "duration_s": 23.7249222,
+   "walltime_s": 31.5410924,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 80392764572,
+   "id": "eval-885",
+   "chips": 8,
+   "duration_s": 1.39827843,
+   "walltime_s": 35.1102208,
+   "outcome": "JobStatus.CANCELED",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 80401945387,
+   "id": "finetune-91",
+   "chips": 16,
+   "duration_s": 3277.44914,
+   "walltime_s": 7412.07225,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 80519280061,
+   "id": "eval-886",
+   "chips": 2,
+   "duration_s": 1767.0632,
+   "walltime_s": 1256.07073,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 80650517381,
+   "id": "eval-887",
+   "chips": 8,
+   "duration_s": 0.557009915,
+   "walltime_s": 1.60528428,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 80678356605,
+   "id": "eval-888",
+   "chips": 2,
+   "duration_s": 9.63287816,
+   "walltime_s": 15.4171104,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 80726661260,
+   "id": "eval-889",
+   "chips": 1,
+   "duration_s": 3.66620384,
+   "walltime_s": 6.09783846,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 80794507049,
+   "id": "eval-890",
+   "chips": 8,
+   "duration_s": 12.6166101,
+   "walltime_s": 26.4670956,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 80852102818,
+   "id": "eval-891",
+   "chips": 8,
+   "duration_s": 2355.4784,
+   "walltime_s": 3334.38777,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 80859481523,
+   "id": "eval-892",
+   "chips": 1,
+   "duration_s": 122.426128,
+   "walltime_s": 144.427512,
+   "outcome": "None",
+   "tenant": "t5"
+  },
+  {
+   "t_us": 81287300022,
+   "id": "eval-893",
+   "chips": 2,
+   "duration_s": 29.1857534,
+   "walltime_s": 104.515747,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81323651986,
+   "id": "eval-894",
+   "chips": 8,
+   "duration_s": 141.982711,
+   "walltime_s": 110.139133,
+   "outcome": "None",
+   "tenant": "t3"
+  },
+  {
+   "t_us": 81372541097,
+   "id": "eval-895",
+   "chips": 4,
+   "duration_s": 0.884926304,
+   "walltime_s": 21.4175742,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t4"
+  },
+  {
+   "t_us": 81408942171,
+   "id": "eval-896",
+   "chips": 2,
+   "duration_s": 10776.9284,
+   "walltime_s": 13758.7207,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 81470814802,
+   "id": "eval-897",
+   "chips": 4,
+   "duration_s": 2538.124,
+   "walltime_s": 1797.00552,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 81482228473,
+   "id": "eval-898",
+   "chips": 4,
+   "duration_s": 51.8858618,
+   "walltime_s": 119.935722,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 81518966128,
+   "id": "eval-899",
+   "chips": 4,
+   "duration_s": 25.1161543,
+   "walltime_s": 48.5917786,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81566994070,
+   "id": "eval-900",
+   "chips": 4,
+   "duration_s": 36.6977292,
+   "walltime_s": 41.987437,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81697661713,
+   "id": "eval-901",
+   "chips": 1,
+   "duration_s": 1.9828997,
+   "walltime_s": 2308.97554,
+   "outcome": "JobStatus.FAILED",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81720735661,
+   "id": "eval-902",
+   "chips": 2,
+   "duration_s": 1620.05183,
+   "walltime_s": 880.136491,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81820284109,
+   "id": "eval-903",
+   "chips": 8,
+   "duration_s": 92.3010658,
+   "walltime_s": 40.7801549,
+   "outcome": "None",
+   "tenant": "t0"
+  },
+  {
+   "t_us": 81889378907,
+   "id": "eval-904",
+   "chips": 8,
+   "duration_s": 3.11988925,
+   "walltime_s": 8.46268849,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 82134826641,
+   "id": "finetune-92",
+   "chips": 64,
+   "duration_s": 3389.03206,
+   "walltime_s": 4326.53646,
+   "outcome": "None",
+   "tenant": "t1"
+  },
+  {
+   "t_us": 82147838295,
+   "id": "eval-905",
+   "chips": 8,
+   "duration_s": 422.317815,
+   "walltime_s": 481.058808,
+   "outcome": "None",
+   "tenant": "t2"
+  },
+  {
+   "t_us": 82154586332,
+   "id": "finetune-93",
+   "chips": 16,
+   "duration_s": 3155.55818,
+   "walltime_s": 5826.86017,
+   "outcome": "None",
+   "tenant": "t0"
+  }
+ ]
+}
