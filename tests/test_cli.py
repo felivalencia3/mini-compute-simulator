@@ -119,9 +119,11 @@ def test_run_scenario_seed_override_wins_over_overrides():
 
 
 def test_run_scenario_invalid_scenario_lists_all_errors():
+    # reservations are implemented in v0.4; TPU shape requests are still
+    # the canonical not-implemented feature for this error-listing test.
     doc = tiny_doc()
     doc["workload"]["classes"]["eval"]["chips"] = "pow2[3, 8]"
-    doc["reservations"] = []
+    doc["workload"]["classes"]["eval"]["shape"] = [2, 2, 2]
     with pytest.raises(ScenarioError) as exc:
         api.run_scenario(doc)
     joined = "; ".join(exc.value.errors)
@@ -395,7 +397,7 @@ def test_cli_viz_open_flag_opens_report(tmp_path, monkeypatch, capsys):
 
 
 def test_public_api_exports():
-    assert fleetsim.__version__ == "0.1.0"
+    assert fleetsim.__version__ == "0.4.0"
     for name in fleetsim.__all__:
         assert getattr(fleetsim, name, None) is not None, name
     # The documented plugin surface is importable from the package root.

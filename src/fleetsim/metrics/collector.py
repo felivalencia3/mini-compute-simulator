@@ -282,6 +282,11 @@ class _JobAcc:
     running_elapsed_us: int = 0
     alloc_start: int | None = None
     queued: bool = False
+    #: v0.4 (recorded only when the matching feature is enabled):
+    #: latest placement was a RELAXED within (cost-model-penalized), and
+    #: quota admission demoted the job to BEST_EFFORT.
+    relaxed: bool = False
+    quota_demoted: bool = False
 
 
 class MetricsCollector:
@@ -306,6 +311,9 @@ class MetricsCollector:
         warmup_frac: float = 0.1,
         drain_frac: float = 0.1,
         stints: str | bool | None = None,
+        track_relaxed: bool = False,
+        track_quota: bool = False,
+        track_reservations: bool = False,
     ):
         if horizon_us <= 0:
             raise ValueError(f"horizon_us must be positive, got {horizon_us}")
@@ -361,6 +369,19 @@ class MetricsCollector:
         self._frag_full: dict[str, list[float]] = {}  # level -> [sum, max, n]
         self._frag_win: dict[str, list[float]] = {}
 
+        # v0.4 opt-in trackers: relaxed placements (relax/penalty pair),
+        # quota demotions, and engine-reported reservation accounting.
+        # When every flag is False the collector's outputs are
+        # byte-identical to a pre-v0.4 collector.
+        self._track_relaxed = bool(track_relaxed)
+        self._track_quota = bool(track_quota)
+        self._track_reservations = bool(track_reservations)
+        self._relaxed_full = 0
+        self._relaxed_win = 0
+        self._demotions_full = 0
+        self._demotions_win = 0
+        self._res_reports: list[dict[str, Any]] = []
+
         # Allocation stints (v0.3 visualizer, opt-in; see module docstring).
         self._stint_level: str | bool | None = None if stints is False else stints
         self._stint_leaf: dict[str, tuple[str, int]] = {}
@@ -399,6 +420,15 @@ class MetricsCollector:
             warmup_frac=float(extra.get("warmup_frac", 0.1)),
             drain_frac=float(extra.get("drain_frac", 0.1)),
             stints=scenario.outputs.stints,
+            # v0.4 trackers key on FEATURE ENABLEMENT (config), not
+            # occurrence, so a feature-on run's output schema is stable
+            # and every feature-off run stays byte-identical.
+            track_relaxed=any(
+                c.within is not None and not c.within.required
+                for c in scenario.workload.classes
+            ),
+            track_quota=scenario.quota is not None,
+            track_reservations=bool(scenario.reservations),
         )
 
     def _init_fleet_statics(self, fleet: "FleetTree") -> None:
@@ -542,6 +572,15 @@ class MetricsCollector:
     def job_admitted(self, job: Job, t: int) -> None:
         rec = self._rec(job)
         rec.status = "ADMITTED"
+        # Admission may have DEMOTED the job (v0.4 quota): re-read the
+        # tier (identical to the submit-time value in every other case).
+        rec.tier = job.tier.name
+        if self._track_quota and getattr(job, "quota_demoted", False):
+            if not rec.quota_demoted:
+                rec.quota_demoted = True
+                self._demotions_full += 1
+                if self._in_window(t):
+                    self._demotions_win += 1
         if not rec.queued:
             rec.queued = True
             self._tw(self._pending_by_class, rec.job_class).add(t, 1)
@@ -559,6 +598,13 @@ class MetricsCollector:
             (int(g.attrs.get("n_domains_spanned", 1)) for g in alloc.gangs),
             default=1,
         )
+        if self._track_relaxed:
+            relaxed = any(g.relaxed for g in alloc.gangs)
+            rec.relaxed = relaxed  # latest placement wins (like the span)
+            if relaxed:
+                self._relaxed_full += 1
+                if self._in_window(t):
+                    self._relaxed_win += 1
         self._dequeue(rec, t)
         if self._stint_level is not None:
             self._open_stint(rec, alloc, t)
@@ -680,6 +726,12 @@ class MetricsCollector:
         if self._in_window(t):
             self._node_repairs_win += 1
 
+    def reservation_report(self, report: dict[str, Any]) -> None:
+        """Engine-emitted final accounting for one calendar reservation
+        (v0.4; probed via ``getattr``, so this is NOT part of the
+        MetricsSink protocol — custom sinks may simply omit it)."""
+        self._res_reports.append(dict(report))
+
     def node_drain_started(self, node_id: str, t: int) -> None:
         self._drains_full += 1
         if self._in_window(t):
@@ -768,6 +820,29 @@ class MetricsCollector:
         """The configured stint level (``True`` = directly below each
         cluster root), or None when stint recording is off."""
         return self._stint_level
+
+    @property
+    def track_relaxed(self) -> bool:
+        """True when relaxed-placement tracking is on (v0.4): jobs rows
+        carry ``relaxed`` and counts carry ``relaxed_placements``."""
+        return self._track_relaxed
+
+    @property
+    def track_quota(self) -> bool:
+        """True when quota tracking is on (v0.4): jobs rows carry
+        ``quota_demoted`` and counts carry ``quota_demotions``."""
+        return self._track_quota
+
+    @property
+    def track_reservations(self) -> bool:
+        """True when reservation tracking is on (v0.4): the summary
+        carries the ``reservations`` report list."""
+        return self._track_reservations
+
+    def reservation_reports(self) -> list[dict[str, Any]]:
+        """Engine-emitted reservation reports, sorted by id (shallow
+        copies)."""
+        return sorted((dict(r) for r in self._res_reports), key=lambda r: r["id"])
 
     def stint_rows(self) -> list[dict[str, Any]]:
         """Allocation stints, one dict per (stint x domain), sorted by
@@ -874,6 +949,12 @@ class MetricsCollector:
                     "ettr": ettr,
                 }
             )
+            # v0.4 columns exist only when their feature is configured —
+            # feature-off runs keep the exact pre-v0.4 schema.
+            if self._track_relaxed:
+                row["relaxed"] = int(rec.relaxed)
+            if self._track_quota:
+                row["quota_demoted"] = int(rec.quota_demoted)
             rows.append(row)
         return rows
 
@@ -926,8 +1007,10 @@ class MetricsCollector:
 
     def event_counts(self) -> dict[str, dict[str, Any]]:
         """Discrete event counters for both scopes (window = closed
-        ``[w0, w1]`` membership of the event time)."""
-        return {
+        ``[w0, w1]`` membership of the event time).  The v0.4 keys
+        (``relaxed_placements``, ``quota_demotions``) appear only when
+        their feature is enabled."""
+        out = {
             "full": {
                 "preemptions_by_trigger": dict(sorted(self._preempts_full.items())),
                 "failure_kills": self._failure_kills_full,
@@ -945,6 +1028,13 @@ class MetricsCollector:
                 "drains_started": self._drains_win,
             },
         }
+        if self._track_relaxed:
+            out["full"]["relaxed_placements"] = self._relaxed_full
+            out["window"]["relaxed_placements"] = self._relaxed_win
+        if self._track_quota:
+            out["full"]["quota_demotions"] = self._demotions_full
+            out["window"]["quota_demotions"] = self._demotions_win
+        return out
 
     def frag_stats(self) -> dict[str, dict[str, dict[str, float]]]:
         """Fragmentation-index stats over flush samples, per level:

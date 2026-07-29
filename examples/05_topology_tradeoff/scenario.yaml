@@ -1,0 +1,83 @@
+# fleetsim example 05 — the topology tradeoff: relaxable constraints vs
+# the crossing penalty (the v0.4 relax/penalty matched pair).
+#
+# THE QUESTION THIS EXAMPLE ANSWERS: when a pod-sized training job cannot
+# find a pod-shaped hole, should it WAIT for one or RUN UGLY across pods
+# at reduced speed?  v0.1-v0.3 could only wait (`within` was hard);
+# relaxing without a penalty would be strictly dominant (free speed) and
+# therefore fake.  v0.4 ships the pair: `required: false` +
+# `relax_after` lets the placement search drop the constraint after a
+# timeout, and `penalties.xover.pod` makes the resulting cross-pod
+# placement pay the bandwidth price — so the tradeoff is real and
+# measurable.  Run A (this file) prices a cross-pod pretrain at 0.7x
+# speed (a Llama-3-flavored 1:7-oversubscription number: cross-pod
+# traffic is bottlenecked, most steps are not communication-bound).
+# Run B (--override penalties.xover.pod=1.0) is the same fleet with
+# free crossings.  Penalties never change FEASIBILITY at any instant —
+# only the clock — but slower jobs hold chips longer, so the two runs'
+# schedules (and even their relaxation counts) diverge downstream.  See
+# README.md for the measured goodput / JCT / occupancy gap.
+#
+# FLEET: 8 pods x 16 racks x 8 nodes x 8 chips = 8,192 H100s (pod =
+# 1,024).  Failures OFF: this example isolates the placement-quality
+# story (example 01 has the failure machinery on).
+#
+# WORKLOAD: pretrains draw {256, 512, 1024} chips with a PREFERRED
+# `within: pod` (relax after 10 min).  A 1024-chip draw needs a fully
+# empty pod — on a ~90%-utilized fleet that hole essentially never
+# opens, so those jobs relax and pay; 256/512-chip draws usually fit and
+# stay clean.  Batch finetunes + diurnal eval mice supply the
+# contention.  Scheduler: best-effort FIFO with the default first-fit
+# (ascending-id bin packing — small jobs pile into low pods, preserving
+# emptier high pods; the honest baseline for a placement study).
+
+sim: {horizon: 7d, round: 60s, seed: 42}
+
+fleet:
+  metro: us-central
+  clusters:
+    - name: h100-main
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, rack, node], counts: [8, 16, 8]}  # 8,192
+      failures: {mtbf_node_days: 0}
+
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+# The v0.4 cost model: a gang whose leaves span MORE than one pod runs
+# at 0.7x speed (segmented gangs and relaxed placements alike).  Setting
+# the multiplier to 1.0 (run B) prices crossings at zero.
+penalties:
+  xover:
+    pod: 0.7
+
+workload:
+  kind: synthetic
+  classes:
+    pretrain:
+      rate_per_day: 14
+      chips:
+        pmf: {256: 0.40, 512: 0.40, 1024: 0.20}
+      duration: lognormal[median=12h, p90=36h]
+      tier: prod
+      checkpoint_interval: 1h
+      min_runtime: 2h
+      # THE PAIR: `within: pod` is PREFERRED — after 10 pending minutes
+      # the search may go cross-pod, and penalties.xover.pod prices it.
+      within: {level: pod, required: false, relax_after: 10m}
+      abort_prob: 0        # keep the A/B comparison free of abort noise
+    finetune:
+      rate_per_day: 90
+      chips: pow2[8, 64]
+      duration: lognormal[median=4h, p90=24h]
+      tier: batch
+    eval:
+      rate_per_hour: 40
+      chips: pow2[1, 8]
+      duration: lognormal[median=2m, p90=30m]
+      tier: batch
+      diurnal: true
+
+scheduler: {name: fifo, params: {strict: false}}
+# stints: pod feeds `fleetsim viz` — relaxed pretrains show up as jobs
+# painting more than one pod row.
+outputs: {events: parquet, stints: pod}

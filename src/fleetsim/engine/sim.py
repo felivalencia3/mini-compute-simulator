@@ -54,9 +54,12 @@ EVENT PAYLOAD CONVENTIONS
 ``PREEMPTION_DONE``: job id.  ``NODE_REPAIR``: node id.  ``NODE_FAILURE``:
 ``None`` for a sampled failure (victim picked at fire time, next failure
 chained), or a node id to force that node down (tests; no chaining).
-``MAINTENANCE_DRAIN``: ``None`` sampled, node id forced, or
-``("grace", node_id)`` for a drain-grace expiry.  ``JOB_TIMEOUT``:
-``("lifetime", job_id)`` or ``("valid_until", job_id)``.
+``MAINTENANCE_DRAIN``: ``None`` sampled, node id forced,
+``("grace", node_id)`` for a drain-grace expiry, or — v0.4 calendar
+reservations, which ride this event channel (DESIGN §17.5) —
+``("res_start", index)`` / ``("res_end", index)`` where ``index`` is the
+position in the engine's ``(start_us, id)``-sorted reservation list.
+``JOB_TIMEOUT``: ``("lifetime", job_id)`` or ``("valid_until", job_id)``.
 
 DETERMINISM: a run is a pure function of (scenario, fleet, source,
 scheduler, seed).  RNG streams used: ``"failures"`` and ``"maintenance"``
@@ -96,10 +99,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from ..config import FailureModelConfig, Scenario
+from ..config import FailureModelConfig, QuotaConfig, ReservationConfig, Scenario
 from ..fleet.tree import FleetTree, Placement
 from ..model import (
     Allocation,
+    CapacityClass,
     Constraint,
     GangSpec,
     Job,
@@ -116,6 +120,7 @@ from ..schedulers.base import (
     Place,
     PlacementPolicy,
     Preempt,
+    ReservationView,
     Scheduler,
 )
 from ..units import DAY
@@ -123,7 +128,13 @@ from ..workload.base import JobSource
 from .events import EventQueue, EventType
 from .rng import RngStreams
 
-__all__ = ["AdmissionPolicy", "PassThrough", "Simulator", "FAILURE_CAUSE_MIX"]
+__all__ = [
+    "AdmissionPolicy",
+    "PassThrough",
+    "QuotaAdmission",
+    "Simulator",
+    "FAILURE_CAUSE_MIX",
+]
 
 _DAYS_PER_MONTH = 30.0  # maintenance "per node-month" denominator (pinned)
 
@@ -171,6 +182,77 @@ class PassThrough:
 
     def admit(self, job: Job, t: int) -> bool:
         return True
+
+
+class QuotaAdmission:
+    """Tenant chip-quota admission (v0.4; MAST-INSPIRED, deliberately
+    simpler — see below).
+
+    A tenant's COMMITTED in-quota chips are the summed gang chips of its
+    non-terminal in-quota jobs (pending, running, or graced — commitment
+    is taken at admission and released only at the terminal transition,
+    which the engine reports through :meth:`job_terminal`).  A job that
+    would push its tenant past the cap is OVER-QUOTA: with ``over_quota:
+    best_effort`` (default) it is DEMOTED to the BEST_EFFORT band
+    (``job.tier`` overwritten, ``job.quota_demoted`` set) and admitted as
+    preemptible scavenger work; with ``over_quota: reject`` it is refused
+    (the engine records it FAILED).  Tenants absent from the table are
+    unlimited.
+
+    HONEST SEMANTICS NOTE (pinned): this is ADMISSION-TIME commitment
+    over QUEUED DEMAND (pending + running) with IRREVERSIBLE demotion —
+    a burst of short jobs from one tenant charges the cap while queued,
+    and a demoted job stays best_effort even after the tenant's usage
+    drops to zero.  MAST (OSDI '24) and HyperPod task governance instead
+    evaluate in-quota vs over-quota against RUNNING usage at scheduling
+    time and treat over-quota work as a dynamic, reclaimable state.
+    Scheduling-time evaluation is future work (DESIGN §17.3); demoted
+    jobs also keep their ``min_runtime_s`` shield, so an in-quota tenant
+    cannot instantly reclaim from long-guarded over-quota work.
+
+    INVARIANT (the quota-conservation validation rung): at every instant,
+    each tenant's in-quota jobs — running included — sum to at most its
+    cap, because commitment is checked at admission and the committed set
+    only shrinks between admissions.
+    """
+
+    def __init__(self, quota: QuotaConfig):
+        self._caps: dict[str, int] = dict(quota.tenants)
+        self._reject = quota.over_quota == "reject"
+        self._committed: dict[str, int] = {}
+        self._in_quota: dict[str, tuple[str, int]] = {}  # job id -> (tenant, chips)
+
+    def admit(self, job: Job, t: int) -> bool:
+        cap = self._caps.get(job.tenant)
+        if cap is None:
+            return True  # unlisted tenant: unlimited
+        chips = sum(g.chips for g in job.gangs)
+        used = self._committed.get(job.tenant, 0)
+        if used + chips <= cap:
+            self._committed[job.tenant] = used + chips
+            self._in_quota[job.id] = (job.tenant, chips)
+            return True
+        if self._reject:
+            return False
+        job.tier = Tier.BEST_EFFORT
+        job.quota_demoted = True
+        return True
+
+    def job_terminal(self, job: Job, t: int) -> None:
+        """Engine hook: release the job's in-quota commitment (no-op for
+        over-quota / unlisted-tenant jobs)."""
+        entry = self._in_quota.pop(job.id, None)
+        if entry is not None:
+            tenant, chips = entry
+            self._committed[tenant] -= chips
+
+    def committed(self, tenant: str) -> int:
+        """Currently committed in-quota chips of ``tenant`` (tests)."""
+        return self._committed.get(tenant, 0)
+
+    def is_in_quota(self, job_id: str) -> bool:
+        """True iff ``job_id`` holds an in-quota commitment (tests)."""
+        return job_id in self._in_quota
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +405,34 @@ class _JobRt:
         return min(work, self.total_work_s - self.kept_work_s)
 
 
+@dataclass(slots=True)
+class _ReservationRt:
+    """Engine-side runtime state for one calendar reservation (v0.4).
+
+    ``leaves`` is the claimed node set (ascending id) once the claim
+    succeeds; ``used_cur``/``used_acc_chip_us`` track the OWNER tenant's
+    allocated chips on those leaves as an exact int chip-µs integral
+    (advanced on every owner alloc/free touching the hold)."""
+
+    cfg: ReservationConfig
+    leaves: tuple[str, ...] = ()
+    leaf_set: frozenset[str] = frozenset()
+    chips_reserved: int = 0
+    active: bool = False
+    reported: bool = False
+    claim_failed: bool = False
+    n_evicted_start: int = 0
+    n_evicted_end: int = 0
+    used_cur: int = 0
+    used_acc_chip_us: int = 0
+    last_us: int = 0
+
+    def advance(self, t: int) -> None:
+        if t > self.last_us:
+            self.used_acc_chip_us += self.used_cur * (t - self.last_us)
+            self.last_us = t
+
+
 # ---------------------------------------------------------------------------
 # ClusterView adapter over live engine state
 # ---------------------------------------------------------------------------
@@ -400,11 +510,15 @@ class _EngineView:
             for did in fleet.domains_at(level)
         )
 
-    def search_first_fit(self, spec: GangSpec) -> Placement | None:
-        return self._sim.fleet.search_first_fit(spec)
+    def search_first_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        return self._sim.fleet.search_first_fit(spec, tenant)
 
-    def search_segmented(self, spec: GangSpec) -> Placement | None:
-        return self._sim.fleet.search_segmented(spec)
+    def search_segmented(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        return self._sim.fleet.search_segmented(spec, tenant)
 
     def graced_job_ids(self) -> tuple[str, ...]:
         """Ids of jobs currently in a preemption grace window (PREEMPTED,
@@ -421,16 +535,92 @@ class _EngineView:
         fleet tree with the victims' chips hypothetically freed (leaf
         health respected: chips on DRAINING/FAILED leaves free nothing)
         and restores the tree exactly (v0.2 reclaim planning).  Tentative
-        reservations made earlier in this wake stay in force."""
+        reservations made earlier in this wake stay in force.
+
+        RELAXABLE constraints (v0.4) are honored exactly as FirstFit
+        places them: the constrained search runs first; when the job's
+        ``within`` is relaxable (``within_required == False``, no
+        segments) and its ``relax_after_s`` has elapsed at ``view.now``,
+        a failed constrained search retries UNCONSTRAINED — so reclaim
+        planning never reports infeasible for a victim set the very next
+        wake's relaxed placement would use."""
+        con = (
+            Constraint(
+                level=job.within,
+                required=job.within_required,
+                relax_after_s=job.relax_after_s,
+            )
+            if job.within is not None
+            else None
+        )
         spec = GangSpec(
             chips=job.chips,
             chip_type=job.chip_type,
-            within=(
-                Constraint(level=job.within) if job.within is not None else None
-            ),
+            within=con,
             segments=job.segments,
         )
-        return self._sim.fleet.search_after_release(spec, victim_ids) is not None
+        if (
+            self._sim.fleet.search_after_release(spec, victim_ids, job.tenant)
+            is not None
+        ):
+            return True
+        if (
+            con is not None
+            and not con.required
+            and job.segments is None
+            and (self._now - job.submit_time) / 1e6 >= con.relax_after_s
+        ):
+            relaxed = GangSpec(chips=job.chips, chip_type=job.chip_type)
+            return (
+                self._sim.fleet.search_after_release(
+                    relaxed, victim_ids, job.tenant
+                )
+                is not None
+            )
+        return False
+
+    def reserved_free_chips(self, domain_id: str, tenant: str | None) -> int:
+        """Free chips under ``domain_id`` sitting on leaves held by a
+        calendar reservation for a DIFFERENT tenant — capacity ``tenant``
+        can never place on while the hold is active (v0.4).  0 when no
+        hold is active.  Chip-count-honest schedulers (e.g. EASY's shadow
+        accounting) subtract this from ``DomainView.free_chips``."""
+        return self._sim.fleet.reserved_free_chips(domain_id, tenant)
+
+    def reservations(self) -> tuple[ReservationView, ...]:
+        """Calendar reservations visible to schedulers (v0.4): every
+        configured block that has not finished (``end_us > now``) and did
+        not fail its claim, in ``(start_us, id)`` order.  ``active`` is
+        True once the hold is claimed, and ``leaves`` then names the held
+        nodes — so topology-aware policies can avoid placing long jobs
+        onto imminent or active holds (DESIGN §17.4)."""
+        out: list[ReservationView] = []
+        for res in self._sim._reservations:
+            cfg = res.cfg
+            if cfg.end_us <= self._now or res.claim_failed:
+                continue
+            out.append(
+                ReservationView(
+                    id=cfg.id,
+                    tenant=cfg.tenant,
+                    chips=cfg.chips,
+                    level=cfg.level,
+                    chip_type=cfg.chip_type,
+                    start_us=cfg.start_us,
+                    end_us=cfg.end_us,
+                    hard_end=cfg.hard_end,
+                    active=res.active,
+                    leaves=res.leaves if res.active else (),
+                )
+            )
+        return tuple(out)
+
+    def placement_speed(self, placement: Placement) -> float:
+        """The wall-clock speed multiplier the cost model would charge
+        this placement (v0.4 ``penalties.xover``); exactly the ``speed``
+        the engine will use at stint start.  1.0 without penalties.
+        Estimate-honest schedulers divide walltime promises by this."""
+        return self._sim.placement_speed(placement)
 
     def find_placement(
         self, job: JobView, policy: PlacementPolicy
@@ -446,6 +636,17 @@ class _EngineView:
         self._sim.fleet.apply(Allocation(job.id, [placement.to_gang_alloc()]))
         self.tentative[job.id] = placement
         return placement
+
+    def release_tentative(self, job_id: str) -> None:
+        """Roll back a tentative reservation made by ``find_placement``
+        THIS wake: the scheduler examined the placement and decided not
+        to ``Place`` the job, and wants the chips back for later
+        searches in the same wake (v0.4; unclaimed tentatives are rolled
+        back after ``schedule()`` returns anyway).  Unknown/unreserved
+        ids are a no-op."""
+        if job_id in self.tentative:
+            self._sim.fleet.release(job_id)
+            del self.tentative[job_id]
 
     def throughput(self, job: JobView, chip_type: str) -> float:
         return 1.0  # Gavel-matrix hook, v0.4
@@ -521,6 +722,19 @@ class Simulator:
         self._dirty = False
         self._wake_times: set[int] = set()
         self._last_wake_us: int | None = None
+        # v0.4: placement-quality speed penalties + quota terminal hook +
+        # calendar reservations.  All default to inert when the scenario
+        # does not use the features (byte-identical outputs).
+        self._penalties = scenario.penalties
+        self._admission_terminal = getattr(self.admission, "job_terminal", None)
+        self._res_report_sink = getattr(self.sink, "reservation_report", None)
+        self._reservations: list[_ReservationRt] = [
+            _ReservationRt(cfg=cfg)
+            for cfg in sorted(
+                scenario.reservations, key=lambda r: (r.start_us, r.id)
+            )
+        ]
+        self._res_active: list[_ReservationRt] = []
         self._failure_seq: int | None = None
         self._maint_seq: int | None = None
         self._maint_wait: set[str] = set()  # DRAINING past grace, owners pending
@@ -575,12 +789,49 @@ class Simulator:
     # -- hooks ----------------------------------------------------------
 
     def speed(self, job: Job, placement: Placement) -> float:
-        """Wall-clock progress multiplier for a placement.  1.0 in v1 —
-        including SEGMENTED (multi-pod) placements: the cross-segment /
-        cross-pod bandwidth penalty is the v0.3 placement-quality cost
-        model and lands here, keyed off ``placement.segment_domains`` and
-        the anchor's depth."""
-        return 1.0
+        """Wall-clock progress multiplier for a placement.
+
+        v0.4: the ``penalties.xover`` cost model — for every configured
+        level, a placement whose leaves do NOT all sit under one domain
+        at that level runs at the level's multiplier (several configured
+        levels multiply).  This penalizes BOTH segmented multi-pod gangs
+        and relaxed ``within`` placements with the same rule.  A leaf
+        with no ancestor at the level counts as its own singleton domain.
+        Without a ``penalties`` section every speed is exactly 1.0
+        (byte-identical outputs to pre-v0.4).  The multiplier depends
+        only on the placement, never the job — schedulers may price a
+        candidate placement via the view's ``placement_speed`` and get
+        exactly this value."""
+        return self.placement_speed(placement)
+
+    def placement_speed(self, placement: Placement) -> float:
+        """The ``penalties.xover`` multiplier for ``placement`` (see
+        :meth:`speed`); exposed to schedulers via the engine view."""
+        pen = self._penalties
+        if pen is None or not pen.xover:
+            return 1.0
+        speed = 1.0
+        for level in sorted(pen.xover):
+            if self._spans_level(placement, level):
+                speed *= pen.xover[level]
+        return speed
+
+    def _spans_level(self, placement: Placement, level: str) -> bool:
+        """True iff the placement's leaves sit under MORE than one domain
+        at ``level`` (leaves lacking an ancestor at the level are their
+        own singleton domains)."""
+        first: str | None = None
+        for lid, _ in placement.leaves:
+            dom = lid  # fallback: no ancestor at `level`
+            for aid in self.fleet.ancestors(lid, include_self=True):
+                if self.fleet.domain(aid).level == level:
+                    dom = aid
+                    break
+            if first is None:
+                first = dom
+            elif dom != first:
+                return True
+        return False
 
     # -- setup ----------------------------------------------------------
 
@@ -608,6 +859,20 @@ class Simulator:
         self._schedule_next_arrival()
         self._arm_failure()
         self._arm_maintenance()
+        # Calendar reservations (v0.4): start/end ride the engine's
+        # maintenance event channel (rank 5 — after same-timestamp
+        # completions/failures/arrivals, BEFORE the wake) with tagged
+        # payloads, so claims and hard-end cliffs settle before the
+        # scheduler sees the state.
+        for i, res in enumerate(self._reservations):
+            if res.cfg.start_us <= self._horizon_us:
+                self.queue.push(
+                    res.cfg.start_us, EventType.MAINTENANCE_DRAIN, ("res_start", i)
+                )
+                if res.cfg.end_us <= self._horizon_us:
+                    self.queue.push(
+                        res.cfg.end_us, EventType.MAINTENANCE_DRAIN, ("res_end", i)
+                    )
         # Seed a wake at t=0 for periodic schedulers AND whenever the
         # source implements the closed-loop ``refill`` hook: refill runs
         # only inside wakes, so an event-triggered scheduler
@@ -629,6 +894,7 @@ class Simulator:
             self.now = ev.time
             self._dispatch(ev)
         self.now = self._horizon_us
+        self._finalize_reservations()
         self._report_live_progress()
         self.sink.flush(
             self._horizon_us, self.fleet, len(self._pending), len(self._running)
@@ -759,7 +1025,7 @@ class Simulator:
                 raise ValueError(f"Place for unknown job {jid!r}")
             if jid in placed or jid not in self._pending:
                 raise ValueError(f"Place for non-pending job {jid!r}")
-            self._validate_placement_spec(rt, action.placement)
+            self._validate_placement_spec(rt, action.placement, t)
             tent = view.tentative.get(jid)
             if tent is not None and tent == action.placement:
                 alloc = self.fleet.allocation(jid)
@@ -777,15 +1043,42 @@ class Simulator:
         placed.add(jid)
         self._start_job(rt, alloc, action.placement, t)
 
-    def _validate_placement_spec(self, rt: _JobRt, placement: Placement) -> None:
+    def _validate_placement_spec(
+        self, rt: _JobRt, placement: Placement, t: int
+    ) -> None:
         """Check a Place action's placement against the job's GangSpec:
-        exact chip count, pinned chip type, the hard ``within``
-        constraint (every leaf under ONE domain at that level), and — for
-        segmented specs — whole-node leaves grouped at the segment level
-        into multiples of ``nodes_per_segment``.  Raises ``ValueError``
-        (refused in strict mode, skipped otherwise)."""
+        exact chip count, pinned chip type, the ``within`` constraint
+        (every leaf under ONE domain at that level — or, for a RELAXED
+        placement, that the constraint really was relaxable and its
+        ``relax_after`` timeout elapsed), reservation-hold ownership
+        (v0.4), and — for segmented specs — whole-node leaves grouped at
+        the segment level into multiples of ``nodes_per_segment``.
+        Raises ``ValueError`` (refused in strict mode, skipped
+        otherwise)."""
         spec = rt.spec
         jid = rt.job.id
+        if self.fleet.has_reservations:
+            for lid, _ in placement.leaves:
+                owner = self.fleet.reserved_owner(lid)
+                if owner is not None and owner != rt.job.tenant:
+                    raise ValueError(
+                        f"Place for job {jid!r}: leaf {lid!r} is reserved"
+                        f" for tenant {owner!r} (job tenant"
+                        f" {rt.job.tenant!r})"
+                    )
+        if placement.relaxed:
+            if spec.within is None or spec.within.required:
+                raise ValueError(
+                    f"Place for job {jid!r}: relaxed placement for a job"
+                    f" without a relaxable within constraint"
+                )
+            waited_s = (t - rt.job.submit_t) / 1e6
+            if waited_s < spec.within.relax_after_s:
+                raise ValueError(
+                    f"Place for job {jid!r}: within={spec.within.level!r}"
+                    f" may only relax after {spec.within.relax_after_s:.0f}s"
+                    f" pending ({waited_s:.0f}s elapsed)"
+                )
         if spec.segments is not None:
             nodes_per_seg, seg_level = spec.segments
             if not placement.whole_node:
@@ -824,7 +1117,7 @@ class Simulator:
                 f" {placement.chip_type!r} != pinned spec type"
                 f" {spec.chip_type!r}"
             )
-        if spec.within is not None:
+        if spec.within is not None and not placement.relaxed:
             level = spec.within.level
             anchor: str | None = None
             for lid, _ in placement.leaves:
@@ -918,7 +1211,7 @@ class Simulator:
             ckpt_age = cum - math.floor(cum / interval) * interval
         else:
             ckpt_age = cum
-        within = rt.spec.within.level if rt.spec.within is not None else None
+        con = rt.spec.within
         return JobView(
             id=job.id,
             submit_time=job.submit_t,
@@ -932,10 +1225,12 @@ class Simulator:
             attained_service_chip_s=(cum + rt.lost_work_s) * rt.spec.chips,
             checkpoint_age_s=ckpt_age,
             walltime_est_s=job.walltime_est_s,
-            within=within,
+            within=con.level if con is not None else None,
             tenant=job.tenant,
             segments=rt.spec.segments,
             n_segments=rt.n_segments,
+            within_required=con.required if con is not None else True,
+            relax_after_s=con.relax_after_s if con is not None else 300.0,
         )
 
     def _schedule_next_arrival(self) -> None:
@@ -1106,6 +1401,8 @@ class Simulator:
                     EventType.JOB_TIMEOUT,
                     ("lifetime", job.id),
                 )
+        if self._res_active:
+            self._res_note_alloc(job, alloc, +1, t)
         self.sink.job_started(job, alloc, t)
         self.sink.chips_allocated(placement.chips, placement.chip_type, t)
 
@@ -1149,6 +1446,8 @@ class Simulator:
         alloc = rt.allocation
         if alloc is None:
             return
+        if self._res_active:
+            self._res_note_alloc(rt.job, alloc, -1, t)
         leaf_ids: dict[str, None] = {}
         for gang in alloc.gangs:
             nodes = gang.nodes
@@ -1183,6 +1482,8 @@ class Simulator:
         self._running.pop(job.id, None)
         self._graced.pop(job.id, None)
         job.status = status
+        if self._admission_terminal is not None:
+            self._admission_terminal(job, t)  # quota commitment release
         productive = rt.kept_work_s * rt.spec.chips
         lost = rt.lost_work_s * rt.spec.chips
         self.sink.job_finished(job, t, status, productive, lost)
@@ -1221,7 +1522,14 @@ class Simulator:
         else:
             job.status = JobStatus.PREEMPTED
             self._graced[job.id] = rt
-            grace_us = _s_to_us(job.checkpoint_save_s)
+            # SPOT capacity (v0.4): zero-notice kill — no checkpoint-save
+            # grace window; the job restarts from its last periodic
+            # checkpoint (floor semantics; ckpt-off spot loses everything).
+            grace_us = (
+                0
+                if job.capacity is CapacityClass.SPOT
+                else _s_to_us(job.checkpoint_save_s)
+            )
             rt.preemption_seq = self.queue.push(
                 t + grace_us, EventType.PREEMPTION_DONE, job.id
             )
@@ -1437,6 +1745,10 @@ class Simulator:
             self._arm_maintenance()
         elif isinstance(p, tuple) and p[0] == "grace":
             self._on_drain_grace(p[1], t)
+        elif isinstance(p, tuple) and p[0] == "res_start":
+            self._on_reservation_start(self._reservations[p[1]], t)
+        elif isinstance(p, tuple) and p[0] == "res_end":
+            self._on_reservation_end(self._reservations[p[1]], t)
         else:  # forced (tests): no chaining
             if self.fleet.domain(p).state is NodeState.HEALTHY:
                 self._drain_node(p, t)
@@ -1497,6 +1809,211 @@ class Simulator:
             lo, hi = self._model_for(leaf_id).repair_auto_min
             delay_s = (lo + hi) / 2.0 * 60.0
         self.queue.push(t + _s_to_us(delay_s), EventType.NODE_REPAIR, leaf_id)
+
+    # -- calendar reservations (v0.4; DESIGN v0.4 addendum) ---------------
+
+    def _on_reservation_start(self, res: _ReservationRt, t: int) -> None:
+        """Claim the hold: pick whole HEALTHY nodes of the reservation's
+        chip type inside ONE domain at its level, choosing the domain
+        that needs the FEWEST EVICTIONS (distinct non-owner running jobs
+        displaced) — ties broken by ascending domain id.  Within a
+        domain, leaves are taken free-first, then owner-occupied (zero
+        evictions), then foreign-occupied, ascending id within each
+        group.  A completely idle domain therefore always beats a busy
+        lower-id one — the claim never evicts when any candidate domain
+        can host the block eviction-free (DESIGN §17.4; Slurm advance
+        reservations pick non-conflicting nodes).  Chosen leaves are
+        marked reserved and non-owner residents are evicted (REQUEUE,
+        trigger ``"reservation"``, engine-initiated: preemptibility and
+        min-runtime guards do NOT apply — the capacity is contractually
+        gone).  A fleet that cannot host the hold anywhere records a
+        failed claim (reported in the summary) and holds nothing."""
+        cfg = res.cfg
+        ct = cfg.chip_type
+        if ct is None:
+            ct = next(iter(sorted(self._node_sizes)))  # homogeneous fleet
+        domains = (
+            self.fleet.domains_at(cfg.level)
+            if cfg.level is not None
+            else self.fleet.cluster_roots
+        )
+        chosen: list[str] | None = None
+        got = 0
+        best_victims: int | None = None
+        for did in domains:  # ascending id order (first minimum wins ties)
+            free_leaves: list[str] = []
+            owner_leaves: list[str] = []  # residents all belong to the owner
+            foreign_leaves: list[str] = []  # >= 1 non-owner resident
+            for lid in self.fleet.leaves_under(did):  # ascending id order
+                leaf = self.fleet.domain(lid)
+                if (
+                    leaf.chip_type != ct
+                    or leaf.state is not NodeState.HEALTHY
+                    or self.fleet.reserved_owner(lid) is not None
+                ):
+                    continue
+                residents = self.fleet.owners(lid)
+                if not residents:
+                    free_leaves.append(lid)
+                elif all(
+                    self._jobs[jid].job.tenant == cfg.tenant
+                    for jid in residents
+                ):
+                    owner_leaves.append(lid)
+                else:
+                    foreign_leaves.append(lid)
+            trial: list[str] = []
+            trial_got = 0
+            trial_victims: set[str] = set()  # distinct RUNNING non-owner jobs
+            for lid in free_leaves + owner_leaves + foreign_leaves:
+                if trial_got >= cfg.chips:
+                    break
+                trial.append(lid)
+                trial_got += self.fleet.domain(lid).chips
+                for jid in sorted(self.fleet.owners(lid)):
+                    rt = self._jobs[jid]
+                    if (
+                        rt.job.tenant != cfg.tenant
+                        and rt.job.status is JobStatus.RUNNING
+                    ):
+                        trial_victims.add(jid)
+            if trial_got < cfg.chips:
+                continue  # this domain cannot host the block at all
+            if best_victims is None or len(trial_victims) < best_victims:
+                best_victims = len(trial_victims)
+                chosen = trial
+                got = trial_got
+                if best_victims == 0:
+                    break  # nothing beats an eviction-free claim
+        if chosen is None:
+            res.claim_failed = True
+            self._emit_reservation_report(res, "claim_failed", t)
+            return
+        res.leaves = tuple(sorted(chosen))
+        res.leaf_set = frozenset(chosen)
+        res.chips_reserved = got
+        self.fleet.reserve_leaves(res.leaves, cfg.tenant)
+        # Evict non-owner residents (owner jobs already on the hold stay).
+        victims: dict[str, None] = {}
+        for lid in res.leaves:
+            for jid in sorted(self.fleet.owners(lid)):
+                victims.setdefault(jid)
+        for jid in victims:
+            rt = self._jobs[jid]
+            if rt.job.tenant == cfg.tenant:
+                continue
+            if rt.job.status is JobStatus.RUNNING:
+                res.n_evicted_start += 1
+                self._preempt(rt, t, PreemptMode.REQUEUE, trigger="reservation")
+            # PREEMPTED residents are already leaving; nothing to do.
+        # Start the owner-usage integral (owner jobs may already be here).
+        res.last_us = t
+        res.used_cur = 0
+        for lid in res.leaves:
+            for jid, chips in sorted(self.fleet.owners(lid).items()):
+                if self._jobs[jid].job.tenant == cfg.tenant:
+                    res.used_cur += chips
+        res.active = True
+        self._res_active.append(res)
+        self._mark_dirty(t)
+
+    def _on_reservation_end(self, res: _ReservationRt, t: int) -> None:
+        """Lift the hold.  With ``hard_end`` (the capacity-block cliff),
+        residents still on the held nodes are evicted first (REQUEUE,
+        trigger ``"reservation"``); they lose work back to their last
+        checkpoint and requeue for placement elsewhere."""
+        if not res.active:
+            return  # claim failed (already reported)
+        res.advance(t)
+        res.active = False
+        self._res_active.remove(res)
+        self.fleet.release_reservation(res.leaves)
+        if res.cfg.hard_end:
+            victims: dict[str, None] = {}
+            for lid in res.leaves:
+                for jid in sorted(self.fleet.owners(lid)):
+                    victims.setdefault(jid)
+            for jid in victims:
+                rt = self._jobs[jid]
+                if rt.job.status is JobStatus.RUNNING:
+                    res.n_evicted_end += 1
+                    self._preempt(
+                        rt, t, PreemptMode.REQUEUE, trigger="reservation"
+                    )
+        self._emit_reservation_report(res, "completed", t)
+        self._mark_dirty(t)
+
+    def _res_note_alloc(self, job: Job, alloc: Allocation, sign: int, t: int) -> None:
+        """Advance active holds' owner-usage integrals for an allocation
+        (de)applied at ``t`` (called on every start/release; fast-path
+        no-op when no hold is active)."""
+        for res in self._res_active:
+            if job.tenant != res.cfg.tenant:
+                continue
+            overlap = 0
+            for gang in alloc.gangs:
+                nodes = gang.nodes
+                if isinstance(nodes, dict):
+                    for lid, chips in nodes.items():
+                        if lid in res.leaf_set:
+                            overlap += chips
+                else:
+                    for lid in nodes:
+                        if lid in res.leaf_set:
+                            overlap += self.fleet.domain(lid).chips
+            if overlap:
+                res.advance(t)
+                res.used_cur += sign * overlap
+
+    def _emit_reservation_report(
+        self, res: _ReservationRt, status: str, t: int
+    ) -> None:
+        """Send the reservation's final accounting to the sink (probed —
+        sinks without ``reservation_report`` are skipped)."""
+        res.reported = True
+        cfg = res.cfg
+        window_end = min(cfg.end_us, self._horizon_us)
+        util: float | None = None
+        if res.chips_reserved > 0 and window_end > cfg.start_us:
+            util = res.used_acc_chip_us / (
+                res.chips_reserved * (window_end - cfg.start_us)
+            )
+        if self._res_report_sink is not None:
+            self._res_report_sink(
+                {
+                    "id": cfg.id,
+                    "tenant": cfg.tenant,
+                    "level": cfg.level,
+                    "chip_type": cfg.chip_type,
+                    "hard_end": cfg.hard_end,
+                    "start_us": cfg.start_us,
+                    "end_us": cfg.end_us,
+                    "status": status,
+                    "chips_requested": cfg.chips,
+                    "chips_reserved": res.chips_reserved,
+                    "n_nodes": len(res.leaves),
+                    "nodes": list(res.leaves),
+                    "n_evicted_at_start": res.n_evicted_start,
+                    "n_evicted_at_end": res.n_evicted_end,
+                    "utilization": util,
+                }
+            )
+
+    def _finalize_reservations(self) -> None:
+        """At the horizon: settle and report every unreported reservation
+        (active holds report ``active_at_horizon`` with the usage integral
+        clipped at the horizon; never-started ones report
+        ``not_started``)."""
+        for res in self._reservations:
+            if res.reported:
+                continue
+            if res.active:
+                res.advance(self._horizon_us)
+                self._emit_reservation_report(
+                    res, "active_at_horizon", self._horizon_us
+                )
+            else:
+                self._emit_reservation_report(res, "not_started", self._horizon_us)
 
     # -- metrics flush ---------------------------------------------------
 

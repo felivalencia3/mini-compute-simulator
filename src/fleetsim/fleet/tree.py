@@ -69,6 +69,11 @@ class Placement:
     in deterministic assignment order; ids REPEAT when several segments
     share one domain.  Empty tuple for non-segmented placements.
 
+    ``relaxed`` (v0.4) marks a placement found AFTER dropping a
+    relaxable (``required: false``) ``within`` constraint whose
+    ``relax_after`` timeout elapsed — the engine gates it and the
+    cost model penalizes it (the DESIGN §4.2 matched pair).
+
     INVARIANT: ``sum(chips for _, chips in leaves) == spec.chips`` of the
     searched :class:`~fleetsim.model.GangSpec`.
     """
@@ -78,6 +83,7 @@ class Placement:
     chip_type: str
     whole_node: bool
     segment_domains: tuple[str, ...] = ()
+    relaxed: bool = False
 
     @property
     def chips(self) -> int:
@@ -107,11 +113,13 @@ class Placement:
             return GangAlloc(
                 nodes=[leaf for leaf, _ in self.leaves],
                 anchor=self.anchor,
+                relaxed=self.relaxed,
                 attrs=attrs,
             )
         return GangAlloc(
             nodes={leaf: chips for leaf, chips in self.leaves},
             anchor=self.anchor,
+            relaxed=self.relaxed,
             attrs=attrs,
         )
 
@@ -226,6 +234,10 @@ class FleetTree:
         # --- dynamic state -------------------------------------------
         self._owners: dict[str, dict[str, int]] = {lid: {} for lid in self._leaf_ids}
         self._allocs: dict[str, Allocation] = {}
+        # Reservation holds (v0.4 calendar blocks): leaf id -> owner
+        # tenant.  A reserved leaf is invisible to placement searches of
+        # every OTHER tenant; empty dict = zero overhead on every path.
+        self._reserved: dict[str, str] = {}
         self._healthy: dict[str, int] = {did: 0 for did in self._domains}
         self._free_ct: dict[str, dict[str, int]] = {did: {} for did in self._domains}
         # Free-NODE counters (v0.2, segmented placement): per domain, the
@@ -388,6 +400,86 @@ class FleetTree:
     def has_allocation(self, job_id: str) -> bool:
         return job_id in self._allocs
 
+    # ------------------------------------------------------------------
+    # Reservation holds (v0.4 calendar blocks)
+    # ------------------------------------------------------------------
+
+    def reserve_leaves(self, leaf_ids: Iterable[str], tenant: str) -> None:
+        """Mark leaves as held for ``tenant``: placement searches of any
+        other tenant skip them from now on.  Raises for non-leaf ids or
+        leaves already reserved (holds never overlap)."""
+        for lid in leaf_ids:
+            self._require_leaf(lid)
+            if lid in self._reserved:
+                raise ValueError(
+                    f"leaf {lid!r} is already reserved for"
+                    f" {self._reserved[lid]!r}"
+                )
+            self._reserved[lid] = tenant
+
+    def release_reservation(self, leaf_ids: Iterable[str]) -> None:
+        """Lift the hold on ``leaf_ids`` (missing entries are ignored)."""
+        for lid in leaf_ids:
+            self._reserved.pop(lid, None)
+
+    def reserved_owner(self, leaf_id: str) -> str | None:
+        """The tenant holding ``leaf_id``, or None when unreserved."""
+        return self._reserved.get(leaf_id)
+
+    @property
+    def has_reservations(self) -> bool:
+        return bool(self._reserved)
+
+    def _leaf_eligible(self, leaf_id: str, tenant: str | None) -> bool:
+        """False iff the leaf is reserved for a DIFFERENT tenant."""
+        owner = self._reserved.get(leaf_id)
+        return owner is None or owner == tenant
+
+    def reserved_free_chips(self, domain_id: str, tenant: str | None) -> int:
+        """Free chips under ``domain_id`` on HEALTHY leaves held by a
+        reservation for a DIFFERENT tenant — free capacity ``tenant``'s
+        placements can never use while the hold lasts (v0.4).  0 with no
+        active hold.  O(|reserved| x depth); chip-count-honest consumers
+        (e.g. EASY's shadow accounting) subtract this from
+        :meth:`free_chips`."""
+        if not self._reserved:
+            return 0
+        n = 0
+        for lid, owner in self._reserved.items():
+            if owner == tenant:
+                continue
+            leaf = self._domains[lid]
+            if leaf.state is NodeState.HEALTHY and (
+                lid == domain_id
+                or domain_id in self.ancestors(lid)
+            ):
+                n += leaf.free_chips
+        return n
+
+    def _ineligible_free_nodes(
+        self, domain_id: str, chip_type: str, leaf_chips: int, tenant: str | None
+    ) -> int:
+        """How many of ``free_full_nodes(domain_id, chip_type,
+        leaf_chips)`` are reserved for a different tenant (and therefore
+        unusable by this search).  O(|reserved| x depth) — reservations
+        are rare and small."""
+        if not self._reserved:
+            return 0
+        n = 0
+        for lid, owner in self._reserved.items():
+            if owner == tenant:
+                continue
+            leaf = self._domains[lid]
+            if (
+                leaf.chip_type == chip_type
+                and leaf.chips == leaf_chips
+                and leaf.state is NodeState.HEALTHY
+                and not self._owners[lid]
+                and domain_id in self.ancestors(lid, include_self=True)
+            ):
+                n += 1
+        return n
+
     def allocation(self, job_id: str) -> Allocation:
         """The applied allocation for ``job_id`` (KeyError if none)."""
         return self._allocs[job_id]
@@ -504,19 +596,26 @@ class FleetTree:
     # Placement search
     # ------------------------------------------------------------------
 
-    def search_first_fit(self, spec: GangSpec) -> Placement | None:
+    def search_first_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
         """First-fit search for one gang, or ``None`` if nothing fits now.
 
         Search domains: all domains at ``spec.within.level`` when the spec
-        has a ``within`` constraint (treated as hard — v0.1 rejects
-        relaxable constraints upstream), else the cluster roots.  Domains
-        are tried independently in ascending id order; within a domain,
-        leaves are scanned in ascending id order.  ``spec.chip_type`` pins
-        the chip type; when unpinned, each chip type present under the
-        domain is tried in sorted order (v1 configs pin, per DESIGN §11).
-        A spec with ``segments`` delegates to :meth:`search_segmented`
-        (first-fit over the same outer domains, segment bin-packing
-        inside).  ``shape``/``twisted`` are v0.3 semantics and ignored.
+        has a ``within`` constraint (treated as hard here — RELAXATION is
+        the placement policy's retry-without-constraint, not a search
+        concern), else the cluster roots.  Domains are tried independently
+        in ascending id order; within a domain, leaves are scanned in
+        ascending id order.  ``spec.chip_type`` pins the chip type; when
+        unpinned, each chip type present under the domain is tried in
+        sorted order (v1 configs pin, per DESIGN §11).  A spec with
+        ``segments`` delegates to :meth:`search_segmented` (first-fit over
+        the same outer domains, segment bin-packing inside).
+        ``shape``/``twisted`` are v0.3 semantics and ignored.
+
+        ``tenant`` (v0.4) is the requesting job's tenant: leaves held by a
+        calendar reservation for a DIFFERENT tenant are skipped; ``None``
+        skips every reserved leaf (conservative).
 
         Per-leaf mode: a request smaller than the leaf's chip count is
         sub-node (needs ``free >= chips``); otherwise whole-node leaves are
@@ -526,18 +625,20 @@ class FleetTree:
         if spec.chips <= 0:
             raise ValueError(f"gang spec needs a positive chip count, got {spec.chips}")
         if spec.segments is not None:
-            return self.search_segmented(spec)
+            return self.search_segmented(spec, tenant)
         if spec.within is not None:
             search_domains = self.domains_at(spec.within.level)
         else:
             search_domains = self._cluster_roots
         for did in search_domains:
-            placement = self._search_domain(did, spec)
+            placement = self._search_domain(did, spec, tenant)
             if placement is not None:
                 return placement
         return None
 
-    def search_segmented(self, spec: GangSpec) -> Placement | None:
+    def search_segmented(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
         """Segmented (Slurm-block) search for one gang, or ``None``.
 
         SEMANTICS (v0.2, pinned): the gang is WHOLE-NODE only and splits
@@ -552,9 +653,11 @@ class FleetTree:
         DESCENDING free-node capacity (ties ascending id) — bin-packing
         that concentrates the job into the fewest domains and preserves
         empty domains for future large jobs.  ``anchor`` is the LCA of
-        all segment domains.  Placement speed stays 1.0 — the cross-pod
-        (multi-segment) bandwidth penalty is the v0.3 cost model, not a
-        feasibility change here.
+        all segment domains.  Feasibility is unchanged by penalties;
+        when ``penalties.xover`` is configured (v0.4) the engine prices
+        the multi-domain span at stint start (see ``Simulator.speed`` /
+        DESIGN §17.1) — the search itself never rejects a spanning
+        placement on cost grounds.
 
         The candidate filter and packing operate on the incrementally
         maintained free-node counters (O(domains at segment level)); only
@@ -581,14 +684,19 @@ class FleetTree:
             search_domains = self._cluster_roots
         for did in search_domains:
             placement = self._search_segmented_domain(
-                did, spec, nodes_per_seg, seg_level
+                did, spec, nodes_per_seg, seg_level, tenant
             )
             if placement is not None:
                 return placement
         return None
 
     def _search_segmented_domain(
-        self, did: str, spec: GangSpec, nodes_per_seg: int, seg_level: str
+        self,
+        did: str,
+        spec: GangSpec,
+        nodes_per_seg: int,
+        seg_level: str,
+        tenant: str | None = None,
     ) -> Placement | None:
         """Segment-pack ``spec`` under one outer domain, or ``None``."""
         types = (
@@ -609,15 +717,19 @@ class FleetTree:
                     continue  # does not decompose into whole segments
                 n_segments = spec.chips // seg_chips
                 total_nodes = n_segments * nodes_per_seg
-                if self._free_nodes[did].get((ct, leaf_size), 0) < total_nodes:
+                avail = self._free_nodes[did].get(
+                    (ct, leaf_size), 0
+                ) - self._ineligible_free_nodes(did, ct, leaf_size, tenant)
+                if avail < total_nodes:
                     continue  # counter prune: not enough free nodes at all
                 chosen = self._pack_segments(
-                    did, ct, leaf_size, seg_level, nodes_per_seg, n_segments
+                    did, ct, leaf_size, seg_level, nodes_per_seg, n_segments,
+                    tenant,
                 )
                 if chosen is None:
                     continue
                 return self._realize_segments(
-                    chosen, ct, leaf_size, nodes_per_seg
+                    chosen, ct, leaf_size, nodes_per_seg, tenant
                 )
         return None
 
@@ -629,6 +741,7 @@ class FleetTree:
         seg_level: str,
         nodes_per_seg: int,
         n_segments: int,
+        tenant: str | None = None,
     ) -> list[tuple[str, int]] | None:
         """Assign ``n_segments`` segments to segment-level domains under
         ``did`` by descending free-node capacity, or ``None`` if they do
@@ -636,7 +749,9 @@ class FleetTree:
         in assignment order."""
         cands: list[tuple[int, str]] = []
         for sd in self.domains_at_under(seg_level, did):
-            free_n = self._free_nodes[sd].get((ct, leaf_size), 0)
+            free_n = self._free_nodes[sd].get(
+                (ct, leaf_size), 0
+            ) - self._ineligible_free_nodes(sd, ct, leaf_size, tenant)
             if free_n >= nodes_per_seg:
                 cands.append((free_n, sd))
         cands.sort(key=lambda pair: (-pair[0], pair[1]))
@@ -657,6 +772,7 @@ class FleetTree:
         ct: str,
         leaf_size: int,
         nodes_per_seg: int,
+        tenant: str | None = None,
     ) -> Placement:
         """Pick concrete leaves for a committed segment assignment and
         build the Placement (leaf scan limited to chosen domains)."""
@@ -671,6 +787,7 @@ class FleetTree:
                     and leaf.chips == leaf_size
                     and leaf.state is NodeState.HEALTHY
                     and not self._owners[lid]
+                    and self._leaf_eligible(lid, tenant)
                 ):
                     leaves.append((lid, leaf.chips))
                     need -= 1
@@ -697,14 +814,16 @@ class FleetTree:
             segment_domains=tuple(seg_domains),
         )
 
-    def _search_domain(self, did: str, spec: GangSpec) -> Placement | None:
+    def _search_domain(
+        self, did: str, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
         types = (
             (spec.chip_type,) if spec.chip_type is not None else self._types_under[did]
         )
         for ct in types:
             if self._free_ct[did].get(ct, 0) < spec.chips:
                 continue  # cheap upper-bound prune
-            found = self._scan_leaves(did, ct, spec.chips)
+            found = self._scan_leaves(did, ct, spec.chips, tenant)
             if found is not None:
                 leaves, whole = found
                 return Placement(
@@ -713,7 +832,7 @@ class FleetTree:
         return None
 
     def _scan_leaves(
-        self, did: str, chip_type: str, chips: int
+        self, did: str, chip_type: str, chips: int, tenant: str | None = None
     ) -> tuple[tuple[tuple[str, int], ...], bool] | None:
         """One-domain scan: first-fit sub-node placement (ascending leaf-id
         order), else an exact whole-node cover accumulated LARGEST leaves
@@ -722,11 +841,15 @@ class FleetTree:
         a divisor chain (8/16/32...); for arbitrary mixed sizes an exact
         cover is a subset-sum problem and this greedy may miss one — a
         documented v0.1 limitation, not silent (returns None = no fit).
+        Leaves reserved for a different tenant are skipped (v0.4).
         """
         candidates: list[tuple[str, int]] = []
+        reserved = bool(self._reserved)
         for lid in self._leaves_under[did]:
             leaf = self._domains[lid]
             if leaf.chip_type != chip_type or leaf.state is not NodeState.HEALTHY:
+                continue
+            if reserved and not self._leaf_eligible(lid, tenant):
                 continue
             if chips < leaf.chips:
                 if leaf.free_chips >= chips:
@@ -747,7 +870,7 @@ class FleetTree:
         return None
 
     def search_after_release(
-        self, spec: GangSpec, job_ids: Iterable[str]
+        self, spec: GangSpec, job_ids: Iterable[str], tenant: str | None = None
     ) -> Placement | None:
         """Dry-run search: the placement ``spec`` would find if the
         allocations of ``job_ids`` were released — WITHOUT changing tree
@@ -776,7 +899,7 @@ class FleetTree:
                     continue
                 self.release(jid)
                 saved.append(alloc)
-            return self.search_first_fit(spec)
+            return self.search_first_fit(spec, tenant)
         finally:
             for alloc in saved:
                 self._reapply(alloc)
@@ -875,6 +998,12 @@ class FleetTree:
 
     # ------------------------------------------------------------------
     # Fragmentation queries (DESIGN §9; v1 tree semantics, no geometry)
+    #
+    # NOTE (v0.4): these are tenant-agnostic — free chips on leaves held
+    # by a calendar reservation still count, so during an active hold
+    # ``largest_placeable`` can exceed what any NON-owner tenant could
+    # place (subtract :meth:`reserved_free_chips` for a tenant-honest
+    # view).  Documented blind spot; holds are rare and short.
     # ------------------------------------------------------------------
 
     def largest_placeable(self, level: str, chip_type: str | None = None) -> int:

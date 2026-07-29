@@ -413,15 +413,17 @@ class TestLoadScenario:
             load_scenario(p, strict=False)
 
     def test_strict_raises_with_error_list(self):
+        # capacity: spot became legal in v0.4; twisted TPU slices remain
+        # the canonical not-yet-implemented trigger.
         doc = compact_doc()
-        doc["workload"]["classes"]["eval"]["capacity"] = "spot"
+        doc["workload"]["classes"]["eval"]["twisted"] = True
         with pytest.raises(ScenarioError) as exc_info:
             load_scenario(doc, strict=True)
         assert any("not implemented in v0.1" in e for e in exc_info.value.errors)
 
     def test_non_strict_returns_scenario(self):
         doc = compact_doc()
-        doc["workload"]["classes"]["eval"]["capacity"] = "spot"
+        doc["workload"]["classes"]["eval"]["twisted"] = True
         s = load_scenario(doc, strict=False)
         errors = validate(s)
         assert any("not implemented in v0.1" in e for e in errors)
@@ -630,16 +632,21 @@ class TestNotImplementedInV01:
         if needle is not None:
             assert any(needle in e for e in matching)
 
-    def test_capacity_class_spot(self):
-        self.check(
-            lambda d: d["workload"]["classes"]["eval"].update(capacity="spot"),
-            "spot",
-        )
+    def test_capacity_class_spot_is_fine_in_v04(self):
+        # SPOT (zero-notice kill + checkpoint restart) landed in v0.4.
+        doc = compact_doc()
+        doc["workload"]["classes"]["eval"]["capacity"] = "spot"
+        assert errors_for(doc) == []
 
     def test_capacity_class_reserved(self):
-        self.check(
-            lambda d: d["workload"]["classes"]["eval"].update(capacity="reserved"),
-            "reserved",
+        # reserved/flex_start/calendar job capacity classes remain
+        # unimplemented in v0.4 (CALENDAR capacity is the top-level
+        # `reservations` section, not a per-class knob).
+        doc = compact_doc()
+        doc["workload"]["classes"]["eval"]["capacity"] = "reserved"
+        errs = errors_for(doc)
+        assert any(
+            "not implemented in v0.4" in e and "reserved" in e for e in errs
         )
 
     def test_capacity_on_demand_is_fine(self):
@@ -665,12 +672,33 @@ class TestNotImplementedInV01:
             "twisted",
         )
 
-    def test_preferred_relaxable_constraint(self):
-        self.check(
-            lambda d: d["workload"]["classes"]["pretrain"].update(
-                within={"level": "pod", "required": False}
-            ),
-            "relaxable",
+    def test_preferred_relaxable_constraint_is_fine_in_v04(self):
+        # Relaxable constraints + the crossing penalty are the v0.4
+        # matched pair; `required: false` now validates cleanly.
+        doc = compact_doc()
+        doc["workload"]["classes"]["pretrain"]["within"] = {
+            "level": "pod",
+            "required": False,
+            "relax_after": "10m",
+        }
+        assert errors_for(doc) == []
+        s = load_scenario(doc, strict=True)
+        by_name = {c.name: c for c in s.workload.classes}
+        con = by_name["pretrain"].within
+        assert con is not None and con.required is False
+        assert con.relax_after_s == 600.0
+
+    def test_relaxable_outer_constraint_on_segmented_gang_rejected(self):
+        doc = compact_doc()
+        doc["workload"]["classes"]["pretrain"]["within"] = {
+            "level": "pod",
+            "required": False,
+        }
+        doc["workload"]["classes"]["pretrain"]["segment_nodes"] = 2
+        doc["workload"]["classes"]["pretrain"]["segment_level"] = "rack"
+        errs = errors_for(doc)
+        assert any(
+            "relaxable" in e and "not implemented in v0.4" in e for e in errs
         )
 
     def test_hard_within_dict_form_is_fine(self):
@@ -681,8 +709,41 @@ class TestNotImplementedInV01:
         }
         assert errors_for(doc) == []
 
-    def test_reservations_block(self):
-        self.check(lambda d: d.update(reservations=[{"name": "r1"}]), "reservations")
+    def test_reservations_block_is_fine_in_v04(self):
+        # Calendar reservations landed in v0.4: a well-formed block
+        # validates cleanly...
+        doc = compact_doc()
+        doc["reservations"] = [
+            {
+                "id": "block-1",
+                "tenant": "t0",
+                "chips": 512,
+                "level": "pod",
+                "start": "2d",
+                "end": "4d",
+            }
+        ]
+        assert errors_for(doc) == []
+        s = load_scenario(doc, strict=True)
+        (res,) = s.reservations
+        assert res.hard_end is True  # calendar blocks end hard by default
+        assert res.start_us == 2 * 24 * 3600 * 1_000_000
+
+    def test_reservations_block_rejects_bad_fields(self):
+        doc = compact_doc()
+        doc["reservations"] = [
+            {
+                "id": "block-1",
+                "tenant": "t0",
+                "chips": 4096,  # > one pod (1,024) — can never fit
+                "level": "pod",
+                "start": "4d",
+                "end": "2d",  # end before start
+            }
+        ]
+        errs = errors_for(doc)
+        assert any("start must be strictly before end" in e for e in errs)
+        assert any("can never fit" in e for e in errs)
 
     def test_ocs_pool_attr(self):
         doc = yaml.safe_load(TEMPLATE_YAML)
