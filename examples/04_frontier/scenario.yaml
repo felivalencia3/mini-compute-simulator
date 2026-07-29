@@ -117,4 +117,7 @@ workload:
       abort_prob: 0
 
 scheduler: {name: tiered_priority, params: {preempt: requeue}}
-outputs: {events: parquet}
+# `stints: pod` adds stints.parquet: one row per allocation stint x pod
+# (the frontier job shows as 32 pod rows per stint) — the v0.3
+# visualizer's replay input.
+outputs: {events: parquet, stints: pod}

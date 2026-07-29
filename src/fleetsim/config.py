@@ -518,9 +518,17 @@ class ServiceConfig:
 
 @dataclass
 class OutputsConfig:
+    """File-output selection.  ``stints`` (v0.3 visualizer) opts into
+    ``stints.parquet`` — one row per (allocation stint x domain): a level
+    name records domains at that level, ``True`` means the level directly
+    below each cluster root, and ``None`` (the default, key absent)
+    disables the file entirely (existing scenarios' outputs stay
+    byte-identical)."""
+
     dir: str | None = None
     events: str = "parquet"
     plots: bool = False
+    stints: str | bool | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -1937,11 +1945,29 @@ def _build_scenario(doc: Mapping[str, Any]) -> Scenario:
     if not isinstance(out_raw, Mapping):
         errors.append(f"outputs: expected a mapping, got {out_raw!r}")
         out_raw = {}
+    stints_raw = out_raw.get("stints")
+    stints: str | bool | None
+    if stints_raw is None or stints_raw is False:
+        stints = None  # absent / explicit opt-out: no stints.parquet
+    elif stints_raw is True or isinstance(stints_raw, str):
+        stints = stints_raw
+    else:
+        errors.append(
+            f"outputs.stints: expected a level name or true"
+            f" (true = the level directly below each cluster root),"
+            f" got {stints_raw!r}"
+        )
+        stints = None
     outputs = OutputsConfig(
         dir=out_raw.get("dir"),
         events=str(out_raw.get("events", "parquet")),
         plots=bool(out_raw.get("plots", False)),
-        extra={k: v for k, v in out_raw.items() if k not in ("dir", "events", "plots")},
+        stints=stints,
+        extra={
+            k: v
+            for k, v in out_raw.items()
+            if k not in ("dir", "events", "plots", "stints")
+        },
     )
 
     services = _parse_services(doc, errors)
@@ -2421,6 +2447,17 @@ def validate(scenario: Scenario) -> list[str]:
             " (v0.1 writes jobs.parquet/timeseries.parquet/summary.json;"
             " only 'parquet' is accepted)"
         )
+    if isinstance(scenario.outputs.stints, str):
+        # Every leaf must have an ancestor at the configured level, so the
+        # level must be declared by EVERY cluster (True — "directly below
+        # each cluster root" — always resolves and needs no check).
+        for cl in clusters:
+            if scenario.outputs.stints not in cl.levels:
+                errors.append(
+                    f"outputs.stints: level {scenario.outputs.stints!r} is"
+                    f" not declared by cluster {cl.id!r}"
+                    f" (its levels: {', '.join(cl.levels) or 'none'})"
+                )
 
     # --- reservations ---
     if scenario.reservations is not None:

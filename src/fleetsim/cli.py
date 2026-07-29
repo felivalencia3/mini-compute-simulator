@@ -6,12 +6,16 @@ Subcommands::
     fleetsim validate scenario.yaml
     fleetsim plot out/
     fleetsim compare out_a/ out_b/ [...]
+    fleetsim viz out/ [out_b/] [-o report.html] [--title T]
+                     [--map-level L] [--open]
 
 ``run`` executes the scenario and prints the summary table; ``validate``
 checks schema + feasibility (fleet buildable, scheduler resolvable,
 trace file present) and exits nonzero on any error; ``plot`` renders the
 standard charts from an output directory; ``compare`` prints headline
-metrics of two or more runs side by side.
+metrics of two or more runs side by side; ``viz`` renders one run (or an
+A/B pair) into a single self-contained interactive HTML replay
+(docs/visualizer.md).
 
 Exit codes: 0 success, 1 validation/comparison failure, 2 usage or
 runtime error.  All output is deterministic given the inputs.
@@ -64,6 +68,44 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_cmp = sub.add_parser("compare", help="compare summaries of two or more runs")
     p_cmp.add_argument("out_dirs", nargs="+", help="output directories to compare")
+
+    p_viz = sub.add_parser(
+        "viz",
+        help="render a run into one self-contained interactive HTML replay",
+    )
+    p_viz.add_argument("out_dir", help="fleetsim run output directory (run A)")
+    p_viz.add_argument(
+        "out_dir_b",
+        nargs="?",
+        default=None,
+        help="optional second run: dashed overlays + side-by-side cards"
+        " (compare mode; must share run A's horizon)",
+    )
+    p_viz.add_argument(
+        "-o",
+        "--out",
+        default=None,
+        metavar="REPORT",
+        help="report file to write (default: OUT_DIR/report.html)",
+    )
+    p_viz.add_argument(
+        "--title",
+        default=None,
+        help="report title (default: 'fleetsim replay — <dir name(s)>')",
+    )
+    p_viz.add_argument(
+        "--map-level",
+        default=None,
+        metavar="LEVEL",
+        help="fleet-map level name, e.g. pod"
+        " (default: inferred from the stint domain ids)",
+    )
+    p_viz.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="open the written report in the default browser",
+    )
     return parser
 
 
@@ -320,6 +362,79 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# viz
+# ---------------------------------------------------------------------------
+
+
+def _viz_horizon_mismatch(dir_a: str, dir_b: str) -> str | None:
+    """A helpful message when the two runs cannot be overlaid honestly.
+
+    Compare mode draws run B's frames on run A's time axis, so the runs
+    must cover the same horizon.  Unreadable summaries return ``None``
+    here — ``build_viz_model`` raises its own (more specific) error."""
+    horizons: list[Any] = []
+    for d in (dir_a, dir_b):
+        try:
+            summary = json.loads(
+                (Path(d) / "summary.json").read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        horizons.append(summary.get("horizon_us"))
+    ha, hb = horizons
+    if isinstance(ha, int) and isinstance(hb, int) and ha != hb:
+        return (
+            f"compare runs have different horizons ({dir_a}: {ha / 1e6:.0f} s"
+            f" vs {dir_b}: {hb / 1e6:.0f} s), so their timelines cannot be"
+            f" overlaid on one axis; compare two runs of the same scenario"
+            f" horizon (e.g. the same scenario at two seeds or schedulers)"
+        )
+    return None
+
+
+def _cmd_viz(args: argparse.Namespace) -> int:
+    from .viz import build_viz_model, render_html
+
+    for d in (args.out_dir, args.out_dir_b):
+        if d is not None and not Path(d).is_dir():
+            print(
+                f"error: {d} is not a directory; pass the -o directory of a"
+                f" previous `fleetsim run`",
+                file=sys.stderr,
+            )
+            return 2
+    if args.out_dir_b is not None:
+        mismatch = _viz_horizon_mismatch(args.out_dir, args.out_dir_b)
+        if mismatch is not None:
+            print(f"error: {mismatch}", file=sys.stderr)
+            return 1
+
+    model = build_viz_model(
+        args.out_dir,
+        compare_dir=args.out_dir_b,
+        map_level_hint=args.map_level,
+    )
+    if args.title:
+        model["meta"]["title"] = args.title
+    # The model's reconstruction notes are the degraded-mode contract:
+    # anything the report could not take verbatim from the run outputs
+    # (no stints.parquet -> no fleet map, no scenario copy -> inferred
+    # round, ...) is disclosed here AND inside the report header.
+    for note in model["meta"]["notes"]:
+        print(f"note: {note}")
+
+    report = Path(args.out) if args.out else Path(args.out_dir) / "report.html"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(render_html(model), encoding="utf-8")
+    print(f"report written to {report} ({report.stat().st_size / 1e6:.1f} MB)")
+    if args.open_browser:
+        import webbrowser
+
+        webbrowser.open(str(report.resolve()))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
@@ -336,6 +451,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_plot(args)
         if args.command == "compare":
             return _cmd_compare(args)
+        if args.command == "viz":
+            return _cmd_viz(args)
     except ScenarioError as exc:
         for err in exc.errors:
             print(f"error: {err}", file=sys.stderr)

@@ -14,6 +14,28 @@ two mechanisms that section pins:
   timing, preemption/failure counts, and the engine-reported
   productive/lost chip-seconds.
 
+ALLOCATION STINTS (v0.3 visualizer, opt-in)
+-------------------------------------------
+With ``stints=<level>`` (or ``True`` = the level directly below each
+cluster root) the collector additionally records who-ran-where-when: a
+stint OPENS at every ``job_started`` (the alloc's leaves are mapped to
+their ancestor domain at the configured level through a leaf->(domain,
+chips) table built ONCE at construction — O(depth) per leaf, O(1) per
+lookup afterwards) and SETTLES when the allocation is released — at
+``job_requeued`` (preemption grace expiry / failure kill / drain kill)
+or ``job_finished`` (completion, cancel, timeout).  ``end_reason`` per
+row: ``completed | preempted | failed | drained | canceled | timeout |
+running_at_horizon`` — requeue settlements use the pending reason set by
+the preceding ``job_preempted`` (trigger ``maintenance`` -> ``drained``,
+else ``preempted``) or ``node_failed`` (-> ``failed``, overriding any
+pending preemption); terminal settlements map the ``job_finished``
+status (NODE_FAIL -> ``failed``).  Stints still open at read time are
+closed at the horizon as ``running_at_horizon`` (read-side only — state
+is never mutated).  A multi-domain (segmented) stint yields ONE ROW PER
+domain carrying that domain's chip share; shares sum to the job's
+chips.  When ``stints`` is None (default) nothing is recorded and every
+other output is byte-identical to a collector without the feature.
+
 PRODUCTIVE CHIP-TIME (goodput numerator)
 ----------------------------------------
 ``job_progress`` calls report each stint's surviving-work delta together
@@ -90,6 +112,76 @@ _US = 1_000_000  # microseconds per second
 
 #: JobClass name whose jobs feed the replica-availability integrals.
 _REPLICA_CLASS = "INFER_REPLICA"
+
+#: Terminal-status -> stint ``end_reason`` (job_finished settlements).
+#: NODE_FAIL (trace-replayed terminal) is a failure kill.
+_STINT_END_REASON = {
+    "COMPLETED": "completed",
+    "FAILED": "failed",
+    "CANCELED": "canceled",
+    "TIMEOUT": "timeout",
+    "NODE_FAIL": "failed",
+}
+
+
+def _build_stint_leaf_map(
+    fleet: "FleetTree", level: str | bool
+) -> dict[str, tuple[str, int]]:
+    """The leaf -> (stint domain id, leaf chips) table, built once.
+
+    ``level`` is a level name (the leaf's nearest ancestor at that level,
+    itself included) or ``True`` (the domain directly below the leaf's
+    cluster root; the root itself when the leaf IS a cluster root).
+    O(leaves x depth) total; raises ``ValueError`` for a leaf that cannot
+    resolve (unknown level / no cluster root on its path).
+    """
+    out: dict[str, tuple[str, int]] = {}
+    roots = set(fleet.cluster_roots) if level is True else None
+    for lid in fleet.leaves():
+        dom: str | None = None
+        if roots is not None:
+            if lid in roots:
+                dom = lid
+            else:
+                prev = lid
+                for aid in fleet.ancestors(lid):
+                    if aid in roots:
+                        dom = prev
+                        break
+                    prev = aid
+            if dom is None:
+                raise ValueError(
+                    f"outputs.stints: leaf {lid!r} is under no cluster root;"
+                    f" cannot resolve stints: true"
+                )
+        else:
+            for aid in fleet.ancestors(lid, include_self=True):
+                if fleet.domain(aid).level == level:
+                    dom = aid
+                    break
+            if dom is None:
+                raise ValueError(
+                    f"outputs.stints: leaf {lid!r} has no ancestor at level"
+                    f" {level!r}"
+                )
+        out[lid] = (dom, fleet.domain(lid).chips)
+    return out
+
+
+@dataclass(slots=True)
+class _OpenStint:
+    """One live allocation stint: identity captured at ``job_started``,
+    ``domains`` is the (domain id, chip share) breakdown in ascending
+    domain-id order, ``reason`` the pending settlement reason set by
+    ``job_preempted`` / ``node_failed`` (None until then)."""
+
+    job_id: str
+    class_name: str
+    job_class: str
+    tier: str
+    t0: int
+    domains: tuple[tuple[str, int], ...]
+    reason: str | None = None
 
 
 class TimeWeighted:
@@ -213,6 +305,7 @@ class MetricsCollector:
         fleet: "FleetTree | None" = None,
         warmup_frac: float = 0.1,
         drain_frac: float = 0.1,
+        stints: str | bool | None = None,
     ):
         if horizon_us <= 0:
             raise ValueError(f"horizon_us must be positive, got {horizon_us}")
@@ -268,6 +361,19 @@ class MetricsCollector:
         self._frag_full: dict[str, list[float]] = {}  # level -> [sum, max, n]
         self._frag_win: dict[str, list[float]] = {}
 
+        # Allocation stints (v0.3 visualizer, opt-in; see module docstring).
+        self._stint_level: str | bool | None = None if stints is False else stints
+        self._stint_leaf: dict[str, tuple[str, int]] = {}
+        self._stints_open: dict[str, _OpenStint] = {}
+        self._stint_rows: list[dict[str, Any]] = []
+        if self._stint_level is not None:
+            if fleet is None:
+                raise ValueError(
+                    "outputs.stints requires the fleet at collector"
+                    " construction (jobs can start before the first flush)"
+                )
+            self._stint_leaf = _build_stint_leaf_map(fleet, self._stint_level)
+
         # Fleet statics (filled at construction or first flush).
         self._statics_ready = False
         self._total_chips = 0
@@ -284,13 +390,15 @@ class MetricsCollector:
     ) -> "MetricsCollector":
         """Build from a scenario: horizon from ``sim``, window fractions
         from optional ``outputs`` keys ``warmup_frac`` / ``drain_frac``
-        (they land in ``OutputsConfig.extra``)."""
+        (they land in ``OutputsConfig.extra``), stint recording from
+        ``outputs.stints``."""
         extra = scenario.outputs.extra or {}
         return cls(
             scenario.sim.horizon_us,
             fleet=fleet,
             warmup_frac=float(extra.get("warmup_frac", 0.1)),
             drain_frac=float(extra.get("drain_frac", 0.1)),
+            stints=scenario.outputs.stints,
         )
 
     def _init_fleet_statics(self, fleet: "FleetTree") -> None:
@@ -366,6 +474,58 @@ class MetricsCollector:
             rec.queued = False
             self._tw(self._pending_by_class, rec.job_class).add(t, -1)
 
+    def _open_stint(self, rec: _JobAcc, alloc: Allocation, t: int) -> None:
+        """Open a stint from the alloc's leaves: chip share per stint
+        domain (O(1) map lookup per leaf; whole-node list entries claim
+        the full leaf, sub-node dict entries their recorded chips)."""
+        shares: dict[str, int] = {}
+        for gang in alloc.gangs:
+            nodes = gang.nodes
+            if isinstance(nodes, dict):
+                for lid, chips in nodes.items():
+                    dom = self._stint_leaf[lid][0]
+                    shares[dom] = shares.get(dom, 0) + int(chips)
+            else:
+                for lid in nodes:
+                    dom, leaf_chips = self._stint_leaf[lid]
+                    shares[dom] = shares.get(dom, 0) + leaf_chips
+        self._stints_open[rec.job_id] = _OpenStint(
+            job_id=rec.job_id,
+            class_name=(
+                rec.source_class
+                if rec.source_class is not None
+                else rec.job_class
+            ),
+            job_class=rec.job_class,
+            tier=rec.tier,
+            t0=t,
+            domains=tuple(sorted(shares.items())),
+        )
+
+    def _settle_stint(self, job_id: str, t1: int, reason: str | None) -> None:
+        """Settle the open stint of ``job_id`` (no-op if none): one row
+        per (stint x domain).  ``reason=None`` uses the pending reason
+        recorded by job_preempted/node_failed (default ``preempted``)."""
+        st = self._stints_open.pop(job_id, None)
+        if st is None:
+            return
+        if reason is None:
+            reason = st.reason if st.reason is not None else "preempted"
+        for dom, chips in st.domains:
+            self._stint_rows.append(
+                {
+                    "job_id": st.job_id,
+                    "class_name": st.class_name,
+                    "job_class": st.job_class,
+                    "tier": st.tier,
+                    "domain": dom,
+                    "chips": chips,
+                    "t0_us": st.t0,
+                    "t1_us": t1,
+                    "end_reason": reason,
+                }
+            )
+
     # -- MetricsSink protocol -------------------------------------------
 
     def job_submitted(self, job: Job, t: int) -> None:
@@ -400,6 +560,8 @@ class MetricsCollector:
             default=1,
         )
         self._dequeue(rec, t)
+        if self._stint_level is not None:
+            self._open_stint(rec, alloc, t)
         if rec.alloc_start is None:
             rec.alloc_start = t
             self._tw(self._alloc_by_class, rec.job_class).add(t, rec.chips)
@@ -416,11 +578,17 @@ class MetricsCollector:
             self._preempts_win[trigger] = self._preempts_win.get(trigger, 0) + 1
         # The allocation stays live through the grace window; it is closed
         # by the matching job_requeued (REQUEUE) or job_finished (CANCEL).
+        if self._stint_level is not None:
+            st = self._stints_open.get(job.id)
+            if st is not None:  # pending reason; settled at requeue/finish
+                st.reason = "drained" if trigger == "maintenance" else "preempted"
 
     def job_requeued(self, job: Job, t: int) -> None:
         rec = self._rec(job)
         rec.status = "PENDING"
         self._close_alloc(rec, t)
+        if self._stint_level is not None:
+            self._settle_stint(job.id, t, None)  # pending reason decides
         if not rec.queued:
             rec.queued = True
             self._tw(self._pending_by_class, rec.job_class).add(t, 1)
@@ -469,6 +637,10 @@ class MetricsCollector:
         rec = self._rec(job)
         if rec.end_t is not None:  # double-terminal guard
             return
+        if self._stint_level is not None:
+            self._settle_stint(
+                job.id, t, _STINT_END_REASON.get(status.name, status.name.lower())
+            )
         self._close_alloc(rec, t)
         self._dequeue(rec, t)
         rec.end_t = t
@@ -498,6 +670,10 @@ class MetricsCollector:
             self._failure_kills_full += 1
             if win:
                 self._failure_kills_win += 1
+            if self._stint_level is not None:
+                st = self._stints_open.get(jid)
+                if st is not None:  # failure kill overrides any pending
+                    st.reason = "failed"  # preemption reason (grace victims)
 
     def node_repaired(self, node_id: str, t: int) -> None:
         self._node_repairs_full += 1
@@ -586,6 +762,45 @@ class MetricsCollector:
     @property
     def drain_frac(self) -> float:
         return self._drain_frac
+
+    @property
+    def stint_level(self) -> str | bool | None:
+        """The configured stint level (``True`` = directly below each
+        cluster root), or None when stint recording is off."""
+        return self._stint_level
+
+    def stint_rows(self) -> list[dict[str, Any]]:
+        """Allocation stints, one dict per (stint x domain), sorted by
+        ``(t0_us, job_id, domain, t1_us)``.  Non-mutating: stints still
+        open are emitted truncated at the horizon with ``end_reason
+        running_at_horizon`` without being settled.  Empty when stint
+        recording is off.
+
+        Columns: ``job_id, class_name, job_class, tier, domain, chips,
+        t0_us, t1_us, end_reason`` — ``class_name`` is the workload-class
+        label (``source_class``), falling back to the JobClass name for
+        hand-built/trace jobs; ``chips`` is the job's chip share in that
+        domain (shares of one stint sum to the job's chips).
+        """
+        rows = [dict(r) for r in self._stint_rows]
+        for jid in sorted(self._stints_open):
+            st = self._stints_open[jid]
+            for dom, chips in st.domains:
+                rows.append(
+                    {
+                        "job_id": st.job_id,
+                        "class_name": st.class_name,
+                        "job_class": st.job_class,
+                        "tier": st.tier,
+                        "domain": dom,
+                        "chips": chips,
+                        "t0_us": st.t0,
+                        "t1_us": self._horizon,
+                        "end_reason": "running_at_horizon",
+                    }
+                )
+        rows.sort(key=lambda r: (r["t0_us"], r["job_id"], r["domain"], r["t1_us"]))
+        return rows
 
     def preempt_triggers(self) -> tuple[str, ...]:
         """All preemption trigger strings observed, sorted."""

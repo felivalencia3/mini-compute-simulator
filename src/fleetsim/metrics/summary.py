@@ -2,7 +2,9 @@
 
 Consumes a :class:`~fleetsim.metrics.collector.MetricsCollector` (its
 read-side API only) and produces DESIGN §9's outputs: ``jobs.parquet``,
-``timeseries.parquet``, ``summary.json``, plus a pretty console table.
+``timeseries.parquet``, ``summary.json`` (plus the opt-in
+``stints.parquet`` when the collector records allocation stints, and a
+pretty console table).
 
 Every distributional metric is reported BOTH job-weighted and
 chip-hour-weighted (mice vs hogs); the chip-hour weight of a job is
@@ -50,6 +52,7 @@ __all__ = [
     "write_outputs",
     "jobs_dataframe",
     "timeseries_dataframe",
+    "stints_dataframe",
     "format_summary_table",
 ]
 
@@ -392,9 +395,44 @@ def timeseries_dataframe(collector: "MetricsCollector") -> pd.DataFrame:
     return df
 
 
+#: stints.parquet column order (pinned) and per-column dtypes.
+_STINT_COLS = (
+    "job_id",
+    "class_name",
+    "job_class",
+    "tier",
+    "domain",
+    "chips",
+    "t0_us",
+    "t1_us",
+    "end_reason",
+)
+_STINT_STR_COLS = frozenset(
+    {"job_id", "class_name", "job_class", "tier", "domain", "end_reason"}
+)
+
+
+def stints_dataframe(collector: "MetricsCollector") -> pd.DataFrame:
+    """Allocation stints as a typed DataFrame (one row per stint x
+    domain, sorted by ``(t0_us, job_id, domain, t1_us)``): string ids,
+    ``chips`` int32, ``t0_us``/``t1_us`` int64.  Empty (but fully typed)
+    when no stint was recorded."""
+    df = pd.DataFrame(collector.stint_rows(), columns=list(_STINT_COLS))
+    for c in _STINT_COLS:
+        if c in _STINT_STR_COLS:
+            df[c] = df[c].astype("string")
+        elif c == "chips":
+            df[c] = df[c].astype("int32")
+        else:
+            df[c] = df[c].astype("int64")
+    return df
+
+
 def write_outputs(collector: "MetricsCollector", out_dir: str | Path) -> dict[str, Any]:
     """Write ``jobs.parquet``, ``timeseries.parquet`` and ``summary.json``
     into ``out_dir`` (created if missing) and return the summary dict.
+    ``stints.parquet`` is written ONLY when the collector was built with
+    stint recording (``outputs.stints``) — absent key, no new file.
 
     INVARIANT: byte-identical outputs for identical collector state (JSON
     keys sorted; DataFrame column order pinned)."""
@@ -404,6 +442,8 @@ def write_outputs(collector: "MetricsCollector", out_dir: str | Path) -> dict[st
     timeseries_dataframe(collector).to_parquet(
         out / "timeseries.parquet", index=False
     )
+    if collector.stint_level is not None:
+        stints_dataframe(collector).to_parquet(out / "stints.parquet", index=False)
     summary = build_summary(collector)
     (out / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
