@@ -61,4 +61,6 @@ workload:
       diurnal: true
 
 scheduler: {name: tiered_priority, params: {preempt: requeue}}
-outputs: {events: parquet, plots: true}
+# `stints: pod` adds stints.parquet (one row per allocation stint x pod
+# — who-ran-where-when, the v0.3 visualizer's replay input).
+outputs: {events: parquet, plots: true, stints: pod}

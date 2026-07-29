@@ -18,6 +18,7 @@ fleetsim run scenario.yaml -o out_tiered
 fleetsim run scenario.yaml -o out_fifo \
     --override scheduler.name=fifo --override "scheduler.params={}"
 fleetsim compare out_fifo out_tiered
+fleetsim viz out_tiered out_fifo -o ab.html   # interactive A/B replay
 ```
 
 What to look at (numbers from the shipped scenario, seed 42):
@@ -37,3 +38,7 @@ What to look at (numbers from the shipped scenario, seed 42):
   ~31 min (**~10×**), while finishing ~1% more jobs overall.
 - **`out_tiered/plots/`**: JCT + queue-wait CDFs, occupancy and goodput
   timelines (from `outputs: {plots: true}`).
+- **`ab.html`**: the interactive replay (from `outputs: {stints: pod}` +
+  `fleetsim viz`) — scrub the two-pod fleet map through 14 days, watch
+  failure pulses and preemption notches, with the FIFO run's dashed
+  overlays on every timeline (docs/visualizer.md).

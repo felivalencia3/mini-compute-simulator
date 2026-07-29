@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>__FLEETSIM_TITLE__</title>
+<style>
+/* fleetsim v0.3 replay — self-contained, zero external requests */
+* { box-sizing: border-box; }
+:root {
+  --bg: #0b0e14; --panel: #11151d; --grid: rgba(255,255,255,.07);
+  --text: #e6e8eb; --muted: #8b93a1; --accent: #4dabf7;
+  --failed: #e03131; --draining: #f76707; --maintenance: #845ef7;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+html { background: var(--bg); }
+body {
+  margin: 0; padding: 14px 14px 56px; color: var(--text); background: var(--bg);
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1440px; margin: 0 auto; }
+h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+h2 { font-size: 12px; margin: 0; font-weight: 650; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+h3 { font-size: 11px; margin: 0; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
+.mono { font-family: var(--mono); }
+.panel { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+.phead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.sub { color: var(--muted); font-size: 11px; }
+.banner { font-size: 11px; color: #ffd8a8; background: rgba(247,103,7,.12); border: 1px solid rgba(247,103,7,.35); border-radius: 6px; padding: 2px 8px; }
+.hidden { display: none !important; }
+.empty { color: var(--muted); font-size: 12px; padding: 18px 4px; font-family: var(--mono); }
+
+/* header */
+#hdr .titlebar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+#metaline { color: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+#notes { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+#notes summary { cursor: pointer; }
+#notes ul { margin: 4px 0 0; padding-left: 18px; }
+#cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; margin-top: 10px; }
+.card { background: rgba(255,255,255,.025); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; }
+.card .clabel { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.card .cval { font-size: 19px; font-weight: 650; margin-top: 2px; }
+.card .cval .ab { display: flex; gap: 10px; align-items: baseline; }
+.card .cval .btag, .card .cval .atag { font-size: 9px; color: var(--muted); font-weight: 600; margin-right: 3px; }
+.card .cval .bval { font-size: 14px; color: var(--muted); font-weight: 600; }
+.card .csub { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; align-items: center; }
+.legend .lsec { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; margin-right: -6px; }
+.key { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text); }
+.key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.key i.hatch { background: repeating-linear-gradient(45deg, #845ef7 0 3px, rgba(132,94,247,.22) 3px 6px); }
+.key i.line { height: 3px; border-radius: 2px; width: 14px; }
+.key i.dash { height: 0; width: 14px; border-top: 2px dashed currentColor; background: none; border-radius: 0; }
+
+/* map */
+#mapWrap { position: relative; }
+#map { display: block; width: 100%; border-radius: 6px; }
+#map:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#mapHint { margin-top: 6px; }
+
+/* controls */
+.ctlrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn {
+  background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--grid);
+  border-radius: 6px; padding: 4px 10px; font: 600 12px var(--mono); cursor: pointer;
+}
+.btn:hover { background: rgba(255,255,255,.1); }
+.btn.primary { background: rgba(77,171,247,.15); border-color: rgba(77,171,247,.5); }
+.btn:focus-visible, select:focus-visible, input:focus-visible, .fchip input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+select {
+  background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--grid);
+  border-radius: 6px; padding: 3px 6px; font: 600 12px var(--mono);
+}
+.ctl { color: var(--muted); font-size: 11px; display: inline-flex; gap: 6px; align-items: center; }
+#readout { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+#scrubwrap { margin-top: 10px; }
+#scrub { width: 100%; accent-color: var(--accent); height: 22px; margin: 0; }
+#ticks { position: relative; height: 14px; margin-top: 2px; }
+.tick {
+  position: absolute; top: 0; width: 4px; height: 12px; margin-left: -2px; padding: 0;
+  border: 0; border-radius: 1px; cursor: pointer; background: var(--muted);
+}
+.tick.k-failure { background: var(--failed); }
+.tick.k-preemption_wave { background: var(--draining); }
+.tick.k-frontier_submit { background: rgba(76,110,245,.55); }
+.tick.k-frontier_start { background: #4c6ef5; }
+.tick.k-mixed { background: var(--text); opacity: .8; }
+.helpline { color: var(--muted); font-size: 10.5px; margin-top: 6px; font-family: var(--mono); }
+
+/* charts */
+.chart { margin-top: 10px; }
+.chart:first-child { margin-top: 0; }
+.chead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 2px; }
+.ckeys { display: flex; gap: 12px; flex-wrap: wrap; }
+svg { display: block; }
+svg text { font-family: var(--mono); }
+.ax { fill: var(--muted); font-size: 9.5px; }
+.gl { stroke: var(--grid); stroke-width: 1; }
+.cursor { stroke: rgba(230,232,235,.55); stroke-width: 1; }
+.xhair { stroke: rgba(230,232,235,.3); stroke-width: 1; }
+.brush { fill: rgba(77,171,247,.15); stroke: rgba(77,171,247,.5); stroke-width: 1; }
+.wave { fill: var(--draining); font-size: 9px; }
+
+/* gantt */
+.fchips { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.fchip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; cursor: pointer;
+  border: 1px solid var(--grid); border-radius: 14px; padding: 2px 9px; background: rgba(255,255,255,.03); }
+.fchip i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.fchip input { margin: 0; accent-color: var(--accent); }
+#pinChip { border-color: rgba(77,171,247,.5); background: rgba(77,171,247,.12); }
+#ganttScroll { max-height: 460px; overflow-y: auto; border: 1px solid var(--grid); border-radius: 6px; }
+#ganttAxis { border-bottom: 1px solid var(--grid); }
+.glbl { fill: var(--text); font-size: 9px; }
+.gnote { fill: var(--muted); font-size: 9px; }
+
+/* distributions */
+#cdfGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+
+/* tooltip */
+.tip {
+  position: fixed; z-index: 50; pointer-events: none; max-width: 340px;
+  background: #171c26; border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+  padding: 7px 9px; font-size: 11.5px; box-shadow: 0 6px 22px rgba(0,0,0,.5);
+}
+.tip .th { font-weight: 650; font-family: var(--mono); font-size: 11.5px; margin-bottom: 3px; }
+.tip .trw { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+.tip .trw i { width: 10px; height: 3px; border-radius: 2px; flex: none; }
+.tip .tv { font-weight: 650; font-family: var(--mono); }
+.tip .tn { color: var(--muted); }
+
+/* footer */
+#foot {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: var(--panel); border-top: 1px solid var(--grid);
+  color: var(--muted); font: 11px var(--mono); padding: 7px 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="hdr" class="panel">
+    <div class="titlebar">
+      <h1 id="title"></h1>
+      <span id="metaline"></span>
+    </div>
+    <details id="notes" class="hidden">
+      <summary>reconstruction notes (<span id="nnotes"></span>)</summary>
+      <ul id="notelist"></ul>
+    </details>
+    <div id="cards"></div>
+    <div id="legend" class="legend"></div>
+  </header>
+
+  <section id="mapPanel" class="panel">
+    <div class="phead">
+      <h2>fleet map</h2>
+      <span id="mapSub" class="sub"></span>
+      <span id="aggBanner" class="banner hidden"></span>
+      <span id="cmpBanner" class="banner hidden"></span>
+    </div>
+    <div id="mapWrap">
+      <canvas id="map" tabindex="0" role="application"
+        aria-label="fleet map: arrow keys select a domain, Enter pins it, Escape clears"></canvas>
+    </div>
+    <div id="mapHint" class="sub">hover a block for detail · click to pin (filters the gantt) · border pulse = recent job failure (red) / drain (orange)</div>
+  </section>
+
+  <section id="controlsPanel" class="panel" aria-label="time controls">
+    <div class="ctlrow">
+      <button id="stepBack" class="btn" title="step back one round (left arrow)">&#9664;&#9664; round</button>
+      <button id="playBtn" class="btn primary" aria-pressed="false" title="play / pause (Space)">&#9654; play</button>
+      <button id="stepFwd" class="btn" title="step forward one round (right arrow)">round &#9654;&#9654;</button>
+      <label class="ctl">speed
+        <select id="speed" aria-label="playback speed, sim-hours per second">
+          <option value="1">&times;1</option>
+          <option value="4" selected>&times;4</option>
+          <option value="16">&times;16</option>
+          <option value="64">&times;64</option>
+        </select>
+        <span>sim-h/s</span>
+      </label>
+      <button id="zoomReset" class="btn hidden" title="reset zoom">reset zoom</button>
+      <span id="readout" class="mono"></span>
+    </div>
+    <div id="scrubwrap">
+      <input id="scrub" type="range" aria-label="simulation time scrubber (arrow keys step one round)">
+      <div id="ticks"></div>
+    </div>
+    <div class="helpline">Space play/pause · arrows step one round · drag a timeline to zoom · double-click resets · z / x zoom around cursor · Home / End</div>
+  </section>
+
+  <section id="timelinesPanel" class="panel">
+    <div class="phead"><h2>timelines</h2><span class="sub">downsampled frames — bucket means / sums, no smoothing</span></div>
+    <div id="timelines"></div>
+  </section>
+
+  <section id="ganttPanel" class="panel">
+    <div class="phead"><h2>the hogs — gantt</h2><span id="ganttSub" class="sub"></span></div>
+    <div class="fchips" id="fchips"></div>
+    <div id="ganttAxisWrap"></div>
+    <div id="ganttScroll"></div>
+  </section>
+
+  <section id="cdfPanel" class="panel">
+    <div class="phead">
+      <h2>distributions</h2>
+      <span id="cdfSub" class="sub">empirical CDFs, tier best_effort excluded</span>
+      <label class="ctl"><input type="checkbox" id="logx"> log x</label>
+    </div>
+    <div id="cdfGrid"></div>
+  </section>
+</div>
+
+<div id="tip" class="tip hidden" role="status"></div>
+<footer id="foot"></footer>
+
+<script>
+/*__FLEETSIM_DATA__*/
+"use strict";
+(function () {
+if (typeof DATA === "undefined") {
+  document.body.insertAdjacentText("afterbegin", "template not rendered: DATA was not injected");
+  return;
+}
+const M = DATA;
+
+/* ------------------------------------------------------------------ *
+ * constants, utils
+ * ------------------------------------------------------------------ */
+const US = 1e6;
+const HOR = Math.max(1, M.meta.horizon_us || 1);
+const ROUND = M.meta.round_us || Math.max(1, Math.round(HOR / 1440));
+const PAL = M.palette || {};
+const GRID = "rgba(255,255,255,.07)", MUTED = "#8b93a1", TEXT = "#e6e8eb";
+const OCC_C = "#4dabf7", ALLOC_C = "#aab3bf", PRE_C = "rgba(230,232,235,.35)", WAVE_C = "#f76707";
+const CANON = ["pretrain", "finetune", "eval", "best_effort", "inference"];
+const DPR = Math.max(1, window.devicePixelRatio || 1);
+const $ = (s) => document.querySelector(s);
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const bisect = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] <= x) lo = m + 1; else hi = m; } return lo; };
+const color = (lab) => PAL[lab] || MUTED;
+
+function fmtClock(us) {
+  const s = Math.floor(us / US);
+  const d = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return (d ? d + "d " : "") + p(hh) + ":" + p(mm) + ":" + p(ss);
+}
+function fmtDurS(sec) {  /* same buckets as the summary-card formatter */
+  if (sec == null || !isFinite(sec)) return "n/a";
+  if (sec < 60) return (sec === 0 ? "0" : parseFloat(sec.toPrecision(3))) + "s";
+  if (sec < 3600) return (sec / 60).toFixed(1) + "m";
+  if (sec < 86400) return (sec / 3600).toFixed(1) + "h";
+  return (sec / 86400).toFixed(1) + "d";
+}
+const fmtDurUs = (us) => fmtDurS(us / US);
+const fmtPct = (v) => (v == null ? "–" : (v * 100).toFixed(1) + "%");
+const fmtInt = (v) => (v == null ? "–" : String(v));
+
+/* ------------------------------------------------------------------ *
+ * indexes over the model
+ * ------------------------------------------------------------------ */
+const F = M.frames, FT = F.t_us;
+const FB = M.compare ? M.compare.frames_b : null;
+
+const observed = new Set();
+for (const k of Object.keys(F.pending_by_class || {})) observed.add(k);
+for (const c of M.stints.class_name) observed.add(c);
+for (const g of M.gantt) observed.add(g.class_name);
+for (const k of Object.keys(M.cdfs.queue_wait_s || {})) observed.add(k);
+for (const k of Object.keys(M.cdfs.jct_s || {})) observed.add(k);
+if (FB) for (const k of Object.keys(FB.pending_by_class || {})) observed.add(k);
+const LABELS = CANON.filter((c) => observed.has(c))
+  .concat([...observed].filter((c) => !CANON.includes(c)).sort());
+if (!LABELS.length) LABELS.push(...CANON);
+const NC = LABELS.length;
+const labIdx = new Map(LABELS.map((l, i) => [l, i]));
+
+/* fleet units: domains, or clusters when > 512 domains (aggregated) */
+const domainsFlat = [];
+const domClusterIdx = [];
+(M.fleet.clusters || []).forEach((c, ci) => c.domains.forEach((d) => {
+  domainsFlat.push(d); domClusterIdx.push(ci);
+}));
+const AGG = domainsFlat.length > 512;
+let units, unitOf;  /* unitOf: domain_idx -> unit idx */
+if (AGG) {
+  units = (M.fleet.clusters || []).map((c) => ({ id: c.id, short: c.id, chips: c.chips }));
+  unitOf = Int32Array.from(domClusterIdx);
+} else {
+  units = domainsFlat.map((d, i) => ({ id: d.id, short: d.short, chips: d.chips, cluster: domClusterIdx[i] }));
+  unitOf = Int32Array.from(domainsFlat.map((_, i) => i));
+}
+const NU = units.length;
+let clusterList;  /* layout groups: {id, chips, unitIdxs} */
+if (AGG) {
+  clusterList = [{ id: "all clusters (aggregated)", chips: units.reduce((a, u) => a + u.chips, 0), unitIdxs: units.map((_, i) => i) }];
+} else {
+  clusterList = (M.fleet.clusters || []).map((c, ci) => ({
+    id: c.id, chips: c.chips, unitIdxs: units.map((_, i) => i).filter((i) => units[i].cluster === ci),
+  }));
+}
+
+/* stints -> typed arrays (100K rows must stay cheap) */
+const NSt = M.stints.t0_us.length;
+const sT0 = Float64Array.from(M.stints.t0_us);
+const sT1 = Float64Array.from(M.stints.t1_us);
+const sChips = Int32Array.from(M.stints.chips);
+const sUnit = Int32Array.from(M.stints.domain_idx, (d) => unitOf[d] ?? 0);
+const sCls = Int16Array.from(M.stints.class_name, (c) => labIdx.get(c) ?? 0);
+const sReason = Uint8Array.from(M.stints.end_reason, (r) => (
+  r === "preempted" ? 1 : r === "failed" ? 2 : r === "drained" ? 3 : 0));
+/* release time for the sweep: a running_at_horizon t1_us is the horizon
+   truncation instant, NOT a release — those stints stay allocated at
+   T = horizon so the map agrees with the final timeseries flush */
+const sRel = Float64Array.from(M.stints.end_reason, (r, i) => (
+  r === "running_at_horizon" ? Infinity : sT1[i]));
+const byRel = Uint32Array.from(Array.from({ length: NSt }, (_, i) => i)
+  .sort((a, b) => (sRel[a] < sRel[b] ? -1 : sRel[a] > sRel[b] ? 1 : a - b)));
+
+/* per-gantt-job: units touched (pin filter) + preemption notch times */
+const ganttIds = new Set(M.gantt.map((g) => g.id));
+const jobUnits = new Map(), jobPreempts = new Map();
+for (let i = 0; i < NSt; i++) {
+  const id = M.stints.job_id[i];
+  if (!ganttIds.has(id)) continue;
+  let s = jobUnits.get(id); if (!s) jobUnits.set(id, s = new Set());
+  s.add(sUnit[i]);
+  if (sReason[i] === 1) {
+    let p = jobPreempts.get(id); if (!p) jobPreempts.set(id, p = new Set());
+    p.add(sT1[i]);
+  }
+}
+for (const [id, p] of jobPreempts) jobPreempts.set(id, [...p].sort((a, b) => a - b));
+
+/* interval cursor: O(total stints) over a full forward playback */
+/* pulse window: horizon/100, but never more than a few rounds — a
+   failure-heavy run must not leave a third of the map glowing red */
+const PULSE = clamp(Math.round(HOR / 100), 2 * ROUND, 6 * ROUND);
+const cur = {
+  t: -1, a: 0, r: 0,
+  occ: new Int32Array(NU * NC),
+  active: new Set(),
+  lastFail: new Float64Array(NU).fill(-Infinity),
+  lastDrain: new Float64Array(NU).fill(-Infinity),
+};
+function seek(T) {
+  if (T < cur.t) {
+    cur.a = 0; cur.r = 0; cur.occ.fill(0); cur.active.clear();
+    cur.lastFail.fill(-Infinity); cur.lastDrain.fill(-Infinity);
+  }
+  while (cur.a < NSt && sT0[cur.a] <= T) {
+    const i = cur.a++;
+    cur.occ[sUnit[i] * NC + sCls[i]] += sChips[i];
+    cur.active.add(i);
+  }
+  while (cur.r < NSt && sRel[byRel[cur.r]] <= T) {
+    const i = byRel[cur.r++];
+    cur.occ[sUnit[i] * NC + sCls[i]] -= sChips[i];
+    cur.active.delete(i);
+    const u = sUnit[i];
+    if (sReason[i] === 2) cur.lastFail[u] = Math.max(cur.lastFail[u], sT1[i]);
+    else if (sReason[i] === 3) cur.lastDrain[u] = Math.max(cur.lastDrain[u], sT1[i]);
+  }
+  cur.t = T;
+}
+function nearestFrame(t) {
+  if (!FT.length) return -1;
+  const i = bisect(FT, t);
+  if (i <= 0) return 0;
+  if (i >= FT.length) return FT.length - 1;
+  return (t - FT[i - 1] <= FT[i] - t) ? i - 1 : i;
+}
+
+/* ------------------------------------------------------------------ *
+ * app state
+ * ------------------------------------------------------------------ */
+const S = {
+  t: 0, playing: false, speed: 4,
+  win: [0, HOR],
+  pin: null, kb: null,
+  cls: new Set(LABELS),
+};
+
+/* ------------------------------------------------------------------ *
+ * tooltip (throttled, textContent only — labels are untrusted data)
+ * ------------------------------------------------------------------ */
+const tip = $("#tip");
+let tipLast = 0;
+function showTip(x, y, head, rows) {
+  tip.textContent = "";
+  if (head != null) {
+    const h = document.createElement("div"); h.className = "th"; h.textContent = head; tip.appendChild(h);
+  }
+  for (const r of rows || []) {
+    const d = document.createElement("div"); d.className = "trw";
+    if (r.c) { const i = document.createElement("i"); i.style.background = r.c; d.appendChild(i); }
+    const v = document.createElement("span"); v.className = "tv"; v.textContent = r.v; d.appendChild(v);
+    const n = document.createElement("span"); n.className = "tn"; n.textContent = r.n; d.appendChild(n);
+    tip.appendChild(d);
+  }
+  tip.classList.remove("hidden");
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let px = x + 14, py = y + 14;
+  if (px + tw > innerWidth - 8) px = x - tw - 10;
+  if (py + th > innerHeight - 8) py = y - th - 10;
+  tip.style.left = Math.max(4, px) + "px";
+  tip.style.top = Math.max(4, py) + "px";
+}
+const hideTip = () => tip.classList.add("hidden");
+/* capture-phase: also fires for inner scroll boxes (e.g. the gantt), so a
+   wheel scroll never strands a position:fixed tooltip over moved content */
+document.addEventListener("scroll", hideTip, { capture: true, passive: true });
+const throttled = () => { const n = performance.now(); if (n - tipLast < 28) return true; tipLast = n; return false; };
+
+/* ------------------------------------------------------------------ *
+ * header: title, meta, cards, legend, footer
+ * ------------------------------------------------------------------ */
+function renderHeader() {
+  $("#title").textContent = M.meta.title;
+  const bits = [];
+  if (M.meta.scenario_name) bits.push("scenario " + M.meta.scenario_name);
+  if (M.meta.seed != null) bits.push("seed " + M.meta.seed);
+  bits.push("horizon " + fmtDurUs(HOR));
+  if (M.meta.round_us) bits.push("round " + fmtDurUs(M.meta.round_us));
+  if (M.fleet.map_level) bits.push("map level " + M.fleet.map_level);
+  bits.push("fleetsim " + M.meta.fleetsim_version);
+  $("#metaline").textContent = bits.join(" · ");
+
+  const notes = M.meta.notes || [];
+  if (notes.length) {
+    $("#notes").classList.remove("hidden");
+    $("#nnotes").textContent = String(notes.length);
+    const ul = $("#notelist");
+    for (const n of notes) { const li = document.createElement("li"); li.textContent = n; ul.appendChild(li); }
+  }
+
+  /* summary cards; A | B columns in compare mode */
+  const cardsEl = $("#cards");
+  const cardsA = M.summary_cards || [];
+  const cardsB = M.compare ? (M.compare.summary_cards_b || []) : null;
+  const order = cardsA.map((c) => c.label);
+  if (cardsB) for (const c of cardsB) if (!order.includes(c.label)) order.push(c.label);
+  const byLabel = (list, lab) => (list || []).find((c) => c.label === lab);
+  for (const lab of order) {
+    const a = byLabel(cardsA, lab), b = byLabel(cardsB, lab);
+    const card = document.createElement("div"); card.className = "card";
+    const l = document.createElement("div"); l.className = "clabel"; l.textContent = lab; card.appendChild(l);
+    const v = document.createElement("div"); v.className = "cval";
+    if (cardsB) {
+      const ab = document.createElement("span"); ab.className = "ab";
+      const av = document.createElement("span");
+      const at = document.createElement("span"); at.className = "atag"; at.textContent = "A";
+      av.appendChild(at); av.appendChild(document.createTextNode(a ? a.value : "–"));
+      const bv = document.createElement("span"); bv.className = "bval";
+      const bt = document.createElement("span"); bt.className = "btag"; bt.textContent = "B";
+      bv.appendChild(bt); bv.appendChild(document.createTextNode(b ? b.value : "–"));
+      ab.appendChild(av); ab.appendChild(bv); v.appendChild(ab);
+    } else {
+      v.textContent = a ? a.value : "–";
+    }
+    card.appendChild(v);
+    const sb = document.createElement("div"); sb.className = "csub"; sb.textContent = (a || b || {}).sub || ""; card.appendChild(sb);
+    cardsEl.appendChild(card);
+  }
+
+  /* legend: job classes, then states */
+  const lg = $("#legend");
+  const sec = (t) => { const s = document.createElement("span"); s.className = "lsec"; s.textContent = t; lg.appendChild(s); };
+  const key = (lab, col, hatch) => {
+    const k = document.createElement("span"); k.className = "key";
+    const i = document.createElement("i");
+    if (hatch) i.className = "hatch"; else i.style.background = col;
+    k.appendChild(i); k.appendChild(document.createTextNode(lab)); lg.appendChild(k);
+  };
+  sec("classes");
+  for (const lab of LABELS) key(lab, color(lab));
+  sec("states");
+  key("failed", PAL.failed || "#e03131");
+  key("draining", PAL.draining || "#f76707");
+  key("maintenance", null, true);
+  key("idle", PAL.idle || "rgba(255,255,255,.05)");
+
+  $("#foot").textContent =
+    "fleetsim " + M.meta.fleetsim_version + " — deterministic replay of " +
+    M.meta.out_dir + ", seed " + (M.meta.seed == null ? "n/a" : M.meta.seed);
+
+  if (M.compare) {
+    const cb = $("#cmpBanner");
+    cb.textContent = "compare mode — map shows run A (" + M.compare.label_a + ") only";
+    cb.classList.remove("hidden");
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * fleet map (canvas)
+ * ------------------------------------------------------------------ */
+const canvas = $("#map");
+const ctx = canvas.getContext("2d");
+let tiles = [], clusterBoxes = [], mapH = 0;
+
+function layoutMap() {
+  const W = Math.max(320, $("#mapWrap").clientWidth);
+  tiles = new Array(NU); clusterBoxes = [];
+  const ts = NU <= 16 ? 64 : NU <= 64 ? 46 : NU <= 160 ? 34 : NU <= 320 ? 26 : 20;
+  const gap = 6, cpad = 10, clabel = 18, gapX = 14, gapY = 14;
+  let x = 0, y = 0, rowH = 0;
+  for (const cl of clusterList) {
+    const k = cl.unitIdxs.length;
+    const maxCols = Math.max(1, Math.floor((W - 2 * cpad) / (ts + gap)));
+    const cols = Math.max(1, Math.min(k, maxCols));
+    const rows = Math.ceil(k / cols);
+    const gw = Math.min(W, cols * (ts + gap) - gap + 2 * cpad);
+    const gh = rows * (ts + gap) - gap + 2 * cpad + clabel;
+    if (x > 0 && x + gw > W) { x = 0; y += rowH + gapY; rowH = 0; }
+    clusterBoxes.push({ x, y, w: gw, h: gh, id: cl.id, chips: cl.chips });
+    cl.unitIdxs.forEach((u, j) => {
+      tiles[u] = {
+        x: x + cpad + (j % cols) * (ts + gap),
+        y: y + clabel + cpad + Math.floor(j / cols) * (ts + gap),
+        w: ts, h: ts, u,
+      };
+    });
+    x += gw + gapX; rowH = Math.max(rowH, gh);
+  }
+  mapH = y + rowH + 2;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(mapH * DPR);
+  canvas.style.height = mapH + "px";
+}
+
+function rr(x, y, w, h, r) {
+  const q = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + q, y);
+  ctx.arcTo(x + w, y, x + w, y + h, q);
+  ctx.arcTo(x + w, y + h, x, y + h, q);
+  ctx.arcTo(x, y + h, x, y, q);
+  ctx.arcTo(x, y, x + w, y, q);
+  ctx.closePath();
+}
+
+function drawMap(now) {
+  if (!NU) return;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, canvas.width / DPR, canvas.height / DPR);
+  ctx.font = "11px ui-monospace, Menlo, monospace";
+  for (const g of clusterBoxes) {
+    ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+    rr(g.x + .5, g.y + .5, g.w - 1, g.h - 1, 8); ctx.stroke();
+    ctx.fillStyle = MUTED;
+    ctx.fillText(g.id + " · " + g.chips + " chips", g.x + 10, g.y + 13);
+  }
+  const showLbl = tiles.length && tiles[0] && tiles[0].w >= 46;
+  for (const t of tiles) {
+    if (!t) continue;
+    const u = t.u, cap = Math.max(1, units[u].chips);
+    ctx.fillStyle = PAL.idle || "rgba(255,255,255,.05)";
+    rr(t.x, t.y, t.w, t.h, 4); ctx.fill();
+    /* vertical class stack, bottom-up, clipped to the rounded tile */
+    ctx.save(); rr(t.x, t.y, t.w, t.h, 4); ctx.clip();
+    const segGap = t.w >= 36 ? 2 : 1;
+    let yb = t.y + t.h;
+    for (let c = 0; c < NC; c++) {
+      const n = cur.occ[u * NC + c];
+      if (n <= 0) continue;
+      const hh = Math.max(1, (n / cap) * t.h);
+      const y1 = Math.max(t.y, yb - hh);
+      ctx.fillStyle = color(LABELS[c]);
+      ctx.fillRect(t.x, y1, t.w, yb - y1);
+      yb = y1 - segGap;
+      if (yb <= t.y) break;
+    }
+    if (showLbl) {
+      ctx.fillStyle = "rgba(230,232,235,.8)";
+      ctx.font = "9px ui-monospace, Menlo, monospace";
+      ctx.fillText(units[u].short, t.x + 3, t.y + 10);
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+    }
+    ctx.restore();
+    /* border: pulse (failure/drain), pin, keyboard cursor */
+    const pf = S.t - cur.lastFail[u] < PULSE, pd = S.t - cur.lastDrain[u] < PULSE;
+    if (pf || pd) {
+      const a = S.playing && now != null ? .5 + .45 * Math.sin(now / 170) : .9;
+      ctx.strokeStyle = pf ? (PAL.failed || "#e03131") : (PAL.draining || "#f76707");
+      ctx.globalAlpha = a; ctx.lineWidth = 2;
+      rr(t.x + 1, t.y + 1, t.w - 2, t.h - 2, 4); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (S.pin === u) {
+      ctx.strokeStyle = TEXT; ctx.lineWidth = 2;
+      rr(t.x - 1.5, t.y - 1.5, t.w + 3, t.h + 3, 5); ctx.stroke();
+    }
+    if (S.kb === u) {
+      ctx.strokeStyle = OCC_C; ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      rr(t.x - 3, t.y - 3, t.w + 6, t.h + 6, 6); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function tileAt(mx, my) {
+  for (const t of tiles) {
+    if (t && mx >= t.x && mx <= t.x + t.w && my >= t.y && my <= t.y + t.h) return t;
+  }
+  return null;
+}
+
+function mapTipFor(u, cx, cy) {
+  const unit = units[u];
+  const rows = [];
+  let used = 0;
+  for (let c = 0; c < NC; c++) {
+    const n = cur.occ[u * NC + c];
+    if (n > 0) { rows.push({ c: color(LABELS[c]), v: String(n), n: LABELS[c] + " chips" }); used += n; }
+  }
+  rows.push({ v: fmtPct(used / Math.max(1, unit.chips)), n: "of " + unit.chips + " chips busy" });
+  /* top resident jobs from the active stint set */
+  if (cur.active.size && cur.active.size <= 20000) {
+    const per = new Map();
+    for (const i of cur.active) {
+      if (sUnit[i] !== u) continue;
+      const id = M.stints.job_id[i];
+      per.set(id, (per.get(id) || 0) + sChips[i]);
+    }
+    const top = [...per.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 4);
+    for (const [id, n] of top) rows.push({ v: String(n), n: id });
+    if (per.size > 4) rows.push({ v: "+" + (per.size - 4), n: "more jobs" });
+  }
+  showTip(cx, cy, unit.id + " @ " + fmtClock(S.t), rows);
+}
+
+function wireMap() {
+  canvas.addEventListener("pointermove", (e) => {
+    if (throttled()) return;
+    const r = canvas.getBoundingClientRect();
+    const t = tileAt(e.clientX - r.left, e.clientY - r.top);
+    if (t) mapTipFor(t.u, e.clientX, e.clientY); else hideTip();
+  });
+  canvas.addEventListener("pointerleave", hideTip);
+  canvas.addEventListener("click", (e) => {
+    const r = canvas.getBoundingClientRect();
+    const t = tileAt(e.clientX - r.left, e.clientY - r.top);
+    if (!t) return;
+    S.pin = (S.pin === t.u) ? null : t.u;
+    renderGantt(); drawMap(); updatePinChip();
+  });
+  canvas.addEventListener("keydown", (e) => {
+    if (!NU || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 }[e.key];
+    if (step != null) {
+      e.preventDefault(); e.stopPropagation();
+      S.kb = clamp((S.kb == null ? 0 : S.kb + step), 0, NU - 1);
+      drawMap();
+      const t = tiles[S.kb], r = canvas.getBoundingClientRect();
+      if (t) mapTipFor(S.kb, r.left + t.x + t.w, r.top + t.y + t.h);
+    } else if (e.key === "Enter" && S.kb != null) {
+      e.preventDefault(); e.stopPropagation();
+      S.pin = (S.pin === S.kb) ? null : S.kb;
+      renderGantt(); drawMap(); updatePinChip();
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      S.kb = null; S.pin = null; hideTip();
+      renderGantt(); drawMap(); updatePinChip();
+    }
+  });
+  canvas.addEventListener("blur", () => { S.kb = null; hideTip(); drawMap(); });
+}
+
+/* ------------------------------------------------------------------ *
+ * time controls
+ * ------------------------------------------------------------------ */
+const scrub = $("#scrub"), ticksEl = $("#ticks"), playBtn = $("#playBtn");
+
+let tickGroups = [];  /* events merged when < 6 px apart (aggregate tooltip) */
+function renderScrubber() {
+  scrub.min = S.win[0]; scrub.max = S.win[1]; scrub.step = ROUND;
+  scrub.value = S.t;
+  const [a, b] = S.win, span = Math.max(1, b - a);
+  const W = Math.max(120, ticksEl.clientWidth || 800);
+  tickGroups = [];
+  let g = null;
+  for (const ev of M.events) {  /* events are sorted by t_us */
+    if (ev.t_us < a || ev.t_us > b) continue;
+    const px = (ev.t_us - a) / span * W;
+    if (g && px - g.px0 < 6) { g.evs.push(ev); g.px1 = px; }
+    else { g = { px0: px, px1: px, evs: [ev] }; tickGroups.push(g); }
+  }
+  const parts = tickGroups.map((grp, i) => {
+    const first = grp.evs[0], last = grp.evs[grp.evs.length - 1];
+    const oneKind = grp.evs.every((e) => e.kind === first.kind);
+    const cls = oneKind ? "k-" + first.kind : "k-mixed";
+    const wpx = Math.max(4, Math.round(grp.px1 - grp.px0) + 4);
+    const label = grp.evs.length === 1
+      ? first.label + " at " + fmtClock(first.t_us)
+      : grp.evs.length + " events from " + fmtClock(first.t_us) + " to " + fmtClock(last.t_us);
+    return '<button class="tick ' + esc(cls) + '" style="left:' + (grp.px0 / W * 100).toFixed(3) +
+      '%;width:' + wpx + 'px" data-g="' + i + '" aria-label="' + esc(label) + '"></button>';
+  });
+  ticksEl.innerHTML = parts.join("");
+}
+function tickTip(grp, x, y) {
+  const first = grp.evs[0], last = grp.evs[grp.evs.length - 1];
+  if (grp.evs.length === 1) {
+    showTip(x, y, fmtClock(first.t_us), [{ v: first.label, n: first.kind }]);
+    return;
+  }
+  const byKind = new Map();
+  for (const ev of grp.evs) byKind.set(ev.kind, (byKind.get(ev.kind) || 0) + 1);
+  const rows = [];
+  for (const [k, n] of byKind) rows.push({ v: String(n) + "×", n: k });
+  showTip(x, y, fmtClock(first.t_us) + " – " + fmtClock(last.t_us) +
+    " · " + grp.evs.length + " events", rows);
+}
+
+function wireControls() {
+  scrub.addEventListener("input", () => setT(+scrub.value));
+  ticksEl.addEventListener("pointerover", (e) => {
+    const b = e.target.closest(".tick"); if (!b) return;
+    tickTip(tickGroups[+b.dataset.g], e.clientX, e.clientY);
+  });
+  ticksEl.addEventListener("pointerout", hideTip);
+  ticksEl.addEventListener("click", (e) => {
+    const b = e.target.closest(".tick"); if (!b) return;
+    setT(tickGroups[+b.dataset.g].evs[0].t_us);
+  });
+  playBtn.addEventListener("click", () => (S.playing ? pause() : play()));
+  $("#stepBack").addEventListener("click", () => setT(S.t - ROUND));
+  $("#stepFwd").addEventListener("click", () => setT(S.t + ROUND));
+  $("#speed").addEventListener("change", (e) => { S.speed = +e.target.value; });
+  $("#zoomReset").addEventListener("click", () => setWindow(0, HOR));
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;  /* keep browser/OS shortcuts */
+    const tgt = e.target;
+    if (tgt !== canvas && tgt.closest && tgt.closest("input,select,textarea,button,[contenteditable]")) return;
+    if (tgt === canvas && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter"].includes(e.key)) return;
+    switch (e.key) {
+      case " ": e.preventDefault(); S.playing ? pause() : play(); break;
+      case "ArrowLeft": e.preventDefault(); setT(S.t - ROUND); break;
+      case "ArrowRight": e.preventDefault(); setT(S.t + ROUND); break;
+      case "Home": e.preventDefault(); setT(S.win[0]); break;
+      case "End": e.preventDefault(); setT(S.win[1]); break;
+      case "z": zoomAround(.5); break;
+      case "x": zoomAround(2); break;
+    }
+  });
+}
+
+function zoomAround(f) {
+  const span = Math.max(4 * ROUND, Math.round((S.win[1] - S.win[0]) * f));
+  let a = Math.round(S.t - span / 2), b = a + span;
+  if (a < 0) { b -= a; a = 0; }
+  if (b > HOR) { a -= b - HOR; b = HOR; a = Math.max(0, a); }
+  setWindow(a, b);
+}
+
+function setWindow(a, b) {
+  /* snap pixel-derived edges (and the clamped playhead) to the rounds
+     grid so brush zooms never leave T on an off-round instant */
+  const lo = Math.floor(Math.min(a, b) / ROUND) * ROUND;
+  const hi = Math.ceil(Math.max(a, b) / ROUND) * ROUND;
+  S.win = [clamp(lo, 0, HOR), clamp(hi, 0, HOR)];
+  if (S.win[1] - S.win[0] < 2 * ROUND) S.win = [0, HOR];
+  S.t = clamp(Math.round(S.t / ROUND) * ROUND, S.win[0], S.win[1]);
+  $("#zoomReset").classList.toggle("hidden", S.win[0] === 0 && S.win[1] === HOR);
+  renderScrubber(); renderTimelines(); renderGantt();
+  seek(S.t); drawMap(); updateCursors();
+}
+
+/* playback: rAF loop runs only while playing */
+let lastNow = 0;
+function play() {
+  if (S.playing) return;
+  if (S.t >= S.win[1]) { S.t = S.win[0]; }
+  S.playing = true;
+  playBtn.setAttribute("aria-pressed", "true");
+  playBtn.innerHTML = "&#10074;&#10074; pause";
+  lastNow = performance.now();
+  requestAnimationFrame(tickPlay);
+}
+function pause() {
+  S.playing = false;
+  playBtn.setAttribute("aria-pressed", "false");
+  playBtn.innerHTML = "&#9654; play";
+  drawMap();
+}
+function tickPlay(now) {
+  if (!S.playing) return;
+  const dt = (now - lastNow) / 1000; lastNow = now;
+  S.t = clamp(S.t + dt * S.speed * 3600 * US, S.win[0], S.win[1]);
+  seek(S.t); drawMap(now); updateCursors();
+  if (S.t >= S.win[1]) { pause(); return; }
+  requestAnimationFrame(tickPlay);
+}
+function setT(t) {
+  S.t = clamp(t, S.win[0], S.win[1]);
+  seek(S.t); drawMap(); updateCursors();
+}
+
+function updateReadout() {
+  const i = nearestFrame(S.t);
+  let txt = "T " + fmtClock(S.t);
+  if (i >= 0) {
+    let pend = 0;
+    for (const lab of Object.keys(F.pending_by_class || {})) pend += F.pending_by_class[lab][i] || 0;
+    txt += " · occ " + fmtPct(F.occupancy[i]) + " · alloc " + fmtPct(F.allocation[i]) + " · pending " + pend;
+  }
+  $("#readout").textContent = txt;
+}
+
+/* ------------------------------------------------------------------ *
+ * timelines (inline SVG, synced cursor, brush zoom)
+ * ------------------------------------------------------------------ */
+const tlBox = $("#timelines");
+let tlCharts = [];  /* {div, w, h, x0, x1, px(t), t(px), svg} */
+
+const PADL = 46, PADR = 12, PADT = 8, PADB = 18;
+function makeX(w) {
+  const x0 = PADL, x1 = Math.max(x0 + 10, w - PADR);
+  const [a, b] = S.win, span = Math.max(1, b - a);
+  return { x0, x1, px: (t) => x0 + (t - a) * (x1 - x0) / span, t: (px) => S.win[0] + (px - x0) * span / (x1 - x0) };
+}
+function frameRange(ts) {
+  let i0 = Math.max(0, bisect(ts, S.win[0]) - 1);
+  let i1 = Math.min(ts.length, bisect(ts, S.win[1]) + 1);
+  return [i0, i1];
+}
+const NICE_SECS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800,
+  21600, 43200, 86400, 172800, 345600, 604800, 1209600, 2419200];
+function timeTicks(a, b, n) {
+  const span = Math.max(1, b - a);
+  let step = NICE_SECS.map((s) => s * US).find((s) => span / s <= n) || NICE_SECS[NICE_SECS.length - 1] * US;
+  while (span / step > n * 1.7) step *= 2;
+  const out = [];
+  for (let t = Math.ceil(a / step) * step; t <= b; t += step) out.push(t);
+  return out;
+}
+function secTicks(maxS, n) {
+  /* same nice-seconds ladder for linear duration axes (CDF x); the
+     sub-second decades cover fast eval-only runs */
+  const ladder = [.001, .002, .005, .01, .02, .05, .1, .2, .5].concat(NICE_SECS);
+  if (!(maxS > 0)) return [0, 1];
+  let step = ladder.find((s) => maxS / s <= n) || ladder[ladder.length - 1];
+  while (maxS / step > n * 1.7) step *= 2;
+  const out = [];
+  for (let v = 0; v <= maxS * (1 + 1e-9); v += step) out.push(v);
+  return out;
+}
+function countTicks(max) {
+  if (!(max > 0)) return [0, 1];
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  const m = max / p;
+  const step = m <= 1 ? p / 4 : m <= 2 ? p / 2 : m <= 5 ? p : 2 * p;
+  const out = [];
+  for (let v = 0; v <= max + step * .999; v += step) out.push(v);
+  return out;
+}
+function linePath(ts, ys, X, Y, i0, i1) {
+  let d = "", pen = false;
+  for (let i = i0; i < i1; i++) {
+    const v = ys[i];
+    if (v == null) { pen = false; continue; }
+    d += (pen ? "L" : "M") + X.px(ts[i]).toFixed(1) + " " + Y(v).toFixed(1);
+    pen = true;
+  }
+  return d;
+}
+function areaPath(ts, ys, X, Y, y0, i0, i1) {
+  let d = "", run = [];
+  const flush = () => {
+    if (run.length < 2) { run = []; return; }
+    d += "M" + run.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L");
+    d += "L" + run[run.length - 1][0].toFixed(1) + " " + y0.toFixed(1);
+    d += "L" + run[0][0].toFixed(1) + " " + y0.toFixed(1) + "Z";
+    run = [];
+  };
+  for (let i = i0; i < i1; i++) {
+    const v = ys[i];
+    if (v == null) { flush(); continue; }
+    run.push([X.px(ts[i]), Y(v)]);
+  }
+  flush();
+  return d;
+}
+function axisSvg(X, w, h, yTicks, yFmt) {
+  let s = "";
+  for (const v of yTicks) {
+    const y = v.y.toFixed(1);
+    s += '<line class="gl" x1="' + X.x0 + '" x2="' + X.x1 + '" y1="' + y + '" y2="' + y + '"></line>';
+    s += '<text class="ax" x="' + (X.x0 - 5) + '" y="' + (v.y + 3).toFixed(1) + '" text-anchor="end">' + esc(yFmt(v.v)) + "</text>";
+  }
+  for (const t of timeTicks(S.win[0], S.win[1], Math.max(3, Math.floor(w / 130)))) {
+    const x = X.px(t).toFixed(1);
+    s += '<line class="gl" x1="' + x + '" x2="' + x + '" y1="' + PADT + '" y2="' + (h - PADB) + '"></line>';
+    s += '<text class="ax" x="' + x + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(fmtDurUs(t)) + "</text>";
+  }
+  return s;
+}
+function chartDiv(title, keys, svg) {
+  const div = document.createElement("div");
+  div.className = "chart";
+  const keyHtml = keys.map((k) =>
+    '<span class="key"><i class="' + (k.dash ? "dash" : "line") + '" style="' +
+    (k.dash ? "color:" : "background:") + esc(k.c) + '"></i>' + esc(k.n) + "</span>").join("");
+  div.innerHTML = '<div class="chead"><h3>' + esc(title) + '</h3><div class="ckeys">' + keyHtml + "</div></div>" + svg;
+  return div;
+}
+
+function buildRateChart(w) {
+  const h = 150;
+  const X = makeX(w);
+  const Y = (v) => PADT + (1 - clamp(v, 0, 1)) * (h - PADT - PADB);
+  const [i0, i1] = frameRange(FT);
+  const yT = [0, .25, .5, .75, 1].map((v) => ({ v, y: Y(v) }));
+  let inner = axisSvg(X, w, h, yT, (v) => (v * 100).toFixed(0) + "%");
+  inner += '<path d="' + areaPath(FT, F.occupancy, X, Y, Y(0), i0, i1) + '" fill="' + OCC_C + '" opacity=".1"></path>';
+  inner += '<path d="' + linePath(FT, F.allocation, X, Y, i0, i1) + '" fill="none" stroke="' + ALLOC_C + '" stroke-width="2" stroke-linejoin="round"></path>';
+  inner += '<path d="' + linePath(FT, F.occupancy, X, Y, i0, i1) + '" fill="none" stroke="' + OCC_C + '" stroke-width="2" stroke-linejoin="round"></path>';
+  const keys = [{ n: "occupancy (alloc/healthy)", c: OCC_C }, { n: "allocation (alloc/total)", c: ALLOC_C }];
+  if (FB) {
+    const [j0, j1] = frameRange(FB.t_us);
+    inner += '<path d="' + linePath(FB.t_us, FB.allocation, X, Y, j0, j1) + '" fill="none" stroke="' + ALLOC_C + '" stroke-width="1.5" stroke-dasharray="5 4"></path>';
+    inner += '<path d="' + linePath(FB.t_us, FB.occupancy, X, Y, j0, j1) + '" fill="none" stroke="' + OCC_C + '" stroke-width="1.5" stroke-dasharray="5 4"></path>';
+    keys.push({ n: "run B (dashed)", c: TEXT, dash: true });
+  }
+  return { title: "occupancy & allocation", keys, inner, w, h, X };
+}
+
+function buildPendingChart(w) {
+  const h = 130;
+  const X = makeX(w);
+  const pend = F.pending_by_class || {};
+  const labs = LABELS.filter((l) => pend[l]);
+  const n = FT.length;
+  /* cumulative stacks in class order */
+  const stacks = [];
+  let base = new Float64Array(n);
+  for (const l of labs) {
+    const top = new Float64Array(n);
+    for (let i = 0; i < n; i++) top[i] = base[i] + (pend[l][i] || 0);
+    stacks.push({ lab: l, lo: base, hi: top });
+    base = top;
+  }
+  let maxV = 0;
+  for (let i = 0; i < n; i++) maxV = Math.max(maxV, base[i]);
+  let bStacks = null;
+  if (FB) {
+    const bp = FB.pending_by_class || {};
+    const bl = LABELS.filter((l) => bp[l]);
+    const bn = FB.t_us.length;
+    let bb = new Float64Array(bn);
+    bStacks = [];
+    for (const l of bl) {
+      const top = new Float64Array(bn);
+      for (let i = 0; i < bn; i++) top[i] = bb[i] + (bp[l][i] || 0);
+      bStacks.push({ lab: l, hi: top });
+      bb = top;
+    }
+    for (let i = 0; i < bn; i++) maxV = Math.max(maxV, bb[i]);
+  }
+  const ticks = countTicks(maxV);
+  const yMax = Math.max(1, ticks[ticks.length - 1]);
+  const Y = (v) => PADT + (1 - clamp(v / yMax, 0, 1)) * (h - PADT - PADB);
+  const [i0, i1] = frameRange(FT);
+  let inner = axisSvg(X, w, h, ticks.map((v) => ({ v, y: Y(v) })), (v) => String(Math.round(v)));
+  for (const st of stacks) {
+    /* band between lo and hi (frames have no nulls in pending — ints) */
+    let up = "", dn = "";
+    for (let i = i0; i < i1; i++) up += (up ? "L" : "M") + X.px(FT[i]).toFixed(1) + " " + Y(st.hi[i]).toFixed(1);
+    for (let i = i1 - 1; i >= i0; i--) dn += "L" + X.px(FT[i]).toFixed(1) + " " + Y(st.lo[i]).toFixed(1);
+    if (up) {
+      inner += '<path d="' + up + dn + 'Z" fill="' + esc(color(st.lab)) + '" opacity=".55"></path>';
+      inner += '<path d="' + up + '" fill="none" stroke="' + esc(color(st.lab)) + '" stroke-width="1.2"></path>';
+    }
+  }
+  if (bStacks) {
+    const [j0, j1] = frameRange(FB.t_us);
+    for (const st of bStacks) {
+      let d = "";
+      for (let i = j0; i < j1; i++) d += (d ? "L" : "M") + X.px(FB.t_us[i]).toFixed(1) + " " + Y(st.hi[i]).toFixed(1);
+      inner += '<path d="' + d + '" fill="none" stroke="' + esc(color(st.lab)) + '" stroke-width="1.2" stroke-dasharray="5 4"></path>';
+    }
+  }
+  const keys = labs.map((l) => ({ n: l, c: color(l) }));
+  if (bStacks) {
+    for (const st of bStacks) {
+      if (!labs.includes(st.lab)) keys.push({ n: st.lab + " (B only)", c: color(st.lab), dash: true });
+    }
+    keys.push({ n: "run B (dashed)", c: TEXT, dash: true });
+  }
+  return { title: "pending jobs by class", keys, inner, w, h, X };
+}
+
+function buildPreemptChart(w) {
+  const h = 96;
+  const X = makeX(w);
+  const [i0, i1] = frameRange(FT);
+  let maxV = 0;
+  for (let i = i0; i < i1; i++) maxV = Math.max(maxV, F.preemptions_delta[i]);
+  if (FB) {  /* same visible-window rule as run A */
+    const [j0, j1] = frameRange(FB.t_us);
+    for (let i = j0; i < j1; i++) maxV = Math.max(maxV, FB.preemptions_delta[i]);
+  }
+  const ticks = countTicks(maxV);
+  const yMax = Math.max(1, ticks[ticks.length - 1]);
+  const Y = (v) => PADT + (1 - clamp(v / yMax, 0, 1)) * (h - PADT - PADB);
+  let inner = axisSvg(X, w, h, ticks.map((v) => ({ v, y: Y(v) })), (v) => String(Math.round(v)));
+  for (let i = i0; i < i1; i++) {
+    const v = F.preemptions_delta[i];
+    if (!v) continue;
+    const xr = X.px(FT[i]);
+    const xl = i > 0 ? X.px(FT[i - 1]) : X.x0;
+    const bw = Math.max(1, xr - xl - 1);
+    inner += '<rect x="' + (xr - bw).toFixed(1) + '" y="' + Y(v).toFixed(1) + '" width="' + bw.toFixed(1) +
+      '" height="' + (Y(0) - Y(v)).toFixed(1) + '" rx="1" fill="' + PRE_C + '"></rect>';
+  }
+  if (FB) {
+    const [j0, j1] = frameRange(FB.t_us);
+    let d = "";
+    for (let i = j0; i < j1; i++) d += (d ? "L" : "M") + X.px(FB.t_us[i]).toFixed(1) + " " + Y(FB.preemptions_delta[i]).toFixed(1);
+    inner += '<path d="' + d + '" fill="none" stroke="' + ALLOC_C + '" stroke-width="1.2" stroke-dasharray="5 4"></path>';
+  }
+  /* wave annotations from events[]; suppress magnitude labels that would
+     collide with the previous one (the hover tooltip still has them —
+     adjacent labels must never merge into a false composite number) */
+  let lastWaveLblX = -Infinity;
+  for (const ev of M.events) {  /* sorted by t_us -> x ascending */
+    if (ev.kind !== "preemption_wave" || ev.t_us < S.win[0] || ev.t_us > S.win[1]) continue;
+    const x = X.px(ev.t_us);
+    inner += '<path d="M' + x.toFixed(1) + ' ' + (PADT + 8) + 'l-4 -7l8 0Z" fill="' + WAVE_C + '"></path>';
+    if (x - lastWaveLblX < 28) continue;
+    lastWaveLblX = x;
+    inner += '<text class="wave" x="' + x.toFixed(1) + '" y="' + (PADT + 18) + '" text-anchor="middle">' + esc(String(ev.magnitude)) + "</text>";
+  }
+  const keys = [{ n: "preemptions per frame", c: PRE_C }, { n: "wave", c: WAVE_C }];
+  if (FB) keys.push({ n: "run B (dashed)", c: ALLOC_C, dash: true });
+  return { title: "preemptions", keys, inner, w, h, X };
+}
+
+function renderTimelines() {
+  tlBox.textContent = "";
+  tlCharts = [];
+  if (!FT.length) {
+    tlBox.innerHTML = '<div class="empty">no timeseries samples in this run</div>';
+    return;
+  }
+  const w = Math.max(360, tlBox.clientWidth || tlBox.parentElement.clientWidth - 28);
+  for (const spec of [buildRateChart(w), buildPendingChart(w), buildPreemptChart(w)]) {
+    const svg = '<svg viewBox="0 0 ' + spec.w + " " + spec.h + '" width="' + spec.w + '" height="' + spec.h + '">' +
+      spec.inner +
+      '<line class="xhair hidden" y1="' + PADT + '" y2="' + (spec.h - PADB) + '" x1="0" x2="0"></line>' +
+      '<line class="cursor" y1="' + PADT + '" y2="' + (spec.h - PADB) + '" x1="0" x2="0"></line>' +
+      '<rect class="brush hidden" y="' + PADT + '" height="' + (spec.h - PADT - PADB) + '" x="0" width="0"></rect>' +
+      "</svg>";
+    const div = chartDiv(spec.title, spec.keys, svg);
+    tlBox.appendChild(div);
+    const chart = {
+      div, X: spec.X, h: spec.h, svg: div.querySelector("svg"),
+      xhair: div.querySelector(".xhair"), cursorEl: div.querySelector(".cursor"),
+      brushEl: div.querySelector(".brush"),
+    };
+    wireTimeline(chart);
+    tlCharts.push(chart);
+  }
+}
+
+function crosshairRows(i) {
+  const rows = [{ c: OCC_C, v: fmtPct(F.occupancy[i]), n: "occupancy" },
+    { c: ALLOC_C, v: fmtPct(F.allocation[i]), n: "allocation" },
+    { v: fmtPct(F.goodput_to_date[i]), n: "goodput to date" }];
+  for (const l of LABELS) {
+    const a = (F.pending_by_class || {})[l];
+    if (a) rows.push({ c: color(l), v: String(a[i]), n: l + " pending" });
+  }
+  rows.push({ v: String(F.preemptions_delta[i]), n: "preemptions in frame" });
+  rows.push({ v: String(F.failures_delta[i]), n: "node failures in frame" });
+  if (FB) {
+    const j = (() => { const ts = FB.t_us; if (!ts.length) return -1;
+      const k = bisect(ts, FT[i]); return clamp(k - 1 < 0 ? 0 : (k >= ts.length ? ts.length - 1 : k), 0, ts.length - 1); })();
+    if (j >= 0) {
+      rows.push({ v: fmtPct(FB.occupancy[j]), n: "B occupancy" });
+      rows.push({ v: fmtPct(FB.allocation[j]), n: "B allocation" });
+    }
+  }
+  return rows;
+}
+
+function wireTimeline(c) {
+  let downX = null, brushing = false, preClickT = null, clickAt = -Infinity;
+  const localX = (e) => {
+    const r = c.svg.getBoundingClientRect();
+    return clamp(e.clientX - r.left, c.X.x0, c.X.x1);
+  };
+  c.svg.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    downX = localX(e); brushing = false;
+    c.svg.setPointerCapture(e.pointerId);
+  });
+  c.svg.addEventListener("pointermove", (e) => {
+    const px = localX(e);
+    if (downX != null && Math.abs(px - downX) > 4) {
+      brushing = true;
+      c.brushEl.classList.remove("hidden");
+      c.brushEl.setAttribute("x", Math.min(px, downX));
+      c.brushEl.setAttribute("width", Math.abs(px - downX));
+      hideTip();
+      return;
+    }
+    if (throttled()) return;
+    const i = nearestFrame(c.X.t(px));
+    if (i < 0) return;
+    const fx = FT[i];
+    for (const o of tlCharts) {
+      o.xhair.classList.remove("hidden");
+      const ox = o.X.px(fx).toFixed(1);
+      o.xhair.setAttribute("x1", ox); o.xhair.setAttribute("x2", ox);
+    }
+    showTip(e.clientX, e.clientY, fmtClock(fx) + " (frame)", crosshairRows(i));
+  });
+  const finish = (e) => {
+    if (downX == null) return;
+    const px = localX(e);
+    if (brushing) {
+      c.brushEl.classList.add("hidden");
+      setWindow(c.X.t(Math.min(downX, px)), c.X.t(Math.max(downX, px)));
+    } else {
+      /* remember T before the FIRST click of a potential double-click,
+         so a zoom-reset dblclick can restore the playback position */
+      const now = performance.now();
+      if (now - clickAt > 400) preClickT = S.t;
+      clickAt = now;
+      setT(FT[Math.max(0, nearestFrame(c.X.t(px)))]);
+    }
+    downX = null; brushing = false;
+  };
+  c.svg.addEventListener("pointerup", finish);
+  c.svg.addEventListener("pointercancel", () => { downX = null; brushing = false; c.brushEl.classList.add("hidden"); });
+  c.svg.addEventListener("pointerleave", () => {
+    hideTip();
+    for (const o of tlCharts) o.xhair.classList.add("hidden");
+  });
+  c.svg.addEventListener("dblclick", () => {
+    const t0 = preClickT;
+    setWindow(0, HOR);
+    if (t0 != null) setT(t0);
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * gantt — the hogs
+ * ------------------------------------------------------------------ */
+let ganttCursorEls = [];
+const rowH = (chips) => Math.round(clamp(2 * Math.log2(chips + 1), 6, 22));
+
+function buildFilterChips() {
+  const box = $("#fchips");
+  const labs = LABELS.filter((l) => M.gantt.some((g) => g.class_name === l));
+  const parts = labs.map((l) => {
+    const nJobs = M.gantt.filter((g) => g.class_name === l).length;
+    return '<label class="fchip"><input type="checkbox" checked data-lab="' + esc(l) + '">' +
+      '<i style="background:' + esc(color(l)) + '"></i>' + esc(l) + ' <span class="sub">' + nJobs + "</span></label>";
+  });
+  parts.push('<button id="pinChip" class="btn hidden"></button>');
+  box.innerHTML = parts.join("");
+  box.addEventListener("change", (e) => {
+    const cb = e.target.closest("input[data-lab]"); if (!cb) return;
+    if (cb.checked) S.cls.add(cb.dataset.lab); else S.cls.delete(cb.dataset.lab);
+    renderGantt();
+  });
+  $("#pinChip").addEventListener("click", () => {
+    S.pin = null; renderGantt(); drawMap(); updatePinChip();
+  });
+}
+function updatePinChip() {
+  const chip = $("#pinChip"); if (!chip) return;
+  if (S.pin == null) { chip.classList.add("hidden"); return; }
+  chip.classList.remove("hidden");
+  chip.textContent = "pinned: " + units[S.pin].id + " ✕";
+}
+
+let ganttRows = [];
+function renderGantt() {
+  const axisWrap = $("#ganttAxisWrap"), scrollBox = $("#ganttScroll");
+  if (!M.gantt.length) {
+    $("#ganttSub").textContent = "";
+    axisWrap.textContent = "";
+    scrollBox.innerHTML = '<div class="empty">no jobs in this run</div>';
+    ganttCursorEls = [];
+    return;
+  }
+  const EMPTY = new Set();
+  const list = M.gantt.filter((g) => S.cls.has(g.class_name) &&
+    (S.pin == null || (jobUnits.get(g.id) || EMPTY).has(S.pin)));
+  /* numeric-aware id tie-break (finetune-228 before finetune-2243),
+     mirroring data.py's _natural_key */
+  const natCmp = (a, b) => {
+    const ma = /^(.*?)(\d+)$/.exec(a), mb = /^(.*?)(\d+)$/.exec(b);
+    if (ma && mb && ma[1] === mb[1]) return (+ma[2]) - (+mb[2]) || (a < b ? -1 : a > b ? 1 : 0);
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
+  list.sort((a, b) => b.chips - a.chips || natCmp(a.id, b.id));
+  $("#ganttSub").textContent = list.length + " of " + M.gantt.length +
+    " jobs · sorted by chips · hollow = queued, filled = running" + (S.pin != null ? " · pinned " + units[S.pin].id : "");
+  const w = Math.max(360, scrollBox.clientWidth || scrollBox.parentElement.clientWidth - 30);
+  const X = makeX(w); X.x0 = 6; X.x1 = w - 8;
+  const [a, b] = S.win, span = Math.max(1, b - a);
+  X.px = (t) => X.x0 + (t - a) * (X.x1 - X.x0) / span;
+
+  /* axis strip (stays put while rows scroll) */
+  let ax = "";
+  for (const t of timeTicks(a, b, Math.max(3, Math.floor(w / 130)))) {
+    const x = X.px(t).toFixed(1);
+    ax += '<line class="gl" x1="' + x + '" x2="' + x + '" y1="0" y2="6"></line>';
+    ax += '<text class="ax" x="' + x + '" y="15" text-anchor="middle">' + esc(fmtDurUs(t)) + "</text>";
+  }
+  axisWrap.innerHTML = '<svg id="ganttAxis" viewBox="0 0 ' + w + ' 18" width="' + w + '" height="18">' + ax +
+    '<line class="cursor" y1="0" y2="18" x1="0" x2="0"></line></svg>';
+
+  ganttRows = [];
+  let y = 2;
+  const parts = [];
+  for (const g of list) {
+    const h = rowH(g.chips);
+    ganttRows.push({ g, y, h });
+    const cy = y + h / 2;
+    const col = esc(color(g.class_name));
+    const qEnd = g.start_us != null ? g.start_us : (g.end_us != null ? g.end_us : HOR);
+    parts.push('<rect class="rowbg" x="0" y="' + y + '" width="' + w + '" height="' + (h + 2) + '" fill="transparent"></rect>');
+    if (qEnd > g.submit_us) {
+      parts.push('<rect x="' + X.px(g.submit_us).toFixed(1) + '" y="' + (y + 1) + '" width="' +
+        Math.max(1, X.px(qEnd) - X.px(g.submit_us)).toFixed(1) + '" height="' + Math.max(1, h - 2) +
+        '" rx="2" fill="none" stroke="' + col + '" stroke-width="1" opacity=".65"></rect>');
+    }
+    if (g.start_us != null) {
+      const e = g.end_us != null ? g.end_us : HOR;
+      parts.push('<rect x="' + X.px(g.start_us).toFixed(1) + '" y="' + y + '" width="' +
+        Math.max(1.5, X.px(e) - X.px(g.start_us)).toFixed(1) + '" height="' + h + '" rx="2" fill="' + col + '"></rect>');
+      for (const pt of jobPreempts.get(g.id) || []) {
+        if (pt < g.start_us || pt > e) continue;
+        parts.push('<line x1="' + X.px(pt).toFixed(1) + '" x2="' + X.px(pt).toFixed(1) + '" y1="' + y +
+          '" y2="' + (y + h) + '" stroke="#0b0e14" stroke-width="2"></line>');
+      }
+      if (g.status === "failed" || g.status === "node_fail") {
+        parts.push('<rect x="' + (X.px(e) - 2).toFixed(1) + '" y="' + y + '" width="3" height="' + h +
+          '" fill="' + esc(PAL.failed || "#e03131") + '"></rect>');
+      }
+    }
+    if (h >= 12) {
+      parts.push('<text class="glbl" x="6" y="' + (cy + 3).toFixed(1) + '">' + esc(g.id) +
+        ' <tspan class="gnote">' + g.chips + "c</tspan></text>");
+    }
+    y += h + 2;
+  }
+  const H = Math.max(40, y + 2);
+  scrollBox.innerHTML = list.length
+    ? '<svg id="ganttBody" viewBox="0 0 ' + w + " " + H + '" width="' + w + '" height="' + H + '">' + parts.join("") +
+      '<line class="cursor" y1="0" y2="' + H + '" x1="0" x2="0"></line></svg>'
+    : '<div class="empty">no jobs match the filter</div>';
+  ganttCursorEls = [];
+  const axc = axisWrap.querySelector(".cursor"); if (axc) ganttCursorEls.push({ el: axc, X });
+  const bc = scrollBox.querySelector(".cursor"); if (bc) ganttCursorEls.push({ el: bc, X });
+  wireGantt(scrollBox, X);
+  updateCursors();
+}
+
+function wireGantt(scrollBox, X) {
+  const svg = scrollBox.querySelector("svg");
+  if (!svg) return;
+  let hi = null;
+  svg.addEventListener("pointermove", (e) => {
+    if (throttled()) return;
+    const r = svg.getBoundingClientRect();
+    const my = e.clientY - r.top;
+    const row = ganttRows.find((q) => my >= q.y && my <= q.y + q.h + 2);
+    if (hi && hi !== row) { hi.bg && hi.bg.setAttribute("fill", "transparent"); hi = null; }
+    if (!row) { hideTip(); return; }
+    if (!row.bg) row.bg = svg.querySelectorAll(".rowbg")[ganttRows.indexOf(row)];
+    row.bg.setAttribute("fill", "rgba(255,255,255,.05)");
+    hi = row;
+    const g = row.g;
+    const rows = [
+      { c: color(g.class_name), v: g.class_name, n: "class" },
+      { v: String(g.chips), n: "chips" },
+      { v: g.status, n: "status" },
+      { v: fmtClock(g.submit_us), n: "submitted" },
+      { v: g.start_us == null ? "never" : fmtClock(g.start_us), n: "started" },
+      { v: g.end_us == null ? "—" : fmtClock(g.end_us), n: "ended" },
+    ];
+    if (g.start_us != null) rows.push({ v: fmtDurUs(g.start_us - g.submit_us), n: "queue wait" });
+    if (g.start_us != null && g.end_us != null) rows.push({ v: fmtDurUs(g.end_us - g.start_us), n: "runtime" });
+    rows.push({ v: String(g.n_preemptions), n: "preemptions" });
+    rows.push({ v: String(g.n_restarts), n: "restarts" });
+    rows.push({ v: g.domains_spanned == null ? "—" : String(g.domains_spanned), n: "domains spanned" });
+    showTip(e.clientX, e.clientY, g.id, rows);
+  });
+  svg.addEventListener("pointerleave", () => {
+    if (hi && hi.bg) hi.bg.setAttribute("fill", "transparent");
+    hi = null; hideTip();
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * distributions (CDFs)
+ * ------------------------------------------------------------------ */
+function renderCdfs() {
+  const grid = $("#cdfGrid");
+  grid.textContent = "";
+  const logx = $("#logx").checked;
+  for (const [k, title] of [["queue_wait_s", "queue wait CDF"], ["jct_s", "JCT CDF (completed jobs)"]]) {
+    grid.appendChild(cdfChart(M.cdfs[k] || {}, title, logx));
+  }
+  if (M.compare) $("#cdfSub").textContent = "empirical CDFs, tier best_effort excluded · run A only";
+}
+
+function cdfChart(series, title, logx) {
+  const labs = LABELS.filter((l) => (series[l] || []).length);
+  const w = Math.max(320, Math.floor(($("#cdfGrid").clientWidth || 700) /
+    ($("#cdfGrid").clientWidth > 720 ? 2 : 1)) - 10);
+  const h = 180;
+  if (!labs.length) {
+    const d = document.createElement("div");
+    d.className = "chart";
+    d.innerHTML = '<div class="chead"><h3>' + esc(title) + '</h3></div><div class="empty">no samples</div>';
+    return d;
+  }
+  let maxV = 0, minPos = Infinity;
+  for (const l of labs) for (const [x] of series[l]) {
+    maxV = Math.max(maxV, x);
+    if (x > 0) minPos = Math.min(minPos, x);
+  }
+  if (!isFinite(minPos)) minPos = 1e-3;
+  maxV = Math.max(maxV, minPos * 1.0001);
+  const x0 = PADL, x1 = w - PADR;
+  const X = logx
+    ? (v) => x0 + (Math.log(Math.max(v, minPos) / minPos) / Math.log(maxV / minPos)) * (x1 - x0)
+    : (v) => x0 + (v / maxV) * (x1 - x0);
+  const Xinv = logx
+    ? (px) => minPos * Math.pow(maxV / minPos, (px - x0) / (x1 - x0))
+    : (px) => (px - x0) / (x1 - x0) * maxV;
+  const Y = (p) => PADT + (1 - p) * (h - PADT - PADB);
+  let inner = "";
+  for (const p of [0, .25, .5, .75, 1]) {
+    inner += '<line class="gl" x1="' + x0 + '" x2="' + x1 + '" y1="' + Y(p).toFixed(1) + '" y2="' + Y(p).toFixed(1) + '"></line>';
+    inner += '<text class="ax" x="' + (x0 - 5) + '" y="' + (Y(p) + 3).toFixed(1) + '" text-anchor="end">' + (p * 100).toFixed(0) + "%</text>";
+  }
+  const xt = [];
+  if (logx) {
+    for (let v = Math.pow(10, Math.floor(Math.log10(minPos))); v <= maxV * 1.001; v *= 10) if (v >= minPos / 10) xt.push(v);
+  } else {
+    /* time-aware ticks (15m/1h/6h boundaries), matching the timelines */
+    for (const v of secTicks(maxV, Math.max(3, Math.floor((x1 - x0) / 90)))) xt.push(v);
+  }
+  let lastLblX = -Infinity;
+  for (const v of xt) {
+    const x = X(v);
+    if (x < x0 - 1 || x > x1 + 1) continue;
+    inner += '<line class="gl" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + PADT + '" y2="' + (h - PADB) + '"></line>';
+    if (x - lastLblX < 34) continue;  /* skip colliding tick labels */
+    lastLblX = x;
+    inner += '<text class="ax" x="' + x.toFixed(1) + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(fmtDurS(v)) + "</text>";
+  }
+  for (const l of labs) {
+    let d = "";
+    for (const [x, p] of series[l]) d += (d ? "L" : "M") + X(x).toFixed(1) + " " + Y(p).toFixed(1);
+    inner += '<path d="' + d + '" fill="none" stroke="' + esc(color(l)) + '" stroke-width="2" stroke-linejoin="round"></path>';
+  }
+  inner += '<line class="xhair hidden" y1="' + PADT + '" y2="' + (h - PADB) + '" x1="0" x2="0"></line>';
+  const div = chartDiv(title, labs.map((l) => ({ n: l, c: color(l) })),
+    '<svg viewBox="0 0 ' + w + " " + h + '" width="' + w + '" height="' + h + '">' + inner + "</svg>");
+  const svg = div.querySelector("svg"), xh = div.querySelector(".xhair");
+  svg.addEventListener("pointermove", (e) => {
+    if (throttled()) return;
+    const r = svg.getBoundingClientRect();
+    const px = clamp(e.clientX - r.left, x0, x1);
+    xh.classList.remove("hidden");
+    xh.setAttribute("x1", px); xh.setAttribute("x2", px);
+    const v = Xinv(px);
+    const rows = labs.map((l) => {
+      const pts = series[l];
+      let lo = 0, hiI = pts.length;
+      while (lo < hiI) { const m = (lo + hiI) >> 1; if (pts[m][0] <= v) lo = m + 1; else hiI = m; }
+      return { c: color(l), v: lo === 0 ? "0%" : (pts[lo - 1][1] * 100).toFixed(1) + "%", n: l };
+    });
+    showTip(e.clientX, e.clientY, "≤ " + fmtDurS(v), rows);
+  });
+  svg.addEventListener("pointerleave", () => { xh.classList.add("hidden"); hideTip(); });
+  return div;
+}
+
+/* ------------------------------------------------------------------ *
+ * cursor sync
+ * ------------------------------------------------------------------ */
+function updateCursors() {
+  scrub.value = S.t;
+  for (const c of tlCharts) {
+    const x = c.X.px(S.t).toFixed(1);
+    c.cursorEl.setAttribute("x1", x); c.cursorEl.setAttribute("x2", x);
+  }
+  for (const g of ganttCursorEls) {
+    const x = g.X.px(S.t).toFixed(1);
+    g.el.setAttribute("x1", x); g.el.setAttribute("x2", x);
+  }
+  updateReadout();
+}
+
+/* ------------------------------------------------------------------ *
+ * boot
+ * ------------------------------------------------------------------ */
+function boot() {
+  document.title = M.meta.title;
+  renderHeader();
+  if (!M.capabilities.map) {
+    $("#mapPanel").classList.add("hidden");
+  } else {
+    $("#mapSub").textContent = (M.fleet.map_level ? "level: " + M.fleet.map_level + " · " : "") +
+      NU + (AGG ? " clusters" : " domains") + " · stacked fill = chips by class at T";
+    if (AGG) {
+      const bn = $("#aggBanner");
+      bn.textContent = domainsFlat.length + " domains > 512 — aggregated to clusters";
+      bn.classList.remove("hidden");
+    }
+    layoutMap(); wireMap();
+  }
+  buildFilterChips();
+  renderScrubber();
+  wireControls();
+  renderTimelines();
+  renderGantt();
+  renderCdfs();
+  $("#logx").addEventListener("change", renderCdfs);
+  setT(0);
+  let rsz = null;
+  addEventListener("resize", () => {
+    clearTimeout(rsz);
+    rsz = setTimeout(() => {
+      if (M.capabilities.map) { layoutMap(); drawMap(); }
+      renderScrubber(); renderTimelines(); renderGantt(); renderCdfs(); updateCursors();
+    }, 150);
+  });
+}
+boot();
+})();
+</script>
+</body>
+</html>

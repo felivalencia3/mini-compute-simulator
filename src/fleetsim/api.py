@@ -5,7 +5,8 @@ CLI does — load + validate config, build the fleet tree, construct the
 job source (synthetic generator or trace replay), instantiate the
 scheduler from the registry, attach a :class:`MetricsCollector`, run the
 :class:`Simulator` to the horizon, and write ``jobs.parquet`` /
-``timeseries.parquet`` / ``summary.json`` (plus plots when requested).
+``timeseries.parquet`` / ``summary.json`` (plus plots when requested and
+``stints.parquet`` when ``outputs.stints`` is set).
 
 UNITS: all times inside the pipeline are int microseconds; the returned
 summary reports float seconds / chip-hours (see fleetsim.metrics.summary).

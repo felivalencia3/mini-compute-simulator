@@ -44,7 +44,14 @@ fleetsim run examples/04_frontier/scenario.yaml -o out_baseline \
     --override workload.classes.best_effort=null
 fleetsim compare out_baseline out_frontier
 fleetsim plot out_frontier      # occupancy timeline shows the reclaim dip
+fleetsim viz out_frontier -o frontier.html   # replay the 32-pod reclaim
 ```
+
+The `viz` report (from `outputs: {stints: pod}`) is the reclaim as a
+movie: 128 pods across 4 clusters, the best-effort band vanishing from
+one cluster in a single round and the frontier gang landing across all
+32 of its pods — with the preemption-wave tick and the frontier
+submit/start events marked on the scrubber (docs/visualizer.md).
 
 Measured wall time: ~80 s for the backlog run, ~40 s for the baseline
 (Apple-silicon laptop, pure Python). The only difference between the

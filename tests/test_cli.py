@@ -222,6 +222,174 @@ def test_cli_plot_missing_dir_exits_2(tmp_path, capsys):
 
 
 # ---------------------------------------------------------------------------
+# CLI: viz
+# ---------------------------------------------------------------------------
+
+_VIZ_EXTERNAL_TOKENS = (
+    "http://",
+    "https://",
+    "url(",
+    "@import",
+    "<link",
+    "fetch(",
+    "XMLHttpRequest",
+)
+
+
+def write_tiny_stints(tmp_path: Path, **sim_over) -> Path:
+    """A tiny scenario with stint recording on (`stints: true` = the
+    level directly below the cluster root; here that is `node`)."""
+    doc = tiny_doc(**sim_over)
+    doc["outputs"] = {"stints": True}
+    p = tmp_path / "scenario_stints.yaml"
+    p.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    return p
+
+
+def read_report_model(report: Path) -> dict:
+    """Recover the injected model from a rendered report (the pinned
+    `const DATA = {...};` single-line contract)."""
+    import re
+
+    doc = report.read_text(encoding="utf-8")
+    m = re.search(r"^const DATA = (.*);$", doc, re.M)
+    assert m is not None, "report lost the const DATA line"
+    return json.loads(m.group(1))
+
+
+def test_cli_viz_end_to_end(tmp_path, capsys):
+    scn = write_tiny_stints(tmp_path)
+    out = tmp_path / "run"
+    assert main(["run", str(scn), "-o", str(out)]) == 0
+    report = tmp_path / "report.html"
+    assert main(["viz", str(out), "-o", str(report)]) == 0
+    printed = capsys.readouterr().out
+    assert "report written to" in printed and str(report) in printed
+
+    doc = report.read_text(encoding="utf-8")
+    # Self-contained: one page, zero external requests of any kind.
+    for token in _VIZ_EXTERNAL_TOKENS:
+        assert token not in doc, token
+    # The panel containers of every replay section are present.
+    for panel_id in (
+        "mapPanel",
+        "controlsPanel",
+        "timelinesPanel",
+        "ganttPanel",
+        "cdfPanel",
+    ):
+        assert f'id="{panel_id}"' in doc, panel_id
+
+    model = read_report_model(report)
+    assert list(model) == [  # the pinned top-level model key order
+        "meta",
+        "capabilities",
+        "palette",
+        "fleet",
+        "frames",
+        "stints",
+        "gantt",
+        "cdfs",
+        "events",
+        "summary_cards",
+        "compare",
+    ]
+    assert model["capabilities"] == {"map": True, "compare": False}
+    assert model["fleet"]["map_level"] == "node"
+    assert len(model["stints"]["job_id"]) > 0
+    assert model["compare"] is None
+
+
+def test_cli_viz_default_output_title_and_map_level(tmp_path, capsys):
+    scn = write_tiny_stints(tmp_path)
+    out = tmp_path / "run"
+    assert main(["run", str(scn), "-o", str(out)]) == 0
+    rc = main(["viz", str(out), "--title", "my <replay>", "--map-level", "node"])
+    assert rc == 0
+    report = out / "report.html"  # -o omitted -> OUT_DIR/report.html
+    assert report.is_file()
+    doc = report.read_text(encoding="utf-8")
+    assert "<title>my &lt;replay&gt;</title>" in doc
+    model = read_report_model(report)
+    assert model["meta"]["title"] == "my <replay>"
+    assert model["fleet"]["map_level"] == "node"
+
+
+def test_cli_viz_degraded_without_stints(tmp_path, capsys):
+    scn = write_tiny(tmp_path)  # no outputs.stints -> no stints.parquet
+    out = tmp_path / "run"
+    assert main(["run", str(scn), "-o", str(out)]) == 0
+    report = tmp_path / "degraded.html"
+    capsys.readouterr()
+    assert main(["viz", str(out), "-o", str(report)]) == 0
+    printed = capsys.readouterr().out
+    assert "note: no stints.parquet" in printed  # degraded, and says so
+    model = read_report_model(report)
+    assert model["capabilities"]["map"] is False
+    assert model["fleet"]["clusters"] == []
+    assert model["stints"]["job_id"] == []
+    assert any("stints.parquet" in n for n in model["meta"]["notes"])
+    # The fleet-level replay is still complete.
+    assert len(model["frames"]["t_us"]) > 0
+    assert model["summary_cards"]
+
+
+def test_cli_viz_compare_mode(tmp_path, capsys):
+    scn = write_tiny_stints(tmp_path)
+    out_a, out_b = tmp_path / "a", tmp_path / "b"
+    assert main(["run", str(scn), "-o", str(out_a)]) == 0
+    assert main(["run", str(scn), "-o", str(out_b), "--seed", "9"]) == 0
+    report = tmp_path / "cmp.html"
+    assert main(["viz", str(out_a), str(out_b), "-o", str(report)]) == 0
+    model = read_report_model(report)
+    assert model["capabilities"]["compare"] is True
+    cmp_ = model["compare"]
+    assert cmp_["label_a"] == "a" and cmp_["label_b"] == "b"
+    assert len(cmp_["frames_b"]["t_us"]) > 0
+    assert cmp_["summary_cards_b"]
+
+
+def test_cli_viz_mismatched_compare_runs(tmp_path, capsys):
+    scn_a = write_tiny_stints(tmp_path)
+    scn_b = tmp_path / "longer.yaml"
+    doc = tiny_doc(horizon="40m")
+    doc["outputs"] = {"stints": True}
+    scn_b.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    out_a, out_b = tmp_path / "a", tmp_path / "b"
+    assert main(["run", str(scn_a), "-o", str(out_a)]) == 0
+    assert main(["run", str(scn_b), "-o", str(out_b)]) == 0
+    capsys.readouterr()
+    assert main(["viz", str(out_a), str(out_b), "-o", str(tmp_path / "x.html")]) == 1
+    err = capsys.readouterr().err
+    assert "different horizons" in err
+    assert not (tmp_path / "x.html").exists()
+
+
+def test_cli_viz_error_paths(tmp_path, capsys):
+    # Nonexistent directory.
+    assert main(["viz", str(tmp_path / "nope")]) == 2
+    assert "not a directory" in capsys.readouterr().err
+    # Directory that is not a run output.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["viz", str(empty)]) == 2
+    assert "not a fleetsim output directory" in capsys.readouterr().err
+
+
+def test_cli_viz_open_flag_opens_report(tmp_path, monkeypatch, capsys):
+    import webbrowser
+
+    scn = write_tiny(tmp_path)
+    out = tmp_path / "run"
+    assert main(["run", str(scn), "-o", str(out)]) == 0
+    opened: list[str] = []
+    monkeypatch.setattr(webbrowser, "open", lambda target: opened.append(target))
+    report = tmp_path / "r.html"
+    assert main(["viz", str(out), "-o", str(report), "--open"]) == 0
+    assert opened == [str(report.resolve())]
+
+
+# ---------------------------------------------------------------------------
 # Package exports
 # ---------------------------------------------------------------------------
 

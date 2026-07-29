@@ -61,6 +61,11 @@ ML gang/preemption-cost semantics. That combination is the product — see
   queue-wait/JCT distributions (job- and chip-hour-weighted),
   fragmentation index, per-tenant shares, steady-state windowing;
   Parquet + JSON + plots.
+- **Visualizer** (v0.3): `fleetsim viz out/` renders any run into one
+  self-contained interactive HTML replay — scrub the fleet map through
+  time, watch preemption waves and the reclaim of 32 pods for a
+  131K-chip gang — with zero external requests, every pixel traceable
+  to the output files ([docs/visualizer.md](docs/visualizer.md)).
 - **Engine**: int-microsecond event core, coalesced scheduler rounds
   (cadence follows `sim.round`). Measured on the shipped 2,048-chip
   example at ρ≈0.9: 14 simulated days in ~4 s, 56 days in ~45 s, 6
@@ -90,10 +95,13 @@ fleetsim run examples/01_minimal/scenario.yaml -o out_fifo \
 fleetsim compare out_fifo out_tiered
 fleetsim validate examples/01_minimal/scenario.yaml
 fleetsim plot out_tiered
+fleetsim viz out_tiered -o replay.html --open       # interactive replay
+fleetsim viz out_tiered out_fifo -o ab.html         # A/B overlay
 
 # frontier scale: 524,288 chips, google_fleet preset traffic, a 131K-chip
 # 32-pod gang reclaiming a cluster (measured walkthrough: examples/04_frontier/)
 fleetsim run examples/04_frontier/scenario.yaml -o out_frontier
+fleetsim viz out_frontier -o frontier.html
 ```
 
 `run` prints a summary table and writes to the output directory:
@@ -103,6 +111,7 @@ fleetsim run examples/04_frontier/scenario.yaml -o out_frontier
 | `summary.json` | every metric below, full-run and steady-state window |
 | `jobs.parquet` | one row per job: timings, status, preemptions, productive/lost chip-seconds |
 | `timeseries.parquet` | per-round samples: allocated/healthy chips, queue depth, fragmentation |
+| `stints.parquet` | who-ran-where-when: one row per allocation stint × domain (`outputs: {stints: pod}`) — the visualizer's replay input |
 | `plots/*.png` | JCT + queue-wait CDFs, occupancy + goodput timelines (`outputs: {plots: true}`) |
 
 Python one-liner (same pipeline):
@@ -111,6 +120,24 @@ Python one-liner (same pipeline):
 import fleetsim
 summary = fleetsim.run_scenario("examples/01_minimal/scenario.yaml", "out")
 ```
+
+## Visualizer
+
+```
+fleetsim viz OUT_DIR [OUT_DIR_B] [-o REPORT] [--title T] [--map-level L] [--open]
+```
+
+One self-contained HTML file (no CDN, no fonts, no fetch — opens from
+`file://`): a playable fleet map colored by workload class with
+failure/drain pulses, occupancy/allocation/pending/preemption
+timelines, a top-hogs gantt, queue-wait + JCT CDFs, and event ticks
+for preemption waves, failures, and frontier-gang launches. Pass a
+second run directory for dashed A/B overlays and side-by-side summary
+cards. The fleet map needs `outputs: {stints: pod}` in the scenario
+(examples 01 and 04 set it); without stints the report degrades to
+fleet-level replay and says so. Every pixel maps to a documented
+column of the run outputs — the full honesty contract, controls, and
+performance notes live in [docs/visualizer.md](docs/visualizer.md).
 
 ## Custom schedulers
 
