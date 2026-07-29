@@ -36,9 +36,14 @@ __all__ = ["main", "build_parser"]
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from . import __version__
+
     parser = argparse.ArgumentParser(
         prog="fleetsim",
         description="Discrete-event simulator for ML accelerator fleets.",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"fleetsim {__version__}"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

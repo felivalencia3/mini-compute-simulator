@@ -18,7 +18,7 @@ Gavel, Pollux) have flat GPU counts and no failures; per-job simulators
 ML gang/preemption-cost semantics. That combination is the product — see
 [DESIGN.md](DESIGN.md) §1 for the full survey.
 
-## What v0.1 does (honest scope)
+## What it does (honest scope, v0.4)
 
 - **Fleet model**: one metro, N clusters, config-defined level trees
   (`[cluster, pod, rack, node]` — vocabulary from config, not code),
@@ -47,13 +47,31 @@ ML gang/preemption-cost semantics. That combination is the product — see
   duration splices, finite-Zipf tenant skew (`tenant_zipf_s`, default
   1.2), and a `google_fleet` workload preset that scales a full
   four-class mix to any fleet, with per-class overrides.
-- **Schedulers**: `fifo` (strict + best-effort) and `tiered_priority`
+- **Schedulers**: `fifo` (strict + best-effort), `tiered_priority`
   (Borg bands `best_effort < batch < prod < monitoring` — band 0's
   canonical name is `best_effort` as of v0.2, with `free` accepted as a
   legacy spelling; REQUEUE preemption, no preemption within PROD,
   per-class min-runtime guard, and v0.2 segmented reclaim that can empty
-  multiple pods for one large pending gang) — plus out-of-tree plugins
-  via entry points.
+  multiple pods for one large pending gang), and v0.4's
+  `easy_backfill` (FIFO + head-of-line shadow reservation +
+  conservative walltime-estimate backfill; the engine never kills at
+  the estimate, so lying estimates delay the head exactly like real
+  clusters) — plus out-of-tree plugins via entry points.
+- **Placement physics (v0.4)**: relaxable `within` constraints
+  (`within: {level: pod, required: false, relax_after: 10m}`) shipped
+  as a matched pair with the crossing penalty (`penalties: {xover:
+  {pod: 0.7}}` — cross-domain placements, relaxed or segmented, run at
+  the configured speed multiplier), so relaxing is a measurable
+  tradeoff, not a free lunch (`examples/05_topology_tradeoff/`).
+- **Capacity economics (v0.4)**: per-tenant chip quota with
+  admission-time over-quota demotion to the best_effort band (or
+  rejection) — a deliberately simplified, MAST-inspired model (DESIGN
+  §17.3 states the divergence exactly); calendar reservations that
+  claim whole nodes inside the fewest-evictions domain, evict
+  residents, exclude other tenants for the window, and cut through
+  their own tenant at a hard end (per-block `utilization` reported in
+  the summary); `capacity: spot` = zero-notice kill + checkpoint
+  restart, the worst-case spot model (`examples/06_economics/`).
 - **Failures**: node MTBF sampling, auto/manual repair, planned
   maintenance drains with grace windows, checkpoint/restart accounting
   (lost work, restart overhead, checkpoint-save overhead).
@@ -78,10 +96,13 @@ ML gang/preemption-cost semantics. That combination is the product — see
   GPUs" envelope is still a target, not yet a measurement.
 
 **Not yet in** (schema present, rejected by `fleetsim validate` with
-"not implemented"): backfill/`Reserve`, quota, capacity classes
-beyond on-demand, TPU OCS predicates, relaxable constraints, multi-gang
-jobs, autoscaling inference, throughput matrices — all moved to v0.3.
-Roadmap: DESIGN.md §11 and the v0.2 addendum, DESIGN.md §16.
+"not implemented"): `reserved`/`flex_start`/`calendar` as *per-class*
+capacity classes (calendar capacity is the top-level `reservations`
+section), TPU OCS predicates, multi-gang (Multislice) jobs, autoscaling
+inference, Gavel throughput matrices / unpinned chip types, multi-metro
+two-stage scheduling. Roadmap: DESIGN.md §11 plus the v0.2 (§16) and
+v0.4 (§17) addenda — v0.5 targets the web app surface, v0.6 research
+replay/validation.
 
 ## Quickstart
 
@@ -102,6 +123,15 @@ fleetsim viz out_tiered out_fifo -o ab.html         # A/B overlay
 # 32-pod gang reclaiming a cluster (measured walkthrough: examples/04_frontier/)
 fleetsim run examples/04_frontier/scenario.yaml -o out_frontier
 fleetsim viz out_frontier -o frontier.html
+
+# v0.4 physics & economics (measured walkthroughs in each README)
+fleetsim run examples/05_topology_tradeoff/scenario.yaml -o out_penalty
+fleetsim run examples/05_topology_tradeoff/scenario.yaml \
+    --override penalties.xover.pod=1.0 -o out_free
+fleetsim compare out_penalty out_free               # relax vs pay, measured
+fleetsim run examples/06_economics/scenario.yaml -o out_econ   # quota + calendar block + spot
+
+fleetsim --version
 ```
 
 `run` prints a summary table and writes to the output directory:
@@ -180,6 +210,7 @@ complete plugin package to copy.
 | **Fragmentation** | largest placeable gang per level; frag index = 1 − largest/free; stranded chips (below the smallest gang quantum seen) |
 | Replica availability | inference replica-time running / desired (`services:` section) |
 | Per-tenant share | chip-hours, queue waits, submissions by tenant |
+| v0.4 feature-keyed | `relaxed` / `quota_demoted` job columns, `counts.relaxed_placements` / `counts.quota_demotions`, and the per-reservation report (`reservations` in summary.json: nodes, evictions at claim/hard-end, `utilization`) — present only when the matching config section is used, so feature-off runs stay byte-identical to pre-v0.4 |
 
 All distributional metrics are reported both job-weighted and
 chip-hour-weighted (mice vs hogs), over the full run and a configurable
@@ -201,8 +232,11 @@ cross-platform regression tests compare with tolerances, never golden
 hashes (`tests/test_traffic_v02.py::TestBackwardCompat`). CI also runs
 closed-form queueing rungs — M/M/c vs Erlang-C, Pollaczek–Khinchine
 M/G/1 under lognormal service, preemptive-resume priority M/G/1
-per-class sojourns, best-effort backlog shielding — and invariant
-property tests.
+per-class sojourns, best-effort backlog shielding — invariant property
+tests, and the v0.4 rungs: backfill head-job non-delay (paired run,
+exact estimates), quota conservation at every flush, reservation
+exclusivity via stints cross-check, and the analytic speed-penalty
+completion identity.
 
 ## License
 

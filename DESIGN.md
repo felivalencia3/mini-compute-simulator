@@ -625,3 +625,218 @@ Helios adapter with the QSSF-beats-FIFO reproduction. v0.3 therefore
 stacks those on top of its original scope (relaxable constraints +
 placement-quality penalty, TPU `ocs_pool` predicates, multi-gang
 Multislice, cross-segment speed penalty). v0.4+ unchanged (§11).
+
+---
+
+## 17. v0.4 addendum — the physics update
+
+*Appended after v0.4 landed; where earlier sections disagree, this
+section and the code win.  v0.4's theme: placements and capacity now
+have PRICES — a crossing costs speed, an over-quota job costs its band,
+a reservation costs everyone else the held nodes.  Every feature is
+opt-in via a config key; a scenario using none of the new keys produces
+byte-identical outputs to v0.3 for identical seeds (examples 01 and 04
+are the CI regression anchors).*
+
+### 17.1 The penalties model (with the relax pair)
+
+`penalties: {xover: {<level>: <multiplier>}}` is the placement-quality
+cost model that §4.2 and §16.2 deferred.  Semantics (pinned): at stint
+start the engine computes `speed = Π multiplier(level)` over every
+configured level at which the placement's leaves do NOT all sit under
+one domain (a leaf with no ancestor at the level counts as its own
+singleton domain); completion is scheduled at `start + overhead +
+remaining/(speed·eff)` — the checkpoint math of §6.1 is otherwise
+unchanged, and `speed` is constant per stint because allocations are
+immutable.  The rule prices BOTH shapes of ugliness identically:
+segmented multi-pod gangs (the v0.2 frontier shape) and relaxed
+`within` placements.  Multipliers must be in (0, 1]; **there is no
+default penalty** — the honest value is fleet-specific (example 05 uses
+0.7 for a pod crossing behind 1:7 oversubscription; a full-bisection
+fabric might be 0.95, a DCN hop 0.3).  Validation rung:
+`validation/test_speed_penalty.py` asserts the completion identity
+exactly (int-µs), including the segmented case.
+
+Relaxable constraints ship in the same release, as §4.2 pinned:
+`within: {level: pod, required: false, relax_after: 10m}` (also
+`relax_after_s`; default 300 s).  The placement search (FirstFit) first
+tries the constrained search; once `now − submit ≥ relax_after` it
+retries unconstrained and marks the result `relaxed` — the engine
+re-checks BOTH the relaxability and the elapsed timeout on every
+`Place` (a scheduler cannot mark its way around a hard constraint), and
+`GangAlloc.relaxed`/the `relaxed` jobs.parquet column record it.
+Relaxing a segmented gang's OUTER constraint is rejected by validate.
+Requeued jobs keep their original `submit_t`, so a preemption victim
+does not restart its relax clock.
+
+### 17.2 EASY backfill (estimate-error honesty)
+
+`scheduler: {name: easy_backfill}`: FIFO ordering; the first
+unplaceable job becomes the HEAD; the scheduler computes the head's
+shadow time per candidate domain (chip-count accounting over
+currently-free ELIGIBLE chips plus running jobs' estimated releases at
+`stint_start + walltime_est/speed`, jobs without estimates never
+release, same-wake placements included) and lets later jobs start now
+only if `now + walltime_est/speed ≤ shadow` and they place — `speed`
+is the §17.1 multiplier of the placement each job actually found
+(`view.placement_speed`), so a penalized cross-domain backfill cannot
+overstay its speed-1 promise by the penalty factor.  Free chips on
+leaves held by a calendar reservation for another tenant (§17.4) are
+SUBTRACTED from the shadow accounting — the head can never claim them,
+so an active hold neither collapses the shadow to `now` (which would
+disable backfill for the whole window) nor pads it with phantom
+capacity.  Releases are still counted hold-blind and sufficiency is
+chip-count, not node-shape — two documented approximations, and the
+reason the non-delay rung runs on a fungible 1-chip-node fleet.  No
+shadow ⇒ no backfill (never gamble against an unbounded reservation).
+This is the CONSERVATIVE one-rule EASY: canonical EASY's second
+disjunct (backfill any job that fits the "extra nodes" left over after
+the head's reservation, regardless of estimate) is deliberately not
+implemented, so measured backfill/utilization rates will undershoot
+published EASY reproductions.  Pinned honesty contract: every decision
+uses the scheduler-VISIBLE `walltime_est_s`, and the engine never
+kills a job at its estimate.  The guarantee, stated exactly: with
+EXACT estimates (est = true remaining) the head — pointwise, every job
+on the rung's fungible fleet — starts no later than under strict FIFO
+(`validation/test_backfill_property.py`, paired run).  With merely
+honest OVER-estimates (est ≥ true) the pointwise property does NOT
+hold — an inflated estimate widens the shadow window and a backfilled
+job can outlive the head's true FIFO start (the rung carries the
+counterexample); what holds then is the canonical EASY property
+(Mu'alem & Feitelson, IEEE TPDS 2001): the head never starts later
+than the shadow computed when backfill was granted.  Underestimates
+delay the head past even the shadow, exactly as on a real cluster
+without walltime enforcement (the same rung asserts the failure mode).
+The v0.2 `Reserve` action was NOT added: the shadow reservation is
+scheduler-internal state, and the engine's tentative-reservation
+semantics (§7) already prevent double-booking within a wake.
+
+### 17.3 Quota (in-quota / over-quota)
+
+`quota: {tenants: {<name>: <chips>}, over_quota: best_effort|reject}` —
+the v1 admission seam (§5) becomes `QuotaAdmission`.  Pinned semantics
+(MAST-INSPIRED, deliberately simpler — see the honesty note):
+commitment is taken at ADMISSION against the tenant's non-terminal
+in-quota jobs (pending + running + graced) and released at the
+terminal transition; a job that would exceed its tenant's cap is
+OVER-QUOTA — demoted to the BEST_EFFORT band (`job.tier` overwritten,
+`quota_demoted` marked in jobs.parquet, counted in
+`counts.quota_demotions`) or rejected (FAILED) under `reject`.
+Unlisted tenants are unlimited; `validate` rejects capped tenant names
+that no configured workload class or service can ever produce (a
+typo'd name would otherwise silently disable the cap).  Consequences
+that follow from existing machinery, deliberately: demoted work is
+preemptible scavenger load for tiered reclaim, and it is excluded from
+queue-wait/JCT distributions like every BEST_EFFORT job (§16.1) —
+per-source-class stats keep the open-loop classes honest.  Invariant
+(CI rung, `validation/test_quota_conservation.py`): at every flush,
+each tenant's running in-quota chips ≤ committed ≤ cap.
+
+HONESTY NOTE (what this is NOT): the named references evaluate quota
+differently.  MAST (OSDI '24) and HyperPod task governance judge
+in-quota vs over-quota against a tenant's RUNNING usage at scheduling
+time, treat over-quota work as a dynamic opportunistic state (borrowed
+idle capacity, reclaimed on demand), and never permanently strip a
+job's band because of queue depth.  fleetsim's model is admission-time
+commitment over QUEUED demand with IRREVERSIBLE demotion: a tenant
+bursting 100 short jobs against a 64-chip cap on an idle fleet keeps
+only the first cap's worth in-quota and the rest stay demoted forever
+(example 06's demotion counts are partly this artifact); demoted jobs
+also keep their `min_runtime_s` shield, so the in-quota tenant cannot
+instantly reclaim from long-guarded over-quota work.  Scheduling-time
+evaluation and lend/borrow (HyperPod) remain future work.
+
+### 17.4 Reservations as meta-jobs (calendar capacity blocks)
+
+`reservations: [{id, tenant, chips, level, start, end, hard_end:
+true}]` implements CALENDAR capacity semantics (§5) as an engine-driven
+META-JOB above every band: at `start` the engine claims whole HEALTHY
+nodes of the reservation's chip type inside ONE domain at `level`,
+choosing the domain that needs the FEWEST EVICTIONS — scored by
+distinct non-owner RUNNING jobs displaced, ties broken ascending
+domain id, so a fully idle domain always beats a busy lower-id one
+(Slurm advance reservations likewise select non-conflicting nodes);
+within the chosen domain, leaves are taken free-first, then
+owner-occupied, then foreign-occupied, ascending id within each group
+(whole-node only, rounded up).  Non-owner residents are evicted
+(REQUEUE, trigger `"reservation"`, bypassing preemptibility/
+min-runtime — the capacity is contractually gone), and the leaves are
+marked held.  GRACE LINGERING (pinned): evicted residents keep their
+chips through the normal REQUEUE grace (`checkpoint_save_s`; zero for
+SPOT) — the grace IS the eviction notice — so the first grace-window
+of the hold can still be occupied by departing tenants, the owner
+cannot place there yet, and that time DEBITS the owner's utilization
+(capacity blocks bill from `start`; the exclusivity rung accounts for
+exactly this lingering).  During `[start, end)` placement searches of
+every other tenant skip held leaves (the engine also refuses non-owner
+`Place` actions on them); the owner's jobs may use them but are not
+steered.  Schedulers are NOT blind to holds: the engine view exposes
+`reservations()` (every unfinished block — id, tenant, chips, level,
+window, `active`, held leaves once claimed) and
+`reserved_free_chips(domain, tenant)` (held-but-free capacity a tenant
+cannot use — easy_backfill's shadow subtracts it), so a topology-aware
+policy CAN refuse to place long jobs onto imminent holds, mirroring
+Slurm's reservation-overlap check.  The built-in FirstFit does not
+look ahead — on a busy fleet a claim still evicts.  At `end` the
+marker lifts; with `hard_end` (default — capacity blocks end hard)
+residents still on the hold are evicted first, INCLUDING the owner's:
+the capacity cliff of §5 cuts through the owner's own run.  The
+summary's `reservations` list reports, per block: claimed nodes,
+evictions at claim and at hard end, and `utilization` = ∫ owner-used
+chips on the hold dt / (chips_reserved × window) — an exact int-chip-µs
+integral.  A fleet that cannot host the hold anywhere reports
+`claim_failed` and holds nothing.  Failure semantics: a held node that
+fails stays held (the lost time debits utilization — capacity blocks
+bill for down nodes unless the operator releases them).  Exclusivity is
+a CI rung via node-level stints cross-check
+(`validation/test_reservation_exclusivity.py`).
+
+SPOT (`capacity: spot`) completes the economics: preemption grace is
+zero regardless of `checkpoint_save_s` (zero-notice kill) and recovery
+is floor-of-checkpoint (§6.1) — a checkpoint-free spot job loses
+everything on every kill.  This models the WORST CASE, deliberately
+harsher than the cloud products it abstracts: EC2 Spot delivers a
+2-minute interruption notice and GCP Spot ~30 s, inside which real
+workloads checkpoint — fleetsim's spot banks nothing, so measured spot
+losses are an upper bound (a configurable notice that banks an
+out-of-band checkpoint, like drain grace, is future work).
+`reserved`/`flex_start`/`calendar` as per-class capacity keys remain
+rejected.
+
+### 17.5 Supporting surface
+
+`workload.classes.<c>.tenant: <name>` pins every job of a class to one
+tenant (no Zipf draw; the `tenant/<class>` stream stays reserved) — the
+idiom for reservation owners and spot fleets.  Feature-keyed output
+schema: the new jobs.parquet columns (`relaxed`, `quota_demoted`) and
+summary keys (`counts.relaxed_placements`, `counts.quota_demotions`,
+`reservations`) appear iff the matching config section is present — so
+they are stable per feature and absent (byte-identical) otherwise.
+`fleetsim --version` prints the package version.  Reservation start/end
+events ride the engine's maintenance event channel (rank 5) with tagged
+payloads — `("res_start", i)` / `("res_end", i)` over the engine's
+`(start, id)`-sorted reservation list — so claims and cliffs settle
+after same-timestamp completions/failures/arrivals and BEFORE the wake:
+the §6.1 ordering contract is preserved without renumbering
+`EventType`.  The ENGINE view (not the `ClusterView` protocol) gained
+four probed-with-`getattr` extras, in the `graced_job_ids`/
+`reclaim_feasible` tradition: `placement_speed(placement)` (the §17.1
+multiplier the engine will charge — exactly `Simulator.speed`),
+`reserved_free_chips(domain_id, tenant)` and `reservations()` (§17.4),
+and `release_tentative(job_id)` (same-wake rollback of an
+examined-but-rejected `find_placement` reservation).
+
+### 17.6 Roadmap update
+
+v0.4 as shipped = penalties + relaxable constraints (the §4.2 pair,
+including the v0.2-promised cross-segment penalty) + EASY backfill +
+tenant quota + calendar reservations + SPOT + examples 05/06 + four new
+validation rungs.  **Not shipped, moved out**: Gavel throughput matrix /
+unpinned chip types and multi-metro two-stage scheduling (the original
+§11 v0.4 scope) join the research-validation release.  Revised roadmap:
+**v0.5 — web app** (a hosted UI over the visualizer's replay model:
+scenario builder, run comparison, shareable reports; JSON-over-socket
+scheduler protocol underneath); **v0.6 — research replay & validation**
+(Helios adapter + QSSF reproduction, Philly/Pollux cross-simulator
+rungs at scale, Gavel matrix + unpinned chips, the §12 ladder completed
+in CI); v1.0 trust release unchanged (§11).

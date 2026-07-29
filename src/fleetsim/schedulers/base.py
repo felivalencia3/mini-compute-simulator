@@ -44,6 +44,7 @@ from ..units import S
 __all__ = [
     "JobView",
     "DomainView",
+    "ReservationView",
     "ClusterView",
     "PlacementPolicy",
     "Place",
@@ -100,6 +101,12 @@ class JobView:
     tenant: str
     segments: tuple[int, str] | None = None
     n_segments: int = 0
+    #: v0.4 relaxable constraints: False = the ``within`` level is
+    #: PREFERRED and may be dropped once ``relax_after_s`` has elapsed
+    #: since submission (placement policies implement the retry; the
+    #: engine gates and the cost model penalizes the result).
+    within_required: bool = True
+    relax_after_s: float = 300.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,32 @@ class DomainView:
     total_chips: int
     free_chips: int
     healthy_chips: int
+
+
+@dataclass(frozen=True, slots=True)
+class ReservationView:
+    """Scheduler-visible snapshot of one calendar reservation (v0.4).
+
+    Exposed by the ENGINE view's optional ``reservations()`` method
+    (probe with ``getattr``, like ``graced_job_ids``): every configured
+    block with ``end_us > now`` whose claim has not failed, in
+    ``(start_us, id)`` order.  ``active`` is True once the hold is
+    claimed; ``leaves`` then names the held node ids (empty before the
+    claim — the concrete node set is chosen at ``start_us``).  Lets
+    topology-aware schedulers avoid placing long jobs onto imminent or
+    active holds (Slurm's reservation-overlap check; DESIGN §17.4).
+    """
+
+    id: str
+    tenant: str
+    chips: int
+    level: str | None
+    chip_type: str | None
+    start_us: int
+    end_us: int
+    hard_end: bool
+    active: bool
+    leaves: tuple[str, ...] = ()
 
 
 @runtime_checkable
@@ -162,13 +195,19 @@ class ClusterView(Protocol):
         emitted).  Returns the cached placement on repeat calls."""
         ...
 
-    def search_first_fit(self, spec: GangSpec) -> Placement | None:
+    def search_first_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
         """Raw first-fit capacity search (no reservation side effect) —
         the primitive placement policies compose.  A spec with
-        ``segments`` set delegates to :meth:`search_segmented`."""
+        ``segments`` set delegates to :meth:`search_segmented`.
+        ``tenant`` (v0.4) lets the search use calendar-reservation holds
+        owned by that tenant; ``None`` skips all held leaves."""
         ...
 
-    def search_segmented(self, spec: GangSpec) -> Placement | None:
+    def search_segmented(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
         """Raw segmented (Slurm-block) search for a spec with
         ``segments`` set (no reservation side effect; v0.2).  See
         :meth:`fleetsim.fleet.tree.FleetTree.search_segmented`."""
@@ -247,6 +286,7 @@ _REGISTRY: dict[str, type[Scheduler]] = {}
 _BUILTIN_MODULES: tuple[str, ...] = (
     "fleetsim.schedulers.fifo",
     "fleetsim.schedulers.tiered_priority",
+    "fleetsim.schedulers.easy_backfill",
 )
 
 

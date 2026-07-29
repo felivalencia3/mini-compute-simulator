@@ -1,0 +1,113 @@
+# fleetsim example 06 — capacity economics: quota, a calendar block, and
+# a SPOT filler (the v0.4 economics trio).
+#
+# THE QUESTION THIS EXAMPLE ANSWERS: what does capacity POLICY — not
+# scheduling — do to a fleet?  Three mechanisms, one 6-day run:
+#
+#   1. QUOTA (admission-time in-quota/over-quota, the simplified
+#      MAST-inspired model of DESIGN 17.3): three tenants share the
+#      on-demand pool under per-tenant chip caps.  Zipf marking makes t0
+#      the over-subscriber (it submits ~58% of the shared jobs against a
+#      cap sized like its fair share), so t0's overflow is DEMOTED to
+#      the best_effort band at admission — it still runs, but as
+#      preemptible scavenger work (`quota_demoted` in jobs.parquet,
+#      `counts.quota_demotions` in summary.json).
+#   2. A CALENDAR RESERVATION (Capacity-Block semantics): tenant `acme`
+#      holds 64 chips inside one pod for days 2-4.  The claim picks the
+#      fewest-evictions pod — in the seed-42 run, the pod where half the
+#      nodes already ran acme's own jobs (owner residents stay) — and
+#      EVICTS the in-quota `train` residents still in the way (spike #1;
+#      the zero-notice spot filler has usually already been reclaimed
+#      off contended nodes by tiered priority, so the claim displaces it
+#      only indirectly).  During the window only acme may place there
+#      (`utilization` in the summary's reservation report measures what
+#      acme actually used); at the HARD END acme's residents are evicted
+#      mid-run (spike #2 — the capacity cliff) and requeue elsewhere.
+#   3. SPOT (zero-notice kill + checkpoint restart): a closed-loop
+#      best-effort backlog with `capacity: spot` and checkpointing off —
+#      the instantly-reclaimable filler that keeps utilization near 1
+#      and soaks up whatever the displaced load frees.
+#
+# FLEET: 4 pods x 8 nodes x 8 chips = 256 H100s.  Failures off (example
+# 01 has that machinery); every eviction here is a POLICY eviction, so
+# the two reservation spikes are unmistakable in the preemption
+# timeseries.  The claim lands mid-round (2d + 90s) so the hold must
+# really evict residents rather than luck into just-freed nodes.
+
+sim: {horizon: 6d, round: 60s, seed: 42}
+
+fleet:
+  metro: us-central
+  clusters:
+    - name: h100-econ
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [pod, node], counts: [4, 8]}  # 256 chips
+      failures: {mtbf_node_days: 0}
+
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+# Per-tenant concurrent in-quota chip caps.  t0/t1/t2 receive the shared
+# `train`/`eval` traffic via Zipf marking (t0 heaviest by far); anything
+# past a tenant's cap is demoted to best_effort at admission.  `acme`
+# (the reservation owner) and `spot` are unlisted = unlimited.
+quota:
+  tenants: {t0: 64, t1: 64, t2: 64}
+  over_quota: best_effort
+
+# The calendar block: 64 chips (8 whole nodes) inside ONE pod, days 2-4,
+# hard end.  Claimed at 2d+90s (mid-round; see the header comment).
+reservations:
+  - id: acme-block
+    tenant: acme
+    chips: 64
+    level: pod
+    start: 172890s     # 2d + 90s
+    end: 4d
+    hard_end: true
+
+workload:
+  kind: synthetic
+  n_tenants: 3          # shared classes mark tenants t0/t1/t2 (Zipf 1.2)
+  classes:
+    # The shared on-demand traffic under quota.
+    train:
+      class: finetune
+      rate_per_hour: 6
+      chips: pow2[8, 32]
+      duration: lognormal[median=2h, p90=8h]
+      tier: batch
+      abort_prob: 0
+    eval:
+      rate_per_hour: 20
+      chips: pow2[1, 4]
+      duration: lognormal[median=5m, p90=30m]
+      tier: batch
+      diurnal: true
+      abort_prob: 0
+    # The reservation owner's pipeline: long enough that work straddles
+    # the 4d hard end (the capacity cliff cuts through running jobs).
+    acme_train:
+      class: finetune
+      rate_per_hour: 1.5
+      chips: pow2[8, 16]
+      duration: lognormal[median=5h, p90=16h]
+      tier: batch
+      tenant: acme       # v0.4 fixed-tenant pin (no Zipf draw)
+      abort_prob: 0
+    # The SPOT filler: standing backlog, zero-notice kills (capacity
+    # spot + checkpointing off), instantly reclaimable.
+    spot_filler:
+      class: finetune
+      arrival: {process: closed_loop, closed_loop: {target_pending: 24}}
+      chips: {pmf: {8: 0.5, 16: 0.5}}
+      duration: lognormal[median=2h, p90=8h]
+      checkpoint_interval: 0s
+      capacity: spot
+      tenant: spot
+      abort_prob: 0
+
+scheduler: {name: tiered_priority, params: {preempt: requeue}}
+# stints at NODE level: the reservation exclusivity is checkable row by
+# row against the summary's reservation node list (this is exactly what
+# validation/test_reservation_exclusivity.py automates).
+outputs: {events: parquet, stints: node}

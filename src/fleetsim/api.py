@@ -35,7 +35,7 @@ import yaml
 
 from .config import Scenario, ScenarioError, load_scenario
 from .engine.rng import RngStreams
-from .engine.sim import Simulator
+from .engine.sim import QuotaAdmission, Simulator
 from .fleet.build import build_fleet
 from .metrics.collector import MetricsCollector
 from .metrics.summary import build_summary, write_outputs
@@ -193,7 +193,12 @@ def run_scenario(
     source = _make_source(scenario, fleet, rng, base_dir)
     scheduler = get_scheduler(scenario.scheduler.name, scenario.scheduler.params)
     collector = MetricsCollector.from_scenario(scenario, fleet)
-    sim = Simulator(scenario, fleet, source, scheduler, collector, rng=rng)
+    admission = (
+        QuotaAdmission(scenario.quota) if scenario.quota is not None else None
+    )
+    sim = Simulator(
+        scenario, fleet, source, scheduler, collector, admission, rng=rng
+    )
     sim.run()
 
     target = out_dir if out_dir is not None else scenario.outputs.dir

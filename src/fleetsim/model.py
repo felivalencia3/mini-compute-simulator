@@ -277,6 +277,10 @@ class Job:
     #: ``JobSource.refill``'s ``pending_by_class`` dict on this label
     #: (falling back to ``job_class.name`` when unset).
     source_class: str | None = None
+    #: True iff quota admission demoted this job to the BEST_EFFORT band
+    #: (v0.4 over-quota semantics).  ``tier`` then already reads
+    #: BEST_EFFORT; this flag preserves the fact of the demotion.
+    quota_demoted: bool = False
     status: JobStatus = JobStatus.PENDING
     attained_service_chip_s: float = 0.0
     goodput_chip_s: float = 0.0

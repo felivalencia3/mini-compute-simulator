@@ -800,10 +800,16 @@ class SyntheticSource:
         )
         dur_s = st.dur_sampler.sample(st.duration)
         walltime_est_s = dur_s * _WALLTIME_FACTOR.sample(st.duration)
-        tenant_i = min(
-            bisect_right(st.tenant_cum, float(st.tenant.random())),
-            cfg.n_tenants - 1,
-        )
+        if cfg.tenant is not None:
+            # v0.4 fixed-tenant pin: no Zipf draw (the ``tenant/<class>``
+            # stream stays reserved but unconsumed for this class).
+            tenant = cfg.tenant
+        else:
+            tenant_i = min(
+                bisect_right(st.tenant_cum, float(st.tenant.random())),
+                cfg.n_tenants - 1,
+            )
+            tenant = f"t{tenant_i}"
         true_dur_s = dur_s
         override: JobStatus | None = None
         if st.outcome.random() < cfg.abort_prob:
@@ -830,7 +836,7 @@ class SyntheticSource:
         ckpt_on = cfg.checkpoint_interval_s and cfg.checkpoint_interval_s > 0
         job = SyntheticJob(
             id=f"{cfg.name}-{st.n_emitted}",
-            tenant=f"t{tenant_i}",
+            tenant=tenant,
             job_class=cfg.job_class,
             submit_t=t,
             gangs=[

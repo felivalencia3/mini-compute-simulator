@@ -91,6 +91,9 @@ __all__ = [
     "SchedulerConfig",
     "ServiceConfig",
     "OutputsConfig",
+    "PenaltiesConfig",
+    "QuotaConfig",
+    "ReservationConfig",
     "SimConfig",
     "Scenario",
     "ScenarioError",
@@ -100,6 +103,7 @@ __all__ = [
 ]
 
 _NOT_V01 = "not implemented in v0.1"
+_NOT_V04 = "not implemented in v0.4"
 
 
 class ScenarioError(Exception):
@@ -465,6 +469,10 @@ class WorkloadClassConfig:
     abort_prob: float = 0.0
     n_tenants: int = 8
     tenant_zipf_s: float = TENANT_ZIPF_S_DEFAULT
+    #: Fixed tenant name for EVERY job of this class (v0.4) — bypasses
+    #: the Zipf tenant draw entirely (the ``tenant/<class>`` stream is
+    #: reserved but not consumed).  None = Zipf marking over n_tenants.
+    tenant: str | None = None
     chip_type: str | None = None
     capacity: CapacityClass = CapacityClass.ON_DEMAND
     n_gangs: int = 1
@@ -532,6 +540,73 @@ class OutputsConfig:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class PenaltiesConfig:
+    """Placement-quality speed penalties (v0.4, the v0.3-designed
+    relax/penalty matched pair).
+
+    ``xover`` maps a level name to a speed MULTIPLIER in (0, 1]: a gang
+    whose leaves do NOT all sit under one domain at that level runs at
+    ``multiplier`` x speed (multipliers of several configured levels
+    multiply).  This covers both segmented multi-pod gangs and RELAXED
+    ``within`` placements — relaxing a constraint is never free once a
+    penalty is configured (DESIGN §4.2: the matched pair).  Absent
+    section = every speed stays exactly 1.0 (byte-identical outputs).
+    """
+
+    xover: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class QuotaConfig:
+    """Tenant chip quota (v0.4; MAST-INSPIRED admission-time model).
+
+    ``tenants`` maps tenant name -> concurrent in-quota chip cap.  At
+    ADMISSION, a job whose tenant's committed in-quota chips (pending +
+    running in-quota jobs) would exceed the cap is OVER-QUOTA:
+    ``over_quota: best_effort`` (default) demotes it to the BEST_EFFORT
+    band (it runs as preemptible scavenger work, ``Job.quota_demoted``
+    set); ``over_quota: reject`` fails it at admission.  Tenants absent
+    from the table are unlimited; ``validate`` rejects capped names no
+    configured workload class or service can produce.
+
+    HONEST SEMANTICS (pinned; DESIGN §17.3): commitment is charged over
+    QUEUED DEMAND (pending + running) at admission time and demotion is
+    IRREVERSIBLE — deliberately simpler than MAST/HyperPod, which
+    evaluate in-quota vs over-quota against RUNNING usage at scheduling
+    time and treat over-quota as a dynamic, reclaimable state.  A burst
+    of short jobs therefore demotes everything past the cap even on an
+    idle fleet.  Scheduling-time evaluation is future work.
+    """
+
+    tenants: dict[str, int] = field(default_factory=dict)
+    over_quota: str = "best_effort"
+
+
+@dataclass(frozen=True)
+class ReservationConfig:
+    """One calendar capacity block (v0.4; CapacityClass.CALENDAR
+    semantics — reservation-as-meta-job).
+
+    The engine claims ``chips`` worth of WHOLE nodes (rounded up) inside
+    one ``level`` domain at ``start_us``, evicting residents (REQUEUE,
+    trigger ``"reservation"``); during ``[start, end)`` only ``tenant``'s
+    jobs may be placed on the held nodes.  With ``hard_end`` (default
+    True — capacity blocks end hard) residents still on the hold at
+    ``end_us`` are evicted; the marker always lifts at ``end_us``.
+    ``chip_type`` is required on heterogeneous fleets.
+    """
+
+    id: str
+    tenant: str
+    chips: int
+    start_us: int
+    end_us: int
+    level: str | None = None
+    chip_type: str | None = None
+    hard_end: bool = True
+
+
 @dataclass
 class Scenario:
     """The fully-parsed scenario.  ``load_errors`` holds problems found
@@ -545,7 +620,9 @@ class Scenario:
     outputs: OutputsConfig = field(default_factory=OutputsConfig)
     failure_model: FailureModelConfig = field(default_factory=FailureModelConfig)
     services: list[ServiceConfig] = field(default_factory=list)
-    reservations: Any = None
+    reservations: list[ReservationConfig] = field(default_factory=list)
+    penalties: PenaltiesConfig | None = None
+    quota: QuotaConfig | None = None
     load_errors: list[str] = field(default_factory=list)
 
 
@@ -940,6 +1017,7 @@ _CLASS_KEYS = {
     "segment_level",
     "abort_prob",
     "n_tenants",
+    "tenant",
     "tenant_zipf_s",
     "capacity",
     "gangs",
@@ -1524,10 +1602,45 @@ def _parse_workload_class(
         if isinstance(within_raw, str):
             within = Constraint(level=within_raw)
         elif isinstance(within_raw, Mapping) and "level" in within_raw:
+            unknown_w = sorted(
+                set(within_raw) - {"level", "required", "relax_after", "relax_after_s"}
+            )
+            if unknown_w:
+                errors.append(
+                    f"{ctx}.within: unknown key(s): {', '.join(unknown_w)}"
+                    f" (known: level, required, relax_after, relax_after_s)"
+                )
+            if "relax_after" in within_raw and "relax_after_s" in within_raw:
+                errors.append(
+                    f"{ctx}.within: give relax_after (a duration) OR"
+                    f" relax_after_s (float seconds), not both"
+                )
+            if "relax_after" in within_raw:
+                relax_s = (
+                    _duration_us(
+                        within_raw["relax_after"],
+                        f"{ctx}.within.relax_after",
+                        errors,
+                        300 * S,
+                    )
+                    / S
+                )
+            else:
+                relax_s = float(within_raw.get("relax_after_s", 300.0))
+            required_raw = within_raw.get("required", True)
+            if not isinstance(required_raw, bool):
+                # Truthiness would turn e.g. the quoted string "false"
+                # (or any typo) into a HARD constraint, silently killing
+                # the relax/penalty pair the user configured.
+                errors.append(
+                    f"{ctx}.within.required: expected true/false,"
+                    f" got {required_raw!r}"
+                )
+                required_raw = True
             within = Constraint(
                 level=str(within_raw["level"]),
-                required=bool(within_raw.get("required", True)),
-                relax_after_s=float(within_raw.get("relax_after_s", 300.0)),
+                required=required_raw,
+                relax_after_s=relax_s,
             )
         else:
             errors.append(
@@ -1573,6 +1686,17 @@ def _parse_workload_class(
         )
         zipf_raw = default_zipf_s
     chip_type_raw = spec.get("chip_type")
+    tenant_raw = spec.get("tenant")
+    if tenant_raw is not None and (
+        not isinstance(tenant_raw, str) or not tenant_raw.strip()
+    ):
+        # Empty/whitespace names (e.g. an unset templating variable)
+        # would silently key jobs, quota, and reservations on "".
+        errors.append(
+            f"{ctx}.tenant: expected a non-empty tenant name string,"
+            f" got {tenant_raw!r}"
+        )
+        tenant_raw = None
     return WorkloadClassConfig(
         name=name,
         job_class=job_class,
@@ -1592,6 +1716,7 @@ def _parse_workload_class(
         abort_prob=float(spec.get("abort_prob", abort_default)),
         n_tenants=int(spec.get("n_tenants", default_tenants)),
         tenant_zipf_s=float(zipf_raw),
+        tenant=tenant_raw,
         chip_type=str(chip_type_raw) if chip_type_raw is not None else None,
         capacity=capacity,
         n_gangs=int(spec.get("gangs", 1)),
@@ -1903,7 +2028,154 @@ _TOP_LEVEL_KEYS = {
     "services",
     "outputs",
     "reservations",
+    "penalties",
+    "quota",
 }
+
+
+def _parse_penalties(
+    doc: Mapping[str, Any], errors: list[str]
+) -> PenaltiesConfig | None:
+    """Parse the top-level ``penalties`` section (v0.4).  Structure:
+    ``penalties: {xover: {<level>: <multiplier>}}``."""
+    raw = doc.get("penalties")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        errors.append(f"penalties: expected a mapping, got {raw!r}")
+        return None
+    unknown = sorted(set(raw) - {"xover"})
+    if unknown:
+        errors.append(
+            f"penalties: unknown key(s): {', '.join(unknown)} (known: xover)"
+        )
+    xover_raw = raw.get("xover")
+    xover: dict[str, float] = {}
+    if xover_raw is None:
+        errors.append("penalties: 'xover' mapping is required")
+    elif not isinstance(xover_raw, Mapping):
+        errors.append(
+            f"penalties.xover: expected a {{level: multiplier}} mapping,"
+            f" got {xover_raw!r}"
+        )
+    else:
+        for level, mult in xover_raw.items():
+            if not _is_number(mult):
+                errors.append(
+                    f"penalties.xover.{level}: expected a number in (0, 1],"
+                    f" got {mult!r}"
+                )
+                continue
+            xover[str(level)] = float(mult)
+    return PenaltiesConfig(xover=xover)
+
+
+_QUOTA_OVER_MODES = ("best_effort", "reject")
+
+
+def _parse_quota(doc: Mapping[str, Any], errors: list[str]) -> QuotaConfig | None:
+    """Parse the top-level ``quota`` section (v0.4).  Structure:
+    ``quota: {tenants: {<name>: <chips> | {chips: <chips>}},
+    over_quota: best_effort | reject}``."""
+    raw = doc.get("quota")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        errors.append(f"quota: expected a mapping, got {raw!r}")
+        return None
+    unknown = sorted(set(raw) - {"tenants", "over_quota"})
+    if unknown:
+        errors.append(
+            f"quota: unknown key(s): {', '.join(unknown)}"
+            f" (known: tenants, over_quota)"
+        )
+    tenants_raw = raw.get("tenants")
+    tenants: dict[str, int] = {}
+    if not isinstance(tenants_raw, Mapping) or not tenants_raw:
+        errors.append(
+            "quota.tenants: a non-empty {tenant: chips} mapping is required"
+        )
+    else:
+        for name, spec in tenants_raw.items():
+            ctx = f"quota.tenants.{name}"
+            chips: Any = spec
+            if isinstance(spec, Mapping):
+                unknown_t = sorted(set(spec) - {"chips"})
+                if unknown_t:
+                    errors.append(
+                        f"{ctx}: unknown key(s): {', '.join(unknown_t)}"
+                        f" (known: chips)"
+                    )
+                chips = spec.get("chips")
+            if isinstance(chips, bool) or not isinstance(chips, int) or chips < 1:
+                errors.append(
+                    f"{ctx}: chips must be an integer >= 1, got {chips!r}"
+                )
+                continue
+            tenants[str(name)] = chips
+    over = str(raw.get("over_quota", "best_effort"))
+    if over not in _QUOTA_OVER_MODES:
+        errors.append(
+            f"quota.over_quota: expected one of"
+            f" {', '.join(_QUOTA_OVER_MODES)}, got {over!r}"
+        )
+        over = "best_effort"
+    return QuotaConfig(tenants=tenants, over_quota=over)
+
+
+_RESERVATION_KEYS = frozenset(
+    {"id", "tenant", "chips", "start", "end", "level", "chip_type", "hard_end"}
+)
+
+
+def _parse_reservations(
+    doc: Mapping[str, Any], errors: list[str]
+) -> list[ReservationConfig]:
+    """Parse the top-level ``reservations`` list (v0.4 calendar blocks)."""
+    raw = doc.get("reservations")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        errors.append(f"reservations: expected a list of mappings, got {raw!r}")
+        return []
+    out: list[ReservationConfig] = []
+    for i, r in enumerate(raw):
+        if not isinstance(r, Mapping):
+            errors.append(f"reservations[{i}]: expected a mapping, got {r!r}")
+            continue
+        rid = str(r.get("id", f"reservation-{i}"))
+        ctx = f"reservations.{rid}"
+        unknown = sorted(set(r) - _RESERVATION_KEYS)
+        if unknown:
+            errors.append(
+                f"{ctx}: unknown key(s): {', '.join(unknown)}"
+                f" (known: {', '.join(sorted(_RESERVATION_KEYS))})"
+            )
+        tenant = r.get("tenant")
+        if not isinstance(tenant, str) or not tenant:
+            errors.append(f"{ctx}: 'tenant' (owner name) is required")
+            tenant = ""
+        chips = r.get("chips")
+        if isinstance(chips, bool) or not isinstance(chips, int) or chips < 1:
+            errors.append(f"{ctx}: chips must be an integer >= 1, got {chips!r}")
+            chips = 1
+        start_us = _duration_us(r.get("start"), f"{ctx}.start", errors, 0)
+        end_us = _duration_us(r.get("end"), f"{ctx}.end", errors, 0)
+        level_raw = r.get("level")
+        ct_raw = r.get("chip_type")
+        out.append(
+            ReservationConfig(
+                id=rid,
+                tenant=str(tenant),
+                chips=chips,
+                start_us=start_us,
+                end_us=end_us,
+                level=str(level_raw) if level_raw is not None else None,
+                chip_type=str(ct_raw) if ct_raw is not None else None,
+                hard_end=bool(r.get("hard_end", True)),
+            )
+        )
+    return out
 
 
 def _build_scenario(doc: Mapping[str, Any]) -> Scenario:
@@ -1971,7 +2243,9 @@ def _build_scenario(doc: Mapping[str, Any]) -> Scenario:
     )
 
     services = _parse_services(doc, errors)
-    reservations = doc["reservations"] if "reservations" in doc else None
+    reservations = _parse_reservations(doc, errors)
+    penalties = _parse_penalties(doc, errors)
+    quota = _parse_quota(doc, errors)
 
     return Scenario(
         sim=sim,
@@ -1982,6 +2256,8 @@ def _build_scenario(doc: Mapping[str, Any]) -> Scenario:
         failure_model=failure_model,
         services=services,
         reservations=reservations,
+        penalties=penalties,
+        quota=quota,
         load_errors=errors,
     )
 
@@ -2316,9 +2592,19 @@ def validate(scenario: Scenario) -> list[str]:
                     f" (known: {', '.join(sorted(level_vocab)) or 'none'})"
                 )
             if not c.within.required:
-                errors.append(
-                    f"{ctx}.within: preferred (relaxable) constraints are {_NOT_V01}"
-                )
+                # Relaxable (preferred) constraints are v0.4 semantics.
+                if c.within.relax_after_s < 0:
+                    errors.append(
+                        f"{ctx}.within: relax_after must be >= 0,"
+                        f" got {c.within.relax_after_s}"
+                    )
+                if c.segment_nodes is not None:
+                    errors.append(
+                        f"{ctx}.within: a relaxable (required: false) OUTER"
+                        f" constraint on a segmented gang is {_NOT_V04}"
+                        f" (segments already span domains; relax the shape"
+                        f" by choosing a higher within level instead)"
+                    )
         # --- closed-loop backlog arrival (v0.2) ---
         if c.arrival is not None and c.arrival.kind != "invalid":
             if c.arrival.kind != "backlog":
@@ -2396,10 +2682,15 @@ def validate(scenario: Scenario) -> list[str]:
             )
         if c.n_tenants < 1:
             errors.append(f"{ctx}.n_tenants: must be >= 1, got {c.n_tenants}")
-        if c.capacity is not CapacityClass.ON_DEMAND:
+        if c.capacity not in (CapacityClass.ON_DEMAND, CapacityClass.SPOT):
+            # SPOT is v0.4 (zero-notice kill + checkpoint restart);
+            # reserved/flex_start/calendar job capacity classes remain
+            # unimplemented (CALENDAR capacity is expressed through the
+            # top-level `reservations` section instead).
             errors.append(
                 f"{ctx}.capacity: capacity class"
-                f" {c.capacity.name.lower()!r} is {_NOT_V01} (only on_demand)"
+                f" {c.capacity.name.lower()!r} is {_NOT_V04}"
+                f" (only on_demand and spot)"
             )
         if c.n_gangs < 1:
             errors.append(f"{ctx}.gangs: must be positive, got {c.n_gangs}")
@@ -2459,9 +2750,112 @@ def validate(scenario: Scenario) -> list[str]:
                     f" (its levels: {', '.join(cl.levels) or 'none'})"
                 )
 
-    # --- reservations ---
-    if scenario.reservations is not None:
-        errors.append(f"reservations: are {_NOT_V01}")
+    # --- penalties (v0.4) ---
+    if scenario.penalties is not None:
+        for level, mult in scenario.penalties.xover.items():
+            pctx = f"penalties.xover.{level}"
+            if level not in level_vocab:
+                errors.append(
+                    f"{pctx}: unknown level {level!r}"
+                    f" (known: {', '.join(sorted(level_vocab)) or 'none'})"
+                )
+            if not 0.0 < mult <= 1.0:
+                errors.append(
+                    f"{pctx}: speed multiplier must be in (0, 1],"
+                    f" got {mult}"
+                )
+
+    # --- quota (v0.4): every capped tenant must be producible ---
+    # Zipf marking yields t0..t{n_tenants-1} per class; fixed `tenant:`
+    # pins and service tenants are declared explicitly.  A name no
+    # configured source can ever produce means the cap is DEAD CONFIG
+    # (unlisted tenants are unlimited) — error, never a silent no-op
+    # (DESIGN principle 5).  Trace workloads are exempt: their tenant
+    # space comes from the trace file, unknown at validate time.
+    if scenario.quota is not None and w.kind == "synthetic":
+        fixed_tenants = {c.tenant for c in w.classes if c.tenant is not None}
+        fixed_tenants.update(svc.tenant for svc in scenario.services)
+        max_zipf = max(
+            (c.n_tenants for c in w.classes if c.tenant is None), default=0
+        )
+        for name in scenario.quota.tenants:
+            if name in fixed_tenants:
+                continue
+            digits = name[1:]
+            if (
+                name.startswith("t")
+                and digits.isdigit()
+                and (digits == "0" or not digits.startswith("0"))
+                and int(digits) < max_zipf
+            ):
+                continue  # reachable via Zipf marking
+            reachable = sorted(fixed_tenants)
+            if max_zipf > 0:
+                reachable.append(f"t0..t{max_zipf - 1}")
+            errors.append(
+                f"quota.tenants.{name}: no configured workload class or"
+                f" service can ever produce tenant {name!r}"
+                f" (reachable: {', '.join(reachable) or 'none'}) — the cap"
+                f" would be silently dead config"
+            )
+
+    # --- reservations (v0.4 calendar blocks) ---
+    if scenario.reservations:
+        # Largest single-domain chip capacity per level (static topology).
+        level_cap: dict[str, int] = {}
+        for cl in clusters:
+            if cl.levels:
+                cap0 = cl.total_chips()
+                level_cap[cl.levels[0]] = max(level_cap.get(cl.levels[0], 0), cap0)
+            for group, _ in _walk_groups(cl):
+                per_instance = (
+                    sum(ch.total_chips() for ch in group.children)
+                    if group.children
+                    else group.chips
+                )
+                level_cap[group.level] = max(
+                    level_cap.get(group.level, 0), per_instance
+                )
+        root_cap = max((cl.total_chips() for cl in clusters), default=0)
+        seen_res: set[str] = set()
+        fleet_leaf_types_r = _referenced_chip_types(scenario.fleet)
+        for res in scenario.reservations:
+            rctx = f"reservations.{res.id}"
+            if res.id in seen_res:
+                errors.append(f"{rctx}: duplicate reservation id")
+            seen_res.add(res.id)
+            if res.start_us >= res.end_us:
+                errors.append(
+                    f"{rctx}: start must be strictly before end"
+                    f" (got {res.start_us} us >= {res.end_us} us)"
+                )
+            if res.level is not None and res.level not in level_vocab:
+                errors.append(
+                    f"{rctx}.level: unknown level {res.level!r}"
+                    f" (known: {', '.join(sorted(level_vocab)) or 'none'})"
+                )
+            if res.chip_type is not None:
+                if res.chip_type not in scenario.fleet.chip_types:
+                    errors.append(
+                        f"{rctx}.chip_type: unknown chip_type {res.chip_type!r}"
+                        f" (declared:"
+                        f" {', '.join(scenario.fleet.chip_types) or 'none'})"
+                    )
+            elif len(fleet_leaf_types_r) > 1:
+                errors.append(
+                    f"{rctx}: chip_type is required — the fleet has multiple"
+                    f" chip types ({', '.join(fleet_leaf_types_r)})"
+                )
+            cap = (
+                level_cap.get(res.level, 0)
+                if res.level is not None
+                else root_cap
+            )
+            if cap and res.chips > cap:
+                errors.append(
+                    f"{rctx}: {res.chips} chips can never fit inside one"
+                    f" {res.level or 'cluster'} domain ({cap} chips)"
+                )
 
     # scheduler.name deliberately unchecked (registry is a run-time concern)
     return errors

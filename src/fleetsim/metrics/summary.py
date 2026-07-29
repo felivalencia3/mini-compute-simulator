@@ -228,6 +228,14 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
             for c in classes
         }
 
+    # v0.4 opt-in counters: present in the collector's counts only when
+    # the matching feature is configured (schema-stable per feature).
+    extra_counts = {
+        k: counts[k]
+        for k in ("relaxed_placements", "quota_demotions")
+        if k in counts
+    }
+
     trig = counts["preemptions_by_trigger"]
     preempt_total = sum(trig.values())
     preemptions_per_min = {k: v / minutes for k, v in sorted(trig.items())}
@@ -303,6 +311,7 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
             "jobs_started": len(started),
             "jobs_finished": len(ended),
             "jobs_by_status": dict(sorted(by_status.items())),
+            **extra_counts,
         },
         "fragmentation": frag,
         "mean_pending_by_class": {
@@ -321,7 +330,7 @@ def build_summary(collector: "MetricsCollector") -> dict[str, Any]:
     the full run and the steady-state window (see module docstring for
     the exact scoping rules)."""
     w0, w1 = collector.window
-    return {
+    out = {
         "horizon_us": collector.horizon_us,
         "steady_state_window": {
             "warmup_frac": collector.warmup_frac,
@@ -332,6 +341,12 @@ def build_summary(collector: "MetricsCollector") -> dict[str, Any]:
         "full": _scope_summary(collector, "full"),
         "window": _scope_summary(collector, "window"),
     }
+    # v0.4: engine-reported calendar-reservation accounting.  The key
+    # exists whenever the scenario configured reservations (schema
+    # stability); feature-off runs keep the exact pre-v0.4 schema.
+    if getattr(collector, "track_reservations", False):
+        out["reservations"] = collector.reservation_reports()
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +384,12 @@ def jobs_dataframe(collector: "MetricsCollector") -> pd.DataFrame:
         "jct_s",
         "ettr",
     ]
+    # v0.4 feature-keyed columns (0/1 int64), appended at the end so the
+    # pre-v0.4 column order is a strict prefix.
+    if getattr(collector, "track_relaxed", False):
+        cols.append("relaxed")
+    if getattr(collector, "track_quota", False):
+        cols.append("quota_demoted")
     df = pd.DataFrame(rows, columns=cols)
     for c in cols:
         if c in _JOB_STR_COLS:
