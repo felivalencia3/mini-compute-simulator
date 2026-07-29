@@ -75,8 +75,14 @@ class JobView:
     (LAS/Tiresias input).  ``checkpoint_age_s`` is the work-seconds of
     progress that would be LOST if the job were killed right now (0 for
     queued jobs; everything since the last checkpoint boundary, or since
-    start when checkpointing is disabled).  ``within`` is the hard
+    start when checkpointing is disabled).  ``within`` is the hard OUTER
     containment level (``GangSpec.within.level``) or ``None``.
+
+    SEGMENTED GANGS (v0.2): ``segments`` mirrors ``GangSpec.segments``
+    (``(nodes_per_segment, level)`` or ``None``) and ``n_segments`` is
+    the engine-computed segment count (``chips / (nodes_per_segment *
+    node_size)``; 0 for non-segmented jobs) — so per-segment chip need is
+    ``chips // n_segments`` without the scheduler knowing node sizes.
     """
 
     id: str
@@ -92,6 +98,8 @@ class JobView:
     walltime_est_s: float | None
     within: str | None
     tenant: str
+    segments: tuple[int, str] | None = None
+    n_segments: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +164,14 @@ class ClusterView(Protocol):
 
     def search_first_fit(self, spec: GangSpec) -> Placement | None:
         """Raw first-fit capacity search (no reservation side effect) —
-        the primitive placement policies compose."""
+        the primitive placement policies compose.  A spec with
+        ``segments`` set delegates to :meth:`search_segmented`."""
+        ...
+
+    def search_segmented(self, spec: GangSpec) -> Placement | None:
+        """Raw segmented (Slurm-block) search for a spec with
+        ``segments`` set (no reservation side effect; v0.2).  See
+        :meth:`fleetsim.fleet.tree.FleetTree.search_segmented`."""
         ...
 
     def throughput(self, job: JobView, chip_type: str) -> float:

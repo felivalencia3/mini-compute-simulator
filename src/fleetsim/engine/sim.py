@@ -78,6 +78,11 @@ INVARIANTS
 - The scheduler is invoked at most once per timestamp, always after every
   same-timestamp state change (event-type ranks), and sees tentative
   reservations made through its own ``find_placement`` calls.
+- At every SCHED_WAKE the engine first calls the source's optional
+  ``refill(now_us, pending_by_class)`` hook (closed-loop backlog, v0.2)
+  and submits the returned jobs at ``now`` through the normal admission
+  path, BEFORE the scheduler view is built — refilled jobs are visible
+  to the same wake.
 - A job holds an allocation exactly while RUNNING or in a preemption
   grace window; every transition calls the matching sink method.
 - Node failure is never terminal for a job in v1 — victims requeue with
@@ -87,6 +92,7 @@ INVARIANTS
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -94,6 +100,7 @@ from ..config import FailureModelConfig, Scenario
 from ..fleet.tree import FleetTree, Placement
 from ..model import (
     Allocation,
+    Constraint,
     GangSpec,
     Job,
     JobStatus,
@@ -167,6 +174,106 @@ class PassThrough:
 
 
 # ---------------------------------------------------------------------------
+# Weighted victim sampling (failure/maintenance hazards)
+# ---------------------------------------------------------------------------
+
+
+class _Hazard:
+    """Fenwick (binary indexed) tree of per-leaf event rates over the
+    STATIC sorted leaf order — the weighted-victim sampler for the
+    failure and maintenance streams.
+
+    Non-HEALTHY leaves carry rate 0.0; health transitions update one
+    leaf in O(log N) and victim picks are O(log N), so the failure path
+    costs O(log N) per event instead of an O(fleet) rescan (DESIGN §6.3
+    envelope at 100K-node fleets; v0.2 perf fix).  Per-leaf HEALTHY
+    rates are fixed at construction (model + lemon factor — they never
+    change at runtime).
+
+    UNITS: rates are events per microsecond.  INVARIANTS: deterministic
+    — the leaf order is the fleet's static sorted order; ``pick`` mirrors
+    "smallest index whose cumulative rate exceeds u" (ties move past,
+    matching ``bisect_right``); the float-edge fallback (u at/above the
+    total) returns the LAST positive-rate leaf, never a zero-rate one.
+    """
+
+    __slots__ = ("_leaves", "_index", "_healthy_rate", "_rate", "_tree", "_n")
+
+    def __init__(
+        self,
+        leaves: tuple[str, ...],
+        rate_fn: Callable[[str], float],
+        is_healthy: Callable[[str], bool],
+    ):
+        self._leaves = leaves
+        self._index = {lid: i for i, lid in enumerate(leaves)}
+        self._healthy_rate = [rate_fn(lid) for lid in leaves]
+        self._rate = [
+            hr if is_healthy(lid) else 0.0
+            for lid, hr in zip(leaves, self._healthy_rate)
+        ]
+        n = len(leaves)
+        self._n = n
+        tree = [0.0] * (n + 1)
+        for i, r in enumerate(self._rate):  # O(N) build
+            j = i + 1
+            tree[j] += r
+            parent = j + (j & -j)
+            if parent <= n:
+                tree[parent] += tree[j]
+        self._tree = tree
+
+    @property
+    def total(self) -> float:
+        """Sum of all current (healthy) rates."""
+        acc = 0.0
+        j = self._n
+        tree = self._tree
+        while j > 0:
+            acc += tree[j]
+            j -= j & -j
+        return acc
+
+    def set_healthy(self, leaf_id: str, healthy: bool) -> None:
+        """Set one leaf's rate to its healthy value or 0.0 (O(log N))."""
+        i = self._index[leaf_id]
+        new = self._healthy_rate[i] if healthy else 0.0
+        delta = new - self._rate[i]
+        if delta == 0.0:
+            return
+        self._rate[i] = new
+        j = i + 1
+        tree = self._tree
+        n = self._n
+        while j <= n:
+            tree[j] += delta
+            j += j & -j
+
+    def pick(self, u: float) -> str:
+        """The leaf at the smallest index whose cumulative rate exceeds
+        ``u`` (Fenwick lower-bound descent)."""
+        pos = 0
+        rem = u
+        k = 1
+        while (k << 1) <= self._n:
+            k <<= 1
+        tree = self._tree
+        while k > 0:
+            nxt = pos + k
+            if nxt <= self._n and tree[nxt] <= rem:
+                pos = nxt
+                rem -= tree[nxt]
+            k >>= 1
+        if pos >= self._n or self._rate[pos] == 0.0:
+            # Float edge (u at/above the total) or landed past the last
+            # positive rate: fall back to the last positive-rate leaf.
+            pos = min(pos, self._n - 1)
+            while pos > 0 and self._rate[pos] == 0.0:
+                pos -= 1
+        return self._leaves[pos]
+
+
+# ---------------------------------------------------------------------------
 # Per-job runtime bookkeeping (engine-side; Job is slots=True and stays
 # declarative)
 # ---------------------------------------------------------------------------
@@ -180,6 +287,9 @@ class _JobRt:
     job: Job
     spec: GangSpec
     total_work_s: float
+    #: Segment count for a segmented gang (v0.2): chips /
+    #: (nodes_per_segment * node_size); 0 for non-segmented jobs.
+    n_segments: int = 0
     kept_work_s: float = 0.0
     lost_work_s: float = 0.0
     bank_next_interrupt: bool = False  # drain-grace out-of-band checkpoint
@@ -190,6 +300,13 @@ class _JobRt:
     stint_speed: float = 1.0
     stint_eff: float = 1.0
     n_failures: int = 0
+    #: True iff the MOST RECENT return to the pending queue was caused by
+    #: a node failure (reset on every successful (re)start) — the
+    #: "failure_second_order" preemption-trigger input (DESIGN §8/§9).
+    #: Deliberately NOT the lifetime ``n_failures`` counter: a job that
+    #: failed once on day 2 must not have its day-20 priority evictions
+    #: tagged as failure fallout.
+    failure_requeued: bool = False
     allocation: Allocation | None = None
     placed_chips: int = 0
     placed_chip_type: str | None = None
@@ -214,10 +331,15 @@ class _JobRt:
 class _EngineView:
     """Concrete :class:`~fleetsim.schedulers.base.ClusterView` for one wake.
 
-    Job views are computed fresh at construction.  ``find_placement``
-    tentatively applies found placements to the fleet tree so subsequent
-    searches in the same wake see remaining capacity; the engine confirms
-    or rolls back after ``schedule()`` returns.
+    Job views are computed LAZILY on first ``pending()`` / ``running()``
+    access and cached for the wake (still frozen snapshots of the wake's
+    settled state — nothing between wake start and the scheduler call
+    mutates queues).  Sorting is O(P log P) on the accessed list only, so
+    schedulers that touch neither list pay nothing — a v0.2 perf
+    guardrail for 100K+-node fleets.  ``find_placement`` tentatively
+    applies found placements to the fleet tree so subsequent searches in
+    the same wake see remaining capacity; the engine confirms or rolls
+    back after ``schedule()`` returns.
     """
 
     __slots__ = ("_sim", "_now", "_pending", "_running", "tentative")
@@ -226,22 +348,39 @@ class _EngineView:
         self._sim = sim
         self._now = now
         self.tentative: dict[str, Placement] = {}
-        key = lambda jv: (jv.submit_time, jv.id)  # noqa: E731
-        self._pending: tuple[JobView, ...] = tuple(
-            sorted((sim._job_view(rt, now) for rt in sim._pending.values()), key=key)
-        )
-        self._running: tuple[JobView, ...] = tuple(
-            sorted((sim._job_view(rt, now) for rt in sim._running.values()), key=key)
-        )
+        self._pending: tuple[JobView, ...] | None = None
+        self._running: tuple[JobView, ...] | None = None
 
     @property
     def now(self) -> int:
         return self._now
 
     def pending(self) -> tuple[JobView, ...]:
+        if self._pending is None:
+            key = lambda jv: (jv.submit_time, jv.id)  # noqa: E731
+            self._pending = tuple(
+                sorted(
+                    (
+                        self._sim._job_view(rt, self._now)
+                        for rt in self._sim._pending.values()
+                    ),
+                    key=key,
+                )
+            )
         return self._pending
 
     def running(self) -> tuple[JobView, ...]:
+        if self._running is None:
+            key = lambda jv: (jv.submit_time, jv.id)  # noqa: E731
+            self._running = tuple(
+                sorted(
+                    (
+                        self._sim._job_view(rt, self._now)
+                        for rt in self._sim._running.values()
+                    ),
+                    key=key,
+                )
+            )
         return self._running
 
     def free_capacity(self, domain_id: str) -> int:
@@ -263,6 +402,35 @@ class _EngineView:
 
     def search_first_fit(self, spec: GangSpec) -> Placement | None:
         return self._sim.fleet.search_first_fit(spec)
+
+    def search_segmented(self, spec: GangSpec) -> Placement | None:
+        return self._sim.fleet.search_segmented(spec)
+
+    def graced_job_ids(self) -> tuple[str, ...]:
+        """Ids of jobs currently in a preemption grace window (PREEMPTED,
+        still holding their chips), sorted.  These jobs appear in neither
+        ``pending()`` nor ``running()``; preempting schedulers use this to
+        recognize their own in-flight reclaim claims (v0.2)."""
+        return tuple(sorted(self._sim._graced))
+
+    def reclaim_feasible(
+        self, job: JobView, victim_ids: Sequence[str]
+    ) -> bool:
+        """Dry-run: would releasing the allocations of ``victim_ids`` let
+        ``job`` place right now?  Runs the real placement search on the
+        fleet tree with the victims' chips hypothetically freed (leaf
+        health respected: chips on DRAINING/FAILED leaves free nothing)
+        and restores the tree exactly (v0.2 reclaim planning).  Tentative
+        reservations made earlier in this wake stay in force."""
+        spec = GangSpec(
+            chips=job.chips,
+            chip_type=job.chip_type,
+            within=(
+                Constraint(level=job.within) if job.within is not None else None
+            ),
+            segments=job.segments,
+        )
+        return self._sim.fleet.search_after_release(spec, victim_ids) is not None
 
     def find_placement(
         self, job: JobView, policy: PlacementPolicy
@@ -358,6 +526,15 @@ class Simulator:
         self._maint_wait: set[str] = set()  # DRAINING past grace, owners pending
         self._maint_duration: dict[str, float] = {}  # node -> duration (s)
         self._leaf_model: dict[str, FailureModelConfig] = self._map_leaf_models()
+        # Leaf (node) sizes present per chip type — segmented-gang specs
+        # are validated against this SET (a spec is accepted when ANY
+        # size decomposes it into whole segments, exactly matching
+        # FleetTree.search_segmented's per-size search; a max-size-only
+        # quantum would reject placeable jobs on mixed-node-size fleets).
+        self._node_sizes: dict[str, set[int]] = {}
+        for lid in self.fleet.leaves():
+            leaf = self.fleet.domain(lid)
+            self._node_sizes.setdefault(leaf.chip_type, set()).add(leaf.chips)
         # Static fleet-wide maximum aggregate rates (all leaves healthy);
         # sampled events are thinned against these — exact by memorylessness.
         self._failure_rate_max: float = sum(
@@ -366,6 +543,22 @@ class Simulator:
         self._maint_rate_max: float = sum(
             self._maint_rate_us(lid) for lid in self.fleet.leaves()
         )
+        # Weighted-victim samplers per stream: Fenwick trees over the
+        # static leaf order, updated O(log N) per health transition and
+        # queried O(log N) per sampled event (v0.2 perf fix — the
+        # previous per-event healthy-leaf rescan was O(fleet), which is
+        # quadratic-ish at 100K-node scale with failures on).
+        def _is_healthy(lid: str) -> bool:
+            return self.fleet.domain(lid).state is NodeState.HEALTHY
+
+        self._hazards: dict[str, _Hazard] = {
+            "failures": _Hazard(
+                self.fleet.leaves(), self._failure_rate_us, _is_healthy
+            ),
+            "maintenance": _Hazard(
+                self.fleet.leaves(), self._maint_rate_us, _is_healthy
+            ),
+        }
 
     def _wire_wake_interval(self) -> None:
         """Point an un-overridden scheduler ``wake_interval`` at the
@@ -382,8 +575,11 @@ class Simulator:
     # -- hooks ----------------------------------------------------------
 
     def speed(self, job: Job, placement: Placement) -> float:
-        """Wall-clock progress multiplier for a placement.  1.0 in v1;
-        the v0.3 placement-quality penalty lands here."""
+        """Wall-clock progress multiplier for a placement.  1.0 in v1 —
+        including SEGMENTED (multi-pod) placements: the cross-segment /
+        cross-pod bandwidth penalty is the v0.3 placement-quality cost
+        model and lands here, keyed off ``placement.segment_domains`` and
+        the anchor's depth."""
         return 1.0
 
     # -- setup ----------------------------------------------------------
@@ -412,7 +608,16 @@ class Simulator:
         self._schedule_next_arrival()
         self._arm_failure()
         self._arm_maintenance()
-        if self.scheduler.wake_interval is not None:
+        # Seed a wake at t=0 for periodic schedulers AND whenever the
+        # source implements the closed-loop ``refill`` hook: refill runs
+        # only inside wakes, so an event-triggered scheduler
+        # (wake_interval=None) paired with a pure closed-loop workload
+        # would otherwise silently generate zero jobs (no arrivals, no
+        # dirty marks, no wakes — ever).
+        if (
+            self.scheduler.wake_interval is not None
+            or getattr(self.source, "refill", None) is not None
+        ):
             self._ensure_wake(0)
         if self._round_us < self._horizon_us:
             self.queue.push(self._round_us, EventType.METRICS_FLUSH, None)
@@ -495,12 +700,37 @@ class Simulator:
         self._wake_times.discard(t)
         self._last_wake_us = t
         self._dirty = False
+        self._refill(t)
         view = _EngineView(self, t)
         actions = self.scheduler.schedule(view)
         self._apply_actions(actions, view, t)
         wi = self.scheduler.wake_interval
         if wi is not None and t + wi <= self._horizon_us:
             self._ensure_wake(t + wi)
+
+    def _refill(self, t: int) -> None:
+        """Closed-loop backlog hook (v0.2): if the job source implements
+        ``refill``, call it with the settled pending counts and submit the
+        returned jobs at ``t`` through the normal admission path (sink
+        calls included) — BEFORE the scheduler view is built, so the wake
+        sees them.  See :class:`fleetsim.workload.base.JobSource`."""
+        refill = getattr(self.source, "refill", None)
+        if refill is None:
+            return
+        pending_by_class: dict[str, int] = {}
+        for rt in self._pending.values():  # insertion order (deterministic)
+            job = rt.job
+            key = job.source_class if job.source_class is not None else (
+                job.job_class.name
+            )
+            pending_by_class[key] = pending_by_class.get(key, 0) + 1
+        for job in refill(t, pending_by_class):
+            if job.submit_t != t:
+                raise ValueError(
+                    f"refill job {job.id!r} has submit_t {job.submit_t}"
+                    f" != wake time {t}"
+                )
+            self._submit_job(job, t, wake=False)
 
     # -- action application ---------------------------------------------
 
@@ -549,11 +779,40 @@ class Simulator:
 
     def _validate_placement_spec(self, rt: _JobRt, placement: Placement) -> None:
         """Check a Place action's placement against the job's GangSpec:
-        exact chip count, pinned chip type, and the hard ``within``
-        constraint (every leaf under ONE domain at that level).  Raises
-        ``ValueError`` (refused in strict mode, skipped otherwise)."""
+        exact chip count, pinned chip type, the hard ``within``
+        constraint (every leaf under ONE domain at that level), and — for
+        segmented specs — whole-node leaves grouped at the segment level
+        into multiples of ``nodes_per_segment``.  Raises ``ValueError``
+        (refused in strict mode, skipped otherwise)."""
         spec = rt.spec
         jid = rt.job.id
+        if spec.segments is not None:
+            nodes_per_seg, seg_level = spec.segments
+            if not placement.whole_node:
+                raise ValueError(
+                    f"Place for job {jid!r}: segmented gangs are whole-node"
+                    f" only, got a sub-node placement"
+                )
+            per_dom: dict[str, int] = {}
+            for lid, _ in placement.leaves:
+                dom: str | None = None
+                for aid in self.fleet.ancestors(lid, include_self=True):
+                    if self.fleet.domain(aid).level == seg_level:
+                        dom = aid
+                        break
+                if dom is None:
+                    raise ValueError(
+                        f"Place for job {jid!r}: leaf {lid!r} has no"
+                        f" ancestor at segment level {seg_level!r}"
+                    )
+                per_dom[dom] = per_dom.get(dom, 0) + 1
+            for dom in sorted(per_dom):
+                if per_dom[dom] % nodes_per_seg:
+                    raise ValueError(
+                        f"Place for job {jid!r}: {per_dom[dom]} nodes under"
+                        f" segment domain {dom!r} is not a multiple of"
+                        f" nodes_per_segment {nodes_per_seg}"
+                    )
         if placement.chips != spec.chips:
             raise ValueError(
                 f"Place for job {jid!r}: placement covers {placement.chips}"
@@ -631,9 +890,13 @@ class Simulator:
                         f"victim {job.id!r} tier {job.tier.name} is not below"
                         f" preemptor {action.preemptor!r} tier {p_tier.name}"
                     )
-                if preemptor_rt.n_failures > 0:
-                    # DESIGN §8/§9: a failure-requeued job evicting others is
-                    # a second-order failure cost, tagged distinctly.
+                if preemptor_rt.failure_requeued:
+                    # DESIGN §8/§9: a job whose MOST RECENT requeue was a
+                    # node failure evicting others is a second-order
+                    # failure cost, tagged distinctly.  (Keyed on the
+                    # last-requeue cause, not the lifetime failure count:
+                    # ordinary priority evictions by a long job that
+                    # failed once weeks ago are "scheduler".)
                     trigger = "failure_second_order"
         except ValueError:
             if self.strict:
@@ -671,6 +934,8 @@ class Simulator:
             walltime_est_s=job.walltime_est_s,
             within=within,
             tenant=job.tenant,
+            segments=rt.spec.segments,
+            n_segments=rt.n_segments,
         )
 
     def _schedule_next_arrival(self) -> None:
@@ -685,8 +950,69 @@ class Simulator:
         self.queue.push(t_arr, EventType.JOB_ARRIVAL, job)
 
     def _on_arrival(self, ev) -> None:
-        job: Job = ev.payload
-        t = self.now
+        self._submit_job(ev.payload, self.now, wake=True)
+        self._schedule_next_arrival()
+
+    def _segment_count(self, job: Job, spec: GangSpec) -> int:
+        """Validate a segmented spec and return its segment count.
+
+        Segmented gangs (v0.2) are WHOLE-NODE only: ``chips`` must
+        decompose into whole segments of exactly ``nodes_per_segment``
+        nodes for AT LEAST ONE leaf size of the pinned chip type —
+        matching ``FleetTree.search_segmented``, which tries every leaf
+        size.  On mixed-node-size fleets the returned count derives from
+        the LARGEST decomposable size and may differ from a realized
+        placement on a smaller size (rare; documented v0.2 limitation).
+        Raises ``ValueError`` on any violation — the caller
+        (:meth:`_submit_job`) turns that into a per-job FAILED terminal
+        status, never a crash of the run."""
+        nodes_per_seg, seg_level = spec.segments  # type: ignore[misc]
+        if not isinstance(nodes_per_seg, int) or nodes_per_seg < 1:
+            raise ValueError(
+                f"job {job.id!r}: segments nodes_per_segment must be an"
+                f" integer >= 1, got {nodes_per_seg!r}"
+            )
+        if spec.chip_type is not None:
+            sizes = self._node_sizes.get(spec.chip_type)
+            if sizes is None:
+                raise ValueError(
+                    f"job {job.id!r}: no fleet leaves of chip_type"
+                    f" {spec.chip_type!r}"
+                )
+        elif len(self._node_sizes) == 1:
+            sizes = next(iter(self._node_sizes.values()))
+        else:
+            raise ValueError(
+                f"job {job.id!r}: segmented gangs need a pinned chip_type"
+                f" on a heterogeneous fleet"
+            )
+        # Accept the largest leaf size that decomposes the request into
+        # whole segments (deterministic; matches the generator's
+        # quantization on uniform fleets).
+        for node_size in sorted(sizes, reverse=True):
+            if spec.chips % node_size:
+                continue
+            total_nodes = spec.chips // node_size
+            if total_nodes % nodes_per_seg:
+                continue
+            return total_nodes // nodes_per_seg
+        if not any(spec.chips % s == 0 for s in sizes):
+            raise ValueError(
+                f"job {job.id!r}: segmented gangs are whole-node only —"
+                f" {spec.chips} chips is not a multiple of any node size"
+                f" in {sorted(sizes)}"
+            )
+        raise ValueError(
+            f"job {job.id!r}: {spec.chips} chips do not divide into"
+            f" segments of exactly {nodes_per_seg} nodes for any node"
+            f" size in {sorted(sizes)}"
+        )
+
+    def _submit_job(self, job: Job, t: int, *, wake: bool) -> None:
+        """Submit one job through the admission path (shared by
+        ``JOB_ARRIVAL`` events and the refill hook).  ``wake=False``
+        skips the dirty-mark — refilled jobs are submitted inside the
+        wake that will schedule them."""
         if len(job.gangs) != 1:
             raise ValueError(
                 f"job {job.id!r} has {len(job.gangs)} gangs; multi-gang jobs"
@@ -694,7 +1020,28 @@ class Simulator:
             )
         if job.id in self._jobs:
             raise ValueError(f"duplicate job id {job.id!r}")
-        rt = _JobRt(job=job, spec=job.gangs[0], total_work_s=float(job.true_duration_s))
+        spec = job.gangs[0]
+        try:
+            n_segments = (
+                self._segment_count(job, spec) if spec.segments is not None else 0
+            )
+        except ValueError:
+            # Spec violation at submission is a PER-JOB terminal failure
+            # (recorded in metrics), never an uncaught exception that
+            # kills the whole run.
+            self._jobs[job.id] = _JobRt(
+                job=job, spec=spec, total_work_s=float(job.true_duration_s)
+            )
+            self.sink.job_submitted(job, t)
+            job.status = JobStatus.FAILED
+            self.sink.job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
+            return
+        rt = _JobRt(
+            job=job,
+            spec=spec,
+            total_work_s=float(job.true_duration_s),
+            n_segments=n_segments,
+        )
         self._jobs[job.id] = rt
         self.sink.job_submitted(job, t)
         if self.admission.admit(job, t):
@@ -707,11 +1054,11 @@ class Simulator:
                     EventType.JOB_TIMEOUT,
                     ("valid_until", job.id),
                 )
-            self._mark_dirty(t)
+            if wake:
+                self._mark_dirty(t)
         else:
             job.status = JobStatus.FAILED
             self.sink.job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
-        self._schedule_next_arrival()
 
     def _start_job(
         self, rt: _JobRt, alloc: Allocation, placement: Placement, t: int
@@ -737,6 +1084,7 @@ class Simulator:
         rt.stint_overhead_s = overhead_s
         rt.stint_speed = speed
         rt.stint_eff = eff
+        rt.failure_requeued = False  # back on chips: failure fallout over
         rt.allocation = alloc
         rt.placed_chips = placement.chips
         rt.placed_chip_type = placement.chip_type
@@ -931,13 +1279,6 @@ class Simulator:
             return 0.0
         return model.maintenance_rate_per_node_month / (_DAYS_PER_MONTH * DAY)
 
-    def _healthy_leaves(self) -> list[str]:
-        return [
-            lid
-            for lid in self.fleet.leaves()
-            if self.fleet.domain(lid).state is NodeState.HEALTHY
-        ]
-
     def _arm(self, which: str) -> None:
         """(Re)arm the sampled failure or maintenance event if disarmed.
 
@@ -972,25 +1313,25 @@ class Simulator:
 
     def _thinned_victim(self, stream_name: str, rate_fn, max_total: float) -> str | None:
         """Thinning-accept the fired event and pick a healthy victim
-        weighted by ``rate_fn`` (sorted-id scan).  Draw order is pinned:
-        one accept uniform, then one victim uniform (the victim draw
-        happens even for rejected events, keeping paired runs aligned).
-        Returns ``None`` when rejected or nothing is eligible."""
-        leaves = self._healthy_leaves()
-        rates = [rate_fn(lid) for lid in leaves]
-        total = sum(rates)
+        weighted by the stream's per-leaf rates (static sorted-id
+        order).  Draw order is pinned: one accept uniform, then one
+        victim uniform (the victim draw happens even for rejected
+        events, keeping paired runs aligned).  Returns ``None`` when
+        rejected or nothing is eligible.
+
+        The rates live in the incrementally-maintained :class:`_Hazard`
+        Fenwick tree (O(log N) per pick; O(log N) per health
+        transition), never an O(fleet) rescan.  ``rate_fn`` is retained
+        in the signature for forced-path parity/tests; the hazard tree
+        was built from it at construction."""
+        hz = self._hazards[stream_name]
+        total = hz.total
         if total <= 0.0 or max_total <= 0.0:
             return None
         stream = self.rng.stream(stream_name)
         accepted = stream.random() * max_total < total
         u = stream.random() * total
-        acc = 0.0
-        victim = leaves[-1]  # float-edge fallback
-        for lid, r in zip(leaves, rates):
-            acc += r
-            if u < acc:
-                victim = lid
-                break
+        victim = hz.pick(u)
         return victim if accepted else None
 
     def _on_failure(self, ev) -> None:
@@ -1023,6 +1364,9 @@ class Simulator:
         leaf = self.fleet.domain(node_id)
         was_healthy = leaf.state is NodeState.HEALTHY
         victims = self.fleet.fail_node(node_id)  # sorted job ids
+        if was_healthy:
+            for hz in self._hazards.values():
+                hz.set_healthy(node_id, False)
         self.sink.node_failed(node_id, t, victims, cause=self._sample_failure_cause())
         if was_healthy:
             self.sink.healthy_delta(-leaf.chips, leaf.chip_type, t)
@@ -1046,6 +1390,7 @@ class Simulator:
             rt.bank_next_interrupt = False  # a crash voids the drain bank
             self._interrupt(rt, t)
             rt.n_failures += 1
+            rt.failure_requeued = True  # this requeue IS failure-caused
             self._release(rt, t)
             job.status = JobStatus.PENDING
             self._pending[jid] = rt
@@ -1069,6 +1414,8 @@ class Simulator:
         if leaf.state not in (NodeState.FAILED, NodeState.MAINTENANCE):
             return  # e.g. drain cancelled by a forced-failure repair race
         self.fleet.repair_node(node_id)
+        for hz in self._hazards.values():
+            hz.set_healthy(node_id, True)
         self.sink.node_repaired(node_id, t)
         self.sink.healthy_delta(leaf.chips, leaf.chip_type, t)
         self._mark_dirty(t)
@@ -1096,6 +1443,8 @@ class Simulator:
 
     def _drain_node(self, node_id: str, t: int) -> None:
         self.fleet.drain_node(node_id)
+        for hz in self._hazards.values():
+            hz.set_healthy(node_id, False)
         leaf = self.fleet.domain(node_id)
         self.sink.node_drain_started(node_id, t)
         self.sink.healthy_delta(-leaf.chips, leaf.chip_type, t)

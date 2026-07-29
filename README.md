@@ -32,9 +32,28 @@ ML gang/preemption-cost semantics. That combination is the product — see
   canonical-CSV trace replay with a Philly converter
   (`fleetsim.workload.philly`); trace chip counts are quantized to the
   fleet's node grammar so replay can never wedge on an unplaceable gang.
+  v0.2 adds CLOSED-LOOP standing-backlog classes
+  (`arrival: backlog[target_pending=N]` instead of a rate: the engine
+  tops the class back up to N pending jobs at every scheduler wake —
+  default `tier: best_effort`, freely reclaimable) and SEGMENTED gangs
+  (`segment_nodes` + `segment_level` with `within` as the outer
+  constraint: whole-node blocks bin-packed across e.g. pods, placed
+  atomically; `jobs.parquet` reports `n_domains_spanned`).
+  v0.2's generative traffic model
+  ([docs/traffic-math.md](docs/traffic-math.md)) adds per-class arrival
+  processes (log-linear harmonic NHPP diurnality, MMPP-2 crunch/normal
+  regimes, Hawkes self-excited eval bursts), weighted pow2 size pmfs
+  with trace-derived presets, lognormal-body + truncated-Pareto-tail
+  duration splices, finite-Zipf tenant skew (`tenant_zipf_s`, default
+  1.2), and a `google_fleet` workload preset that scales a full
+  four-class mix to any fleet, with per-class overrides.
 - **Schedulers**: `fifo` (strict + best-effort) and `tiered_priority`
-  (Borg bands, REQUEUE preemption, no preemption within PROD, per-class
-  min-runtime guard) — plus out-of-tree plugins via entry points.
+  (Borg bands `best_effort < batch < prod < monitoring` — band 0's
+  canonical name is `best_effort` as of v0.2, with `free` accepted as a
+  legacy spelling; REQUEUE preemption, no preemption within PROD,
+  per-class min-runtime guard, and v0.2 segmented reclaim that can empty
+  multiple pods for one large pending gang) — plus out-of-tree plugins
+  via entry points.
 - **Failures**: node MTBF sampling, auto/manual repair, planned
   maintenance drains with grace windows, checkpoint/restart accounting
   (lost work, restart overhead, checkpoint-save overhead).
@@ -45,14 +64,19 @@ ML gang/preemption-cost semantics. That combination is the product — see
 - **Engine**: int-microsecond event core, coalesced scheduler rounds
   (cadence follows `sim.round`). Measured on the shipped 2,048-chip
   example at ρ≈0.9: 14 simulated days in ~4 s, 56 days in ~45 s, 6
-  months in ~9 minutes on a laptop. Cost scales with events × queue
-  depth, so hotter or longer runs cost proportionally more; the DESIGN
-  §6.3 100K-GPU envelope is a target, not yet a measurement.
+  months in ~9 minutes on a laptop. At frontier scale
+  (`examples/04_frontier/`): 2 simulated days of a **524,288-chip**
+  fleet held at 99.5% occupancy by a closed-loop backlog — ~36K jobs,
+  including a 131,072-chip segmented gang reclaiming 32 pods — in
+  ~80 s. Cost scales with events × queue depth, so hotter or longer
+  runs cost proportionally more; the DESIGN §6.3 "6 months of 100K
+  GPUs" envelope is still a target, not yet a measurement.
 
-**Not in v0.1** (schema present, rejected by `fleetsim validate` with
-"not implemented in v0.1"): backfill/`Reserve`, quota, capacity classes
+**Not yet in** (schema present, rejected by `fleetsim validate` with
+"not implemented"): backfill/`Reserve`, quota, capacity classes
 beyond on-demand, TPU OCS predicates, relaxable constraints, multi-gang
-jobs, autoscaling inference, throughput matrices. Roadmap: DESIGN.md §11.
+jobs, autoscaling inference, throughput matrices — all moved to v0.3.
+Roadmap: DESIGN.md §11 and the v0.2 addendum, DESIGN.md §16.
 
 ## Quickstart
 
@@ -66,6 +90,10 @@ fleetsim run examples/01_minimal/scenario.yaml -o out_fifo \
 fleetsim compare out_fifo out_tiered
 fleetsim validate examples/01_minimal/scenario.yaml
 fleetsim plot out_tiered
+
+# frontier scale: 524,288 chips, google_fleet preset traffic, a 131K-chip
+# 32-pod gang reclaiming a cluster (measured walkthrough: examples/04_frontier/)
+fleetsim run examples/04_frontier/scenario.yaml -o out_frontier
 ```
 
 `run` prints a summary table and writes to the output directory:
@@ -137,9 +165,17 @@ seed)`. Named independent RNG streams (`arrivals/<class>`,
 `size/<class>`, `failures`, `repair`, `maintenance`, ...) mean enabling
 failure injection never perturbs the arrival sequence — A/B scheduler
 comparisons are paired experiments, not noise. Identical `(scenario,
-seed)` produce **byte-identical** Parquet and JSON outputs
-(`validation/test_determinism.py` enforces this in CI, alongside an
-M/M/c Erlang-C check and invariant property tests).
+seed)` produce **byte-identical** Parquet and JSON outputs on a given
+platform (`validation/test_determinism.py` enforces this in CI). Across
+OS/architectures, results may differ by float ULPs: the lognormal and
+exponential samplers route through the platform libm, whose `exp`/`log`
+differ in the last bit between e.g. glibc and Apple's libm — so
+cross-platform regression tests compare with tolerances, never golden
+hashes (`tests/test_traffic_v02.py::TestBackwardCompat`). CI also runs
+closed-form queueing rungs — M/M/c vs Erlang-C, Pollaczek–Khinchine
+M/G/1 under lognormal service, preemptive-resume priority M/G/1
+per-class sojourns, best-effort backlog shielding — and invariant
+property tests.
 
 ## License
 

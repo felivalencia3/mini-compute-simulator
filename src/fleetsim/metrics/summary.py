@@ -11,7 +11,12 @@ Summaries are computed over the FULL run and over the steady-state
 WINDOW.  Scope membership (window = closed ``[w0, w1]``):
 
 - queue-wait stats: jobs whose ``first_start_t`` is in scope (reported
-  per class AND bucketed by gang chip count, DESIGN §9);
+  per JobClass, per SOURCE CLASS — the workload-class label, so a
+  closed-loop backlog reusing another JobClass never pollutes it — and
+  bucketed by gang chip count, DESIGN §9).  BEST_EFFORT-tier jobs are
+  EXCLUDED from every queue-wait/JCT distribution (DESIGN §16.1 /
+  traffic-math §2.1: report best-effort goodput, never best-effort
+  wait — undefined under a saturated closed loop);
 - JCT stats: COMPLETED jobs whose ``end_t`` is in scope;
 - ETTR / status counts: terminal jobs whose ``end_t`` is in scope;
 - goodput: the collector's productive chip-time integral for the scope
@@ -49,9 +54,11 @@ __all__ = [
 ]
 
 _JOB_STR_COLS = frozenset(
-    {"job_id", "tenant", "job_class", "tier", "chip_type", "status"}
+    {"job_id", "tenant", "job_class", "tier", "source_class", "chip_type", "status"}
 )
-_JOB_NULLABLE_INT_COLS = frozenset({"first_start_t_us", "end_t_us"})
+_JOB_NULLABLE_INT_COLS = frozenset(
+    {"first_start_t_us", "end_t_us", "n_domains_spanned"}
+)
 _JOB_FLOAT_COLS = frozenset(
     {
         "productive_chip_s",
@@ -181,6 +188,12 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
     started = [r for r in rows if in_scope(r["first_start_t_us"])]
     ended = [r for r in rows if in_scope(r["end_t_us"])]
     completed = [r for r in ended if r["status"] == "COMPLETED"]
+    # DESIGN §16.1 / traffic-math §2.1: never report best-effort wait/JCT
+    # distributions (undefined under a saturated closed loop; blending
+    # them into the JobClass they reuse misstates the open-loop class).
+    # Their goodput/occupancy contributions remain in the integrals.
+    started_open = [r for r in started if r["tier"] != "BEST_EFFORT"]
+    completed_open = [r for r in completed if r["tier"] != "BEST_EFFORT"]
 
     duration_s = ints["duration_s"]
     minutes = duration_s / 60.0
@@ -195,6 +208,20 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
         classes = sorted({r["job_class"] for r in pool})
         return {
             c: _both_weightings([r for r in pool if r["job_class"] == c], key, pcts)
+            for c in classes
+        }
+
+    def _src(r: dict[str, Any]) -> str:
+        # Workload-class label; hand-built/trace jobs (source_class None)
+        # fall back to the JobClass name.
+        return r["source_class"] if r["source_class"] is not None else r["job_class"]
+
+    def per_source_class(
+        pool: list[dict[str, Any]], key: str, pcts: tuple[int, ...]
+    ) -> dict[str, Any]:
+        classes = sorted({_src(r) for r in pool})
+        return {
+            c: _both_weightings([r for r in pool if _src(r) == c], key, pcts)
             for c in classes
         }
 
@@ -242,13 +269,23 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
                 for k, v in ints["allocated_chip_s_by_class"].items()
             },
         },
-        "queue_wait_s": per_class(started, "queue_wait_s", (50, 90, 99)),
+        "queue_wait_s": per_class(started_open, "queue_wait_s", (50, 90, 99)),
+        "queue_wait_s_by_source_class": per_source_class(
+            started_open, "queue_wait_s", (50, 90, 99)
+        ),
         "queue_wait_s_by_chips": {
             bucket: _both_weightings(pool, "queue_wait_s", (50, 90, 99))
             for bucket, _ in _CHIP_BUCKETS
-            if (pool := [r for r in started if _chip_bucket(r["chips"]) == bucket])
+            if (
+                pool := [
+                    r for r in started_open if _chip_bucket(r["chips"]) == bucket
+                ]
+            )
         },
-        "jct_s": per_class(completed, "jct_s", (50, 90, 99)),
+        "jct_s": per_class(completed_open, "jct_s", (50, 90, 99)),
+        "jct_s_by_source_class": per_source_class(
+            completed_open, "jct_s", (50, 90, 99)
+        ),
         "ettr": _both_weightings(
             [r for r in ended if r["ettr"] is not None], "ettr", (10, 50, 90)
         ),
@@ -309,6 +346,7 @@ def jobs_dataframe(collector: "MetricsCollector") -> pd.DataFrame:
         "tenant",
         "job_class",
         "tier",
+        "source_class",
         "chips",
         "chip_type",
         "submit_t_us",
@@ -317,6 +355,7 @@ def jobs_dataframe(collector: "MetricsCollector") -> pd.DataFrame:
         "status",
         "n_starts",
         "n_restarts",
+        "n_domains_spanned",
         "n_preemptions",
         *trigger_cols,
         "n_node_failures",
@@ -433,8 +472,15 @@ def format_summary_table(summary: dict[str, Any]) -> str:
 
     blocks = (
         ("queue wait", "queue_wait_s", "class", True),
+        (
+            "queue wait by source class",
+            "queue_wait_s_by_source_class",
+            "class",
+            True,
+        ),
         ("queue wait by gang size", "queue_wait_s_by_chips", "chips", False),
         ("JCT", "jct_s", "class", True),
+        ("JCT by source class", "jct_s_by_source_class", "class", True),
     )
     for title, key, col0, sort_keys in blocks:
         block = full.get(key) or {}

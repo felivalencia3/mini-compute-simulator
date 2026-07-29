@@ -132,8 +132,13 @@ class GangSpec:
     """Declarative request for one gang (all-or-nothing chip set).
 
     ``chips`` is either sub-node (fits one leaf) or a whole-node multiple.
-    ``chip_type`` must be pinned in v1.  ``segments`` (Slurm block) and
-    ``shape``/``twisted`` (TPU slice) are schema-carried, v0.3 semantics.
+    ``chip_type`` must be pinned in v1.  ``segments`` (Slurm block; v0.2)
+    is ``(nodes_per_segment, level)``: the gang is whole-node only and
+    splits into equal blocks of ``nodes_per_segment`` nodes, each block
+    contained in ONE domain at ``level`` (multiple blocks may share a
+    domain); ``within`` is then the OUTER containment constraint at a
+    higher level.  ``shape``/``twisted`` (TPU slice) are schema-carried,
+    v0.3 semantics.
     """
 
     chips: int
@@ -195,12 +200,20 @@ class JobClass(Enum):
 
 class Tier(IntEnum):
     """Borg priority bands.  Band rules, not raw integers: a higher band
-    preempts a lower band; no preemption within PROD."""
+    preempts a lower band; no preemption within PROD.
 
-    FREE = 0
+    Band 0's canonical name is ``BEST_EFFORT`` (v0.2 rename); ``FREE`` is
+    a compatibility alias for the same member (``Tier.FREE is
+    Tier.BEST_EFFORT``; ``Tier(0).name == "BEST_EFFORT"``).  Config
+    accepts both spellings (``tier: best_effort`` canonical, ``free``
+    legacy)."""
+
+    BEST_EFFORT = 0
     BATCH = 1
     PROD = 2
     MONITORING = 3
+    #: Legacy alias for band 0 (v0.1 name).
+    FREE = 0
 
 
 class CapacityClass(Enum):
@@ -259,6 +272,11 @@ class Job:
     restart_overhead_s: float = 900.0
     valid_until: int | None = None
     service_id: str | None = None
+    #: Workload-class label of the generating source (e.g. the synthetic
+    #: class name), or None for hand-built/trace jobs.  The engine keys
+    #: ``JobSource.refill``'s ``pending_by_class`` dict on this label
+    #: (falling back to ``job_class.name`` when unset).
+    source_class: str | None = None
     status: JobStatus = JobStatus.PENDING
     attained_service_chip_s: float = 0.0
     goodput_chip_s: float = 0.0

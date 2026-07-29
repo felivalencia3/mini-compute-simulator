@@ -168,6 +168,11 @@ class _JobAcc:
     tenant: str
     job_class: str
     tier: str
+    #: Workload-class label of the generating source (``Job.source_class``;
+    #: None for hand-built/trace jobs).  Distinguishes e.g. a closed-loop
+    #: best-effort backlog class from the open-loop class sharing its
+    #: JobClass — the summary layer keys honest per-class stats on it.
+    source_class: str | None
     chips: int
     chip_type: str | None
     submit_t: int
@@ -175,6 +180,9 @@ class _JobAcc:
     first_start_t: int | None = None
     end_t: int | None = None
     n_starts: int = 0
+    #: Distinct segment-level domains of the LATEST placement (v0.2,
+    #: segmented gangs; 1 for plain gangs) — None until first start.
+    n_domains_spanned: int | None = None
     n_node_failures: int = 0
     preempts: dict[str, int] = field(default_factory=dict)
     productive_chip_s: float = 0.0
@@ -334,6 +342,7 @@ class MetricsCollector:
                 tenant=job.tenant,
                 job_class=job.job_class.name,
                 tier=job.tier.name,
+                source_class=getattr(job, "source_class", None),
                 chips=sum(g.chips for g in job.gangs),
                 chip_type=job.gangs[0].chip_type if job.gangs else None,
                 submit_t=job.submit_t,
@@ -383,6 +392,13 @@ class MetricsCollector:
         rec.n_starts += 1
         if rec.first_start_t is None:
             rec.first_start_t = t
+        # Segmented placements record their span in GangAlloc.attrs; a
+        # plain gang always spans exactly one domain.  Latest start wins
+        # (restarts may land elsewhere).
+        rec.n_domains_spanned = max(
+            (int(g.attrs.get("n_domains_spanned", 1)) for g in alloc.gangs),
+            default=1,
+        )
         self._dequeue(rec, t)
         if rec.alloc_start is None:
             rec.alloc_start = t
@@ -417,12 +433,22 @@ class MetricsCollector:
         productive_chip_s: float,
         lost_chip_s: float,
     ) -> None:
-        """Accumulate a settled stint's surviving/lost work.  The window
-        share spreads the delta uniformly over ``[start_us, end_us]``
-        (point credit when the interval is empty)."""
+        """Accumulate a settled stint's surviving/lost work — into the
+        fleet aggregates AND the per-job record, so jobs still RUNNING at
+        the horizon carry their checkpoint-banked progress in
+        ``jobs.parquet`` (the engine reports it at the horizon; deltas
+        sum exactly to the terminal totals, which ``job_finished``
+        re-asserts authoritatively).  The window share spreads the delta
+        uniformly over ``[start_us, end_us]`` (point credit when the
+        interval is empty)."""
         productive = float(productive_chip_s)
+        lost = float(lost_chip_s)
         self._productive_full += productive
-        self._lost_full += float(lost_chip_s)
+        self._lost_full += lost
+        rec = self._recs.get(job.id)
+        if rec is not None:
+            rec.productive_chip_s += productive
+            rec.lost_chip_s += lost
         w0, w1 = self._w
         if end_us > start_us:
             lo = max(start_us, w0)
@@ -568,12 +594,18 @@ class MetricsCollector:
     def job_rows(self) -> list[dict[str, Any]]:
         """One dict per job, sorted by ``(submit_t, job_id)``.
 
-        Columns: ``job_id, tenant, job_class, tier, chips, chip_type,
-        submit_t_us, first_start_t_us, end_t_us, status, n_starts,
-        n_restarts, n_preemptions, n_preempt_<trigger>...,
-        n_node_failures, productive_chip_s, lost_chip_s,
-        running_elapsed_s, queue_wait_s, jct_s, ettr``.  Nullable fields
-        are ``None`` when undefined (never started / not terminal).
+        Columns: ``job_id, tenant, job_class, tier, source_class, chips,
+        chip_type, submit_t_us, first_start_t_us, end_t_us, status,
+        n_starts, n_restarts, n_domains_spanned, n_preemptions,
+        n_preempt_<trigger>..., n_node_failures, productive_chip_s,
+        lost_chip_s, running_elapsed_s, queue_wait_s, jct_s, ettr``.
+        ``productive_chip_s``/``lost_chip_s`` accumulate as stints settle
+        (still-running jobs show their checkpoint-banked progress after
+        the horizon flush, not 0.0).
+        ``n_domains_spanned`` is the latest placement's distinct
+        segment-level domain count (1 for plain gangs, ``None`` before
+        the first start).  Nullable fields are ``None`` when undefined
+        (never started / not terminal).
         ``jct_s`` is filled for every terminal job; JCT *statistics*
         downstream restrict to COMPLETED.  Still-open allocations are
         clamped at the horizon for ``running_elapsed_s``.
@@ -602,6 +634,7 @@ class MetricsCollector:
                 "tenant": rec.tenant,
                 "job_class": rec.job_class,
                 "tier": rec.tier,
+                "source_class": rec.source_class,
                 "chips": rec.chips,
                 "chip_type": rec.chip_type,
                 "submit_t_us": rec.submit_t,
@@ -610,6 +643,7 @@ class MetricsCollector:
                 "status": rec.status,
                 "n_starts": rec.n_starts,
                 "n_restarts": max(0, rec.n_starts - 1),
+                "n_domains_spanned": rec.n_domains_spanned,
                 "n_preemptions": sum(rec.preempts.values()),
             }
             for trig in triggers:
