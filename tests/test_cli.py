@@ -498,7 +498,7 @@ def test_cli_validation_run_vendored_slices(capsys):
 
 
 def test_public_api_exports():
-    assert fleetsim.__version__ == "0.7.0"
+    assert fleetsim.__version__ == "0.8.0"
     for name in fleetsim.__all__:
         assert getattr(fleetsim, name, None) is not None, name
     # The documented plugin surface is importable from the package root.

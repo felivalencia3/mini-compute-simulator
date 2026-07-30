@@ -39,7 +39,7 @@ from .schedulers.base import (
 )
 from .schedulers.placement import get_placement, placement_names
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     "__version__",

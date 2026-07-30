@@ -263,7 +263,11 @@ def test_static_file_served_and_traversal_blocked(served):
 def test_validate_ok_and_errors(served):
     port, _, _ = served
     out = request_json(port, "POST", "/api/validate", {"yaml": tiny_yaml()})
-    assert out == {"ok": True, "errors": []}
+    assert out["ok"] is True and out["errors"] == []
+    # v0.8, additive: a VALID scenario also carries the fleet it describes,
+    # which is what the editor's shape preview draws
+    assert set(out) == {"ok", "errors", "fleet"}
+    assert out["fleet"]["total_chips"] > 0
 
     out = request_json(port, "POST", "/api/validate", {"yaml": "just a string"})
     assert out["ok"] is False and out["errors"]
@@ -314,7 +318,13 @@ def test_run_lifecycle(served):
     assert row["status"] == "done"
     assert isinstance(row["created"], int)
     hl = row["headline"]
-    assert set(hl) == {"occupancy", "goodput", "jobs_finished"}
+    # the three pinned keys, plus one frag.<level> per level the run
+    # recorded (v0.8: the sweep board's placement metrics)
+    assert {"occupancy", "goodput", "jobs_finished"} <= set(hl)
+    assert all(
+        k in ("occupancy", "goodput", "jobs_finished") or k.startswith("frag.")
+        for k in hl
+    ), sorted(hl)
     assert isinstance(hl["jobs_finished"], int)
 
     # detail carries the full summary
@@ -419,7 +429,9 @@ def test_delete_queued_run(served_no_worker):
     out = request_json(port, "POST", "/api/runs", {"yaml": tiny_yaml()})
     run_id = out["id"]
     prog, _ = get_json(port, f"/api/runs/{run_id}/progress")
-    assert prog == {"status": "queued", "progress": None}
+    # v0.8: the progress payload also carries the queued run's FIFO
+    # position (1-based), so a poller needs one request, not two.
+    assert prog == {"status": "queued", "progress": None, "queue_position": 1}
 
     assert request_json(port, "DELETE", f"/api/runs/{run_id}") == {"ok": True}
     assert not (workspace / run_id).exists()
@@ -446,7 +458,11 @@ def test_external_cli_run_shows_up(served):
     detail, _ = get_json(port, "/api/runs/cli-drop")
     assert detail["summary"] is not None
     prog, _ = get_json(port, "/api/runs/cli-drop/progress")
-    assert prog == {"status": "done", "progress": None}
+    assert prog == {
+        "status": "done",
+        "progress": None,  # external runs spool nothing
+        "queue_position": None,
+    }
     # model/report work off summary.json alone
     model, _ = get_json(port, "/api/runs/cli-drop/model")
     assert "frames" in model

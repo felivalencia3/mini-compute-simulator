@@ -18,7 +18,7 @@ Gavel, Pollux) have flat GPU counts and no failures; per-job simulators
 ML gang/preemption-cost semantics. That combination is the product — see
 [DESIGN.md](DESIGN.md) §1 for the full survey.
 
-## What it does (honest scope, v0.7)
+## What it does (honest scope, v0.8)
 
 - **Fleet model**: one metro, N clusters, config-defined level trees
   (`[cluster, pod, rack, node]` — vocabulary from config, not code),
@@ -89,13 +89,21 @@ ML gang/preemption-cost semantics. That combination is the product — see
   time, watch preemption waves and the reclaim of 32 pods for a
   131K-chip gang — with zero external requests, every pixel traceable
   to the output files ([docs/visualizer.md](docs/visualizer.md)).
-- **Web app** (v0.5): `fleetsim serve --open` runs a local,
-  pure-stdlib web app — browse workspace runs, open any run as the
-  interactive 2D report, submit scenario YAML from an editor with
-  validation and live progress, and replay the fleet in a **three.js
-  3D view** (vendored, zero external requests). Loopback-only by
-  default, strict CSP, path-contained workspace, `yaml.safe_load`
-  only, in-process runs ([docs/webapp.md](docs/webapp.md)).
+- **Web app** (v0.5, made an instrument in v0.8): `fleetsim serve --open`
+  runs a local, pure-stdlib web app — browse workspace runs, open any run
+  as the interactive 2D report, submit scenario YAML from an editor that
+  **draws the fleet as you type**, and replay the fleet in a **three.js
+  3D view** (vendored, zero external requests) that renders a run **while
+  it is still executing**, drills from cluster to pod to node, and hands
+  out **deep links** (exact moment + camera angle) and PNG snapshots.
+  v0.8 also adds **compare** (metric matrix, overlaid timelines, config
+  diff), **sweeps** (a parameter grid, one run per cell, on a live
+  board), an **Analysis** tab that attributes disruptions instead of just
+  displaying them, and a **Validation** tab that shows every published
+  number fleetsim is measured against *and* every one it deliberately
+  does not reproduce. Runs execute in parallel worker processes;
+  loopback-only by default, strict CSP, path-contained workspace,
+  `yaml.safe_load` only ([docs/webapp.md](docs/webapp.md)).
 - **Validation suite** (v0.6, extended in v0.7): reproduces PUBLISHED
   cluster-trace results, so the occupancy / queue-wait / JCT numbers are
   checked against reality, not just internally consistent. fleetsim
@@ -182,8 +190,32 @@ for P in first_fit best_fit consolidate spread; do
 done
 fleetsim compare out_first_fit out_best_fit out_spread
 
-# the local web app: browse runs, launch scenarios, 2D report + 3D replay
-fleetsim serve --open
+# the local web app: browse runs, launch scenarios, 2D report + 3D replay,
+# watch a running run fill the fleet live, compare runs, sweep a grid
+fleetsim serve --open --workers 4
+
+# ...then, in the app:
+#   #new          edit a scenario — the fleet it describes is drawn as you type
+#   #sweep        one base scenario + parameter axes  -> one run per cell
+#   #compare/A,B  select runs in the rail (shift-click a range) -> matrix,
+#                 overlaid timelines, config diff
+#   #run/<id>/fleet3d   3D fleet — live while it runs; click a pod to drill
+#                       into its nodes; "Copy link" shares the exact moment
+#   #validation   published-vs-fleetsim results, and the documented anti-goals
+
+# the same sweep from the shell (all-or-nothing validation, cap 64 cells)
+python3 - <<'EOF' | curl -sX POST http://127.0.0.1:8500/api/sweeps \
+    -H 'Content-Type: application/json' --data-binary @-
+import json, pathlib
+print(json.dumps({
+    "yaml": pathlib.Path("examples/07_placement_study/scenario.yaml").read_text(),
+    "title": "packing study",
+    "grid": {"scheduler.params.placement": ["first_fit", "consolidate", "spread"]},
+    "seeds": [1, 2],
+}))
+EOF
+# -> {"sweep_id": "sweep-...", "run_ids": [...], "n_runs": 6}
+# then open http://127.0.0.1:8500/#sweep/<sweep_id>
 
 # validation: reproduce published trace results (docs/validation.md)
 fleetsim validation run                 # vendored-slice checks, no network
@@ -230,7 +262,8 @@ performance notes live in [docs/visualizer.md](docs/visualizer.md).
 ## Web app
 
 ```
-fleetsim serve [-p 8500] [--workspace ./fleetsim-runs] [--host 127.0.0.1] [--open]
+fleetsim serve [-p 8500] [--workspace ./fleetsim-runs] [--host 127.0.0.1]
+               [--workers N] [--open]
 ```
 
 A local web app on the same pipeline (pure stdlib `http.server`, no new
@@ -241,11 +274,47 @@ while a run executes, the 2D report inline (and downloadable), and a
 three.js **3D fleet replay** — halls of pods as stacks of node slabs,
 colored by class, with failure/drain pulses and camera poses (three.js
 is vendored into the package; the app makes zero external requests).
+Since v0.8 it also **compares**: select runs in the rail (shift-click for
+a range) to open a metric matrix, overlaid timelines and a config diff of
+just the scenario keys that differ — and **explores**, defining a
+parameter grid whose cells run as ordinary runs and land on a live sweep
+board (bars for one axis, a heatmap for two) that hands its cells
+straight to the compare view. Each run also gets an **Analysis** tab that
+attributes rather than displays: click a preemption wave or failure round
+to see which jobs stopped and which higher-tier gang took their chips
+(marked *inferred* — fleetsim records no causal link), scatter
+fragmentation against queue pressure (or occupancy against goodput, or
+failures against occupancy) with Pearson *r* and *n*, and decompose every
+occupancy dip into chips lost to failures, drains and preemptions —
+**with the unexplained residual drawn, not hidden**.
+
+v0.8 finishes the job of making it an instrument rather than a viewer:
+
+- **Live replay** — a running run renders *as it executes*, in the 2D
+  fleet map under the progress panel and in the 3D view, streamed from
+  the run's stint spool. The transport follows the leading edge until you
+  scrub back.
+- **Node drill-down** — click a pod and the camera flies in and expands
+  it into its individual nodes, with a `cluster › pod › node` breadcrumb
+  and `Esc` to back out. The per-node split is labelled as a layout,
+  because fleetsim records placement per domain, not per node — unless
+  the domain *is* a node, where the panel says the fill is exact.
+- **Deep links + PNG** — `Copy link` encodes the moment, camera pose,
+  pin, drill-down and class filters in the URL, so a link reopens the
+  exact frame; `PNG` saves the current 3D frame or any 2D chart panel.
+- **Fleet-shape preview** — the editor draws the fleet a scenario
+  describes before it runs, summed arithmetically from the count tree,
+  at the level `outputs.stints` will actually record (and it says so when
+  the scenario records none, so an empty fleet map is never a surprise).
+- **Validation tab** — `#validation` renders the validation suite's own
+  results module, leading with the documented **anti-goals**: what
+  fleetsim deliberately does not reproduce, and why.
+
 Binds 127.0.0.1 only unless you explicitly widen it; run ids are
 server-generated, every path is containment-checked, scenarios are
-`yaml.safe_load`-parsed and executed in-process. Full API contract,
-workspace layout, security posture, 3D controls, and troubleshooting:
-[docs/webapp.md](docs/webapp.md).
+`yaml.safe_load`-parsed and executed in worker processes. Full API
+contract, workspace layout, security posture, 3D controls, and
+troubleshooting: [docs/webapp.md](docs/webapp.md).
 
 ## Validation
 

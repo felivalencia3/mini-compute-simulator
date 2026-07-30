@@ -14,7 +14,11 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The suite is ~2 min on a dev laptop but the 2-core hosted runners are
+    # several times slower once the parallel-worker tests spin real pools.
+    # A genuine hang is caught by pytest's faulthandler_timeout (pyproject),
+    # which dumps every thread's stack — this ceiling is only a backstop.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

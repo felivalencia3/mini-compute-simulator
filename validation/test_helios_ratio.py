@@ -63,6 +63,12 @@ import pandas as pd
 import pytest
 
 from fleetsim.validation.harness import per_vc_replay, replay_canonical
+from fleetsim.validation.results import (
+    HELIOS_JCT_RATIO_BAND,
+    HELIOS_PUBLISHED_RATIOS,
+    HELIOS_Q_RATIO_BAND,
+    HELIOS_SATURN_FIFO_JCT_PUBLISHED,
+)
 
 # Repo layout: this file is <root>/validation/test_helios_ratio.py.
 _ROOT = Path(__file__).resolve().parents[1]
@@ -209,33 +215,32 @@ def test_helios_slice_smoke_best_effort_direction() -> None:
 # Full trace — opt-in (downloads real data.zip; asserts §2 V1(f))
 # ---------------------------------------------------------------------------
 
-#: plan §2 V1(f) assertion bands.  These stay BANDS, deliberately much
-#: wider than the point values, and v0.7 does NOT tighten them despite all
-#: four clusters now landing inside.  The width comes from two things this
-#: suite cannot pin down: the paper's ANALYSIS WINDOW is unpublished (§1) and
-#: the per-VC CAPACITY MODEL is a choice with its own bias (§4.4).  A third,
+#: plan §2 V1(f) assertion bands and the published Table 3 point values.
+#: BOTH come from :mod:`fleetsim.validation.results`, the single source of
+#: truth these numbers have since v0.8 — the same table
+#: ``GET /api/validation`` serves to the web app, so an assertion here and
+#: a number on screen can never disagree.  The bands stay BANDS,
+#: deliberately much wider than the point values, and v0.7 does NOT tighten
+#: them despite all four clusters now landing inside; the width comes from
+#: two things this suite cannot pin down (the paper's unpublished ANALYSIS
+#: WINDOW, §1, and the per-VC CAPACITY MODEL choice, §4.4).  A third,
 #: separate fact bounds how much any single point value can be leaned on:
 #: 35.5 % of Saturn's jobs share an exact submit second, and reordering
 #: within those seconds moves Saturn's FIFO JCT by 17 % (docs/validation.md
 #: §4.5) — that is a scheduler-order SENSITIVITY, not an uncertainty band
 #: (ascending id is the faithful order), but it is why the placer choice
 #: rests on the four-cluster aggregate rather than on Saturn alone.
-_JCT_RATIO_BAND = (1.3, 8.0)
-_Q_RATIO_BAND = (3.0, 25.0)
+_JCT_RATIO_BAND = HELIOS_JCT_RATIO_BAND
+_Q_RATIO_BAND = HELIOS_Q_RATIO_BAND
 
 #: Published Table 3 point ratios, for the failure message (not asserted).
-_PUB = {
-    "Venus": {"jct": 3.07, "q": 5.68, "share": 0.818},
-    "Earth": {"jct": 2.87, "q": 16.4, "share": 0.693},
-    "Saturn": {"jct": 6.59, "q": 18.5, "share": 0.897},
-    "Uranus": {"jct": 1.49, "q": 4.51, "share": 0.425},
-}
+_PUB = HELIOS_PUBLISHED_RATIOS
 
 #: Published Table 3 Saturn FIFO average JCT (s) — the V2 absolute rung's
 #: reference point.  It CORROBORATES the placer choice; it does not decide it
 #: (the four-cluster mean ratio error does, and the band does not either —
 #: see the module docstring).
-_PUB_SATURN_FIFO_JCT = 55_984.0
+_PUB_SATURN_FIFO_JCT = HELIOS_SATURN_FIFO_JCT_PUBLISHED
 
 
 @pytest.mark.trace_full

@@ -729,6 +729,20 @@ class Simulator:
     default) no code path changes and outputs stay byte-identical.  An
     exception raised by the callback aborts the run (``fleetsim serve``
     uses exactly this for cooperative cancellation).
+
+    ``progress_stints`` (v0.8, opt-in and OFF by default so the v0.5
+    snapshot shape above stays pinned for existing callers) adds three
+    keys to every snapshot, read off the sink's live stint API
+    (:meth:`~fleetsim.metrics.collector.MetricsCollector.stints_since` /
+    ``open_stint_rows``; a sink without them yields ``[]``/``[]``/``0``)::
+
+        {stints: [row, ...],       # SETTLED since the previous flush
+         stint_cursor: int,        # rows consumed so far (monotone)
+         open_stints: [row, ...],  # overlay of stints still open, t1_us=t
+         stint_fleet: {...}|None}  # domain geometry, FIRST snapshot only
+
+    Still pure observation — the engine reads the sink, never mutates it,
+    and outputs are byte-identical with the flag on or off.
     """
 
     def __init__(
@@ -743,6 +757,7 @@ class Simulator:
         rng: RngStreams | None = None,
         strict: bool = True,
         progress_cb: Callable[[dict[str, Any]], None] | None = None,
+        progress_stints: bool = False,
     ):
         self.scenario = scenario
         self.fleet = fleet
@@ -755,6 +770,9 @@ class Simulator:
         self.rng = rng if rng is not None else RngStreams(scenario.sim.seed)
         self.strict = bool(strict)
         self.progress_cb = progress_cb
+        self._progress_stints = bool(progress_stints)
+        self._stint_cursor = 0
+        self._stint_fleet_sent = False
         self._n_finished = 0  # sink.job_finished calls (terminal jobs)
         self.queue = EventQueue()
         self.now: int = 0
@@ -988,24 +1006,40 @@ class Simulator:
         probe = getattr(self.sink, "last_flush_sample", None)
         if probe is not None:
             row = probe()
-        cb(
-            {
-                "t_us": t,
-                "horizon_us": self._horizon_us,
-                "jobs_finished": self._n_finished,
-                "jobs_running": len(self._running),
-                "pending": len(self._pending),
-                "occupancy_to_date": (
-                    row["occupancy_to_date"] if row is not None else None
-                ),
-                "allocated_chips": (
-                    row["allocated_chips"] if row is not None else None
-                ),
-                "healthy_chips": (
-                    row["healthy_chips"] if row is not None else None
-                ),
-            }
-        )
+        snapshot: dict[str, Any] = {
+            "t_us": t,
+            "horizon_us": self._horizon_us,
+            "jobs_finished": self._n_finished,
+            "jobs_running": len(self._running),
+            "pending": len(self._pending),
+            "occupancy_to_date": (
+                row["occupancy_to_date"] if row is not None else None
+            ),
+            "allocated_chips": (
+                row["allocated_chips"] if row is not None else None
+            ),
+            "healthy_chips": (row["healthy_chips"] if row is not None else None),
+        }
+        if self._progress_stints:
+            since = getattr(self.sink, "stints_since", None)
+            if since is not None:
+                rows, self._stint_cursor = since(self._stint_cursor)
+            else:  # a custom sink without the live stint API
+                rows = []
+            snap_open = getattr(self.sink, "open_stint_rows", None)
+            snapshot["stints"] = rows
+            snapshot["stint_cursor"] = self._stint_cursor
+            snapshot["open_stints"] = snap_open(t) if snap_open is not None else []
+            # The stint level's domain geometry is static, so it rides the
+            # FIRST snapshot only (and is null in every later one).
+            fleet_probe = getattr(self.sink, "stint_fleet", None)
+            snapshot["stint_fleet"] = (
+                fleet_probe()
+                if (fleet_probe is not None and not self._stint_fleet_sent)
+                else None
+            )
+            self._stint_fleet_sent = True
+        cb(snapshot)
 
     def _job_finished(
         self,

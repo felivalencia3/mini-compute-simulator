@@ -157,6 +157,7 @@ def run_scenario(
     overrides: Mapping[str, str] | None = None,
     *,
     progress_cb: Callable[[dict[str, Any]], None] | None = None,
+    progress_stints: bool = False,
 ) -> dict[str, Any]:
     """Run one scenario end to end and return its summary dict.
 
@@ -179,6 +180,12 @@ def run_scenario(
         at every metrics flush with the engine's progress snapshot dict
         (see the Simulator docstring).  ``None`` (default) changes
         nothing; outputs stay byte-identical.
+    progress_stints:
+        Opt-in (v0.8): adds ``stints`` / ``stint_cursor`` /
+        ``open_stints`` to every progress snapshot so a consumer can build
+        the fleet map WHILE the run executes (``fleetsim serve``'s
+        ``/api/runs/{id}/live``).  Ignored without ``progress_cb``;
+        outputs stay byte-identical either way.
 
     Raises :class:`ScenarioError` (listing every problem) for invalid
     scenarios and ``ValueError`` for unknown scheduler names.
@@ -212,6 +219,7 @@ def run_scenario(
         admission,
         rng=rng,
         progress_cb=progress_cb,
+        progress_stints=progress_stints,
     )
     sim.run()
 
