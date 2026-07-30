@@ -392,12 +392,50 @@ def test_cli_viz_open_flag_opens_report(tmp_path, monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
+# validation subcommand (v0.6)
+# ---------------------------------------------------------------------------
+
+
+def test_cli_validation_cite_one_trace(capsys):
+    assert main(["validation", "cite", "helios"]) == 0
+    out = capsys.readouterr().out
+    assert "helios" in out
+    assert "SC '21" in out  # the required Helios citation
+    assert "CC-BY-4.0" in out
+
+
+def test_cli_validation_cite_all_traces(capsys):
+    assert main(["validation", "cite"]) == 0
+    out = capsys.readouterr().out
+    # Every registered trace prints its attribution block.
+    for name in ("helios", "philly", "pai_task_table"):
+        assert name in out
+    assert "ATC '19" in out and "NSDI '22" in out
+
+
+def test_cli_validation_cite_unknown_exits_2(capsys):
+    assert main(["validation", "cite", "nope"]) == 2
+    assert "unknown trace" in capsys.readouterr().err
+
+
+def test_cli_validation_run_vendored_slices(capsys):
+    """`fleetsim validation run` replays the vendored slices and reports
+    PASS for both the Helios direction and Philly status checks."""
+    assert main(["validation", "run"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("[PASS]") == 2
+    assert "[FAIL]" not in out
+    assert "Helios" in out and "Philly" in out
+    assert "all passed" in out
+
+
+# ---------------------------------------------------------------------------
 # Package exports
 # ---------------------------------------------------------------------------
 
 
 def test_public_api_exports():
-    assert fleetsim.__version__ == "0.5.0"
+    assert fleetsim.__version__ == "0.6.0"
     for name in fleetsim.__all__:
         assert getattr(fleetsim, name, None) is not None, name
     # The documented plugin surface is importable from the package root.

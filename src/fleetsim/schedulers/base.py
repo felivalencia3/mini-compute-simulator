@@ -285,6 +285,7 @@ _REGISTRY: dict[str, type[Scheduler]] = {}
 #: ``@register`` decorators have run.  New built-ins append here.
 _BUILTIN_MODULES: tuple[str, ...] = (
     "fleetsim.schedulers.fifo",
+    "fleetsim.schedulers.sjf",
     "fleetsim.schedulers.tiered_priority",
     "fleetsim.schedulers.easy_backfill",
 )

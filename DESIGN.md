@@ -840,3 +840,152 @@ scheduler protocol underneath); **v0.6 — research replay & validation**
 (Helios adapter + QSSF reproduction, Philly/Pollux cross-simulator
 rungs at scale, Gavel matrix + unpinned chips, the §12 ladder completed
 in CI); v1.0 trust release unchanged (§11).
+
+---
+
+## 18. v0.6 addendum — the validation update
+
+*Appended after v0.6 landed; where earlier sections disagree, this
+section and the code win.  v0.6's theme: prove the numbers are REAL.
+Every prior release validated fleetsim against itself (closed-form
+queueing rungs, conservation invariants, determinism).  v0.6 validates it
+against PUBLISHED cluster traces — it downloads the Helios (SC '21),
+Philly (ATC '19), and Alibaba PAI (NSDI '22) traces, replays them, and
+asserts the papers' reported ratios and distributions.  The full, honest,
+numbers-populated writeup is [docs/validation.md](docs/validation.md);
+this addendum is the design rationale.  No core engine file changed — the
+suite is a new `fleetsim.validation` package plus one scheduler
+(`schedulers/sjf.py`), so examples 01/04 stay byte-identical.*
+
+### 18.1 Two kinds of claim (and the anti-goals)
+
+A trace replay never reproduces a published headline to the last digit:
+the released trace differs from the paper's analysis window, timestamps
+carry no timezone, and every simulator makes placement choices the
+original scheduler did not.  So the suite validates two kinds of claim and
+weights them differently.  **Policy-effect** validations (strongest) assert
+a *ratio* between two policies on the *same* trace — SJF's average JCT vs
+FIFO's; ratios cancel absolute-scale error, so a 10%-light load leaves the
+ratio intact.  **Distribution-match** validations reproduce a shape the
+trace itself carries (Philly's killed/failed %); these test converter
+fidelity, and their tolerance is dominated by the unpublished analysis
+window.  Six published numbers are stated up front as **anti-goals**, never
+asserted — Philly's 52.3% SM-cycle GPU *utilization* (a hardware counter, not
+scheduler occupancy — a DES produces the different, higher *allocation*
+occupancy), Helios's QSSF column (needs an absent `jobname` + a duration
+predictor; SJF-oracle is the reproducible proxy), Alibaba's 50% GPU-sharing
+saving (needs fractional GPUs, §18.6), Borg absolutes (normalized, BigQuery,
+8 cells), Philly Table 2's delay-cause split, and co-location interference
+(unmodeled).  The docs/validation.md §0 table carries each with its reason.
+
+### 18.2 The `sjf` scheduler and SJF-oracle
+
+V1 needed a scheduler v0.5 lacked.  `schedulers/sjf.py`
+(`@register("sjf")`) orders pending jobs by `(walltime_est_s,
+submit_time, id)` ascending — shortest *estimate* first; a `None` estimate
+sorts LAST (`+inf`); ties break by `(submit_time, id)`.  `__init__(placement
+=None -> FirstFit, strict=False)`; `strict=False` is a best-effort scan
+(skip an unplaceable job, continue), `strict=True` blocks on the shortest
+head-of-line job.  When the walltime estimate EQUALS the true duration —
+which is exactly what the Helios converter writes — this is **SJF-oracle**:
+a perfect service-time estimate, the exact analogue of the Helios reference
+sim keying on `duration` and a strict upper bound on what the
+duration-predicting QSSF policy can achieve.  A CI-always analytic rung
+(`validation/test_sjf_ordering.py`) proves the underlying Smith-1956 SPT
+optimality end to end through the real engine: on a fungible pool SJF starts
+jobs shortest-first and its mean JCT ≤ FIFO's, at identical makespan.
+
+### 18.3 The converter, the harness, and metric adapters
+
+`convert_helios` (`validation/helios.py`) mirrors the existing
+`convert_philly`: `cluster_log.csv` → canonical rows, dropping `gpu_num==0`
+CPU jobs and pre-April-2020 rows, mapping the state enum (British
+`CANCELLED` → `CANCELED`), capping `duration` at the 1,209,600 s (14-day)
+Slurm max, and writing `duration` into BOTH `duration_s` and
+`walltime_limit_s` (the SJF-oracle).  Per-VC node pools come from the
+`cluster_gpu_number.csv` snapshot (GPUs ÷ 8).
+
+The load-bearing engineering detail is that fleetsim schedules a **single
+global pool** and never routes jobs to a cluster by tenant, but the Helios
+reference sim schedules **each VC independently** (one worker per VC; jobs
+never cross VC boundaries).  So V1/V2 are a **harness**
+(`validation/harness.py::per_vc_replay`) that runs one simulation per VC on
+a fleet sized to that VC and aggregates job-weighted to cluster totals — NOT
+an engine change.  Replay fidelity is held fixed (plan §1): `failure_model`
+off and checkpointing disabled so service time == trace `duration` exactly;
+BATCH tier so jobs are included in the papers' distributions; an adaptive,
+*verified* horizon so every windowed job reaches a terminal status (a
+truncated long-waiter would bias the mean on exactly the jobs carrying the
+FIFO-vs-SJF signal).  Two **metric adapters** (`validation/adapters.py`)
+recompute the papers' summary definitions from `jobs.parquet`, where they
+diverge from `summary.json`: average JCT over **all** terminal jobs (not
+COMPLETED-only), and `#Queuing` = jobs whose wait exceeds one scheduler
+round.
+
+### 18.4 Results: what reproduces, and the one gap
+
+On the real Helios September trace (deterministic; seed 0), fleetsim
+reproduces the Table-3 FIFO-vs-SJF policy effect **strongly**: the direction
+on all four clusters; the queuing-ratio band [3, 25]× on all four; the
+JCT-ratio lower bound (SJF advantage, ≥ 1.3×) on all four; the cross-cluster
+JCT-ratio rank (Saturn 8.75× strongest → Uranus 1.69× weakest, matching the
+published Saturn 6.59 → Uranus 1.49 order); the queuing-share ordering
+(Saturn > Venus > Earth > Uranus); and three of four JCT ratios inside
+[1.3, 8]× (Venus 4.21, Earth 2.11, Uranus 1.69).  **The one documented gap**:
+Saturn's JCT ratio is 8.75× (~9% past the 8× ceiling) — a MODELING gap, not
+a bug.  fleetsim's FirstFit placement fragments Saturn's large gangs more
+than the reference "consolidate" placer, so the most gang-heavy cluster's
+FIFO blocking (absolute FIFO JCT 75,329 s vs a published 55,984 s, ~1.35×)
+over-inflates.  The V1 opt-in test asserts [1.3, 8]× for the other three and
+`xfail`s Saturn with exactly this diagnosis — the band is **not** widened to
+pass; a consolidate placer (v0.7) is the remedy.
+
+Two plan assumptions were wrong and were corrected in the harness, not
+fudged: (1) the reference scan is **strict/blocking**, not best-effort — a
+best-effort scan collapses FIFO's head-of-line queuing (the whole point of
+the published huge FIFO numbers) and yields ~1.4× ratios with the wrong
+rank; (2) per-VC capacity must use the **September-max** quota, not a fixed
+Sept-1 snapshot — several VCs' quotas drift within the month (on Uranus,
+`vc7hD` spins up 0 → 416 GPU), and a Sept-1 pool over-congests Uranus and
+breaks its rank.  Sept-max recovers published Uranus almost exactly.  V3
+(Philly status split) is a converter-fidelity rung: `convert_philly` maps
+Pass/Killed/Failed → COMPLETED/CANCELED/FAILED, and the by-count /
+by-GPU-time split honours Table 6 (the killed+unsuccessful minority of jobs
+is a majority-tilted share of GPU-time).  Its full-trace rung is written to
+spec but **UNVERIFIED on real data** — the 1 GB Git-LFS artifact was not
+fetched in this build (`fetch_trace` detects the LFS pointer and skips with
+the `git lfs pull` remediation).
+
+### 18.5 CI budget, downloads, attribution
+
+CI runs only vendored slices — a REAL 2-VC Venus September slice and a
+synthetic ~2k-row Philly slice under `tests/validation_traces/`, each with a
+header comment recording source, license, and exact sampling command.  The
+opt-in full replays are marked `@pytest.mark.trace_full` AND env-guarded
+(`FLEETSIM_HELIOS_FULL` / `FLEETSIM_PHILLY_FULL`), so `pytest -m "not
+trace_full"` stays fast and offline; the marker is registered in
+`pyproject.toml`.  Downloads (`validation/fetch.py`) are **stdlib-only**
+(`urllib` + `hashlib`, no new runtime dependency), cached under
+`$FLEETSIM_TRACE_CACHE` or `~/.cache/fleetsim/traces/`, and **checksum- or
+size-gated** — a truncated or wrong download can never silently pass a
+validation, and a Git-LFS pointer is detected rather than cached as data.
+`fleetsim validation cite [trace]` prints the license + citation each trace's
+attribution requires (Helios CC-BY-4.0 / SC '21; Philly CC-BY-4.0 / ATC '19;
+PAI free-use / NSDI '22), and `fleetsim validation run` runs the
+vendored-slice checks with a human-readable PASS/FAIL report.
+
+### 18.6 Roadmap update
+
+v0.6 as shipped = the `sjf` scheduler + SJF-oracle + `convert_helios` +
+per-VC replay harness + metric adapters + stdlib fetch/registry + the V1
+(Helios FIFO-vs-SJF, CI smoke + opt-in four-cluster) and V3 (Philly status)
+rungs + the SPT analytic rung + `fleetsim validation` CLI + docs/validation.md.
+**Deferred to v0.7** (each blocked on one missing capability, now named
+explicitly): **fractional / sub-chip GPU allocation** unlocks the Alibaba PAI
+50% GPU-sharing saving and the 113 s V100 median queueing (V5); **per-job
+delay-cause attribution** unlocks Philly Table 2's fair-share vs
+fragmentation-delay split (V4); and a **consolidate placement policy** is
+expected to bring Saturn's JCT ratio into band (§18.4).  The Gavel throughput
+matrix / unpinned chip types and multi-metro two-stage scheduling (carried on
+the roadmap since §17.6) remain future work.  v1.0 trust release unchanged
+(§11).

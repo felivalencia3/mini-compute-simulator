@@ -9,6 +9,8 @@ Subcommands::
     fleetsim viz out/ [out_b/] [-o report.html] [--title T]
                      [--map-level L] [--open]
     fleetsim serve [-p 8500] [--workspace DIR] [--host H] [--open]
+    fleetsim validation cite [trace]
+    fleetsim validation run
 
 ``run`` executes the scenario and prints the summary table; ``validate``
 checks schema + feasibility (fleet buildable, scheduler resolvable,
@@ -18,7 +20,10 @@ metrics of two or more runs side by side; ``viz`` renders one run (or an
 A/B pair) into a single self-contained interactive HTML replay
 (docs/visualizer.md); ``serve`` starts the local web app (v0.5): browse
 workspace runs, launch scenarios with live progress, open the 2D report
-and the three.js 3D fleet replay (docs/webapp.md).
+and the three.js 3D fleet replay (docs/webapp.md); ``validation cite``
+prints the license + citation each published trace must be attributed
+under, and ``validation run`` runs the vendored-slice validation checks
+(no network) — the v0.6 validation suite (docs/validation.md).
 
 Exit codes: 0 success, 1 validation/comparison failure, 2 usage or
 runtime error.  All output is deterministic given the inputs.
@@ -139,6 +144,30 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="open_browser",
         help="open the app in the default browser",
+    )
+
+    p_vld = sub.add_parser(
+        "validation",
+        help="v0.6 trace-validation suite: cite trace attributions or run"
+        " the vendored-slice checks",
+    )
+    vsub = p_vld.add_subparsers(dest="validation_command", required=True)
+    p_cite = vsub.add_parser(
+        "cite",
+        help="print the license + citation each published trace must be"
+        " attributed under",
+    )
+    p_cite.add_argument(
+        "trace",
+        nargs="?",
+        default=None,
+        help="trace name (e.g. helios, philly, pai_task_table);"
+        " omit to print every registered trace",
+    )
+    vsub.add_parser(
+        "run",
+        help="run the vendored-slice validation checks (Helios FIFO-vs-SJF"
+        " direction + Philly status split); no network, no full trace",
     )
     return parser
 
@@ -508,6 +537,133 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# validation (v0.6 suite: cite trace attributions / run vendored-slice checks)
+# ---------------------------------------------------------------------------
+
+
+def _format_citation(spec) -> str:
+    """The attribution block for one trace: citation, license, source,
+    and the extraction hint — everything the trace's license requires when
+    a paper's numbers are reproduced from it."""
+    lines = [
+        spec.name,
+        f"  citation: {spec.citation}",
+        f"  license:  {spec.license}",
+        f"  source:   {spec.attribution_url}",
+        f"  extract:  {spec.extract_hint}",
+    ]
+    return "\n".join(lines)
+
+
+def _cmd_validation_cite(args: argparse.Namespace) -> int:
+    from .validation.registry import TRACE_REGISTRY, get_spec
+
+    if args.trace is not None:
+        try:
+            spec = get_spec(args.trace)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print(_format_citation(spec))
+        return 0
+    # No trace named: print every registered trace, in registry order.
+    print(_format_citation(next(iter(TRACE_REGISTRY.values()))), end="")
+    for spec in list(TRACE_REGISTRY.values())[1:]:
+        print("\n")
+        print(_format_citation(spec), end="")
+    print()
+    return 0
+
+
+def _cmd_validation_run(_args: argparse.Namespace) -> int:
+    """Run the vendored-slice validation checks (no network, no full
+    trace): the Helios FIFO-vs-SJF direction on the 2-VC Venus slice and
+    the Philly status split on the ~2k-row slice — the same checks CI runs.
+    Prints a PASS/FAIL line per check and exits nonzero if any fail."""
+    import pandas as pd
+
+    from .validation.harness import replay_canonical
+    from .validation.philly_status import (
+        status_split_by_count,
+        status_split_by_gpu_time,
+    )
+
+    root = Path(__file__).resolve().parents[2]
+    traces = root / "tests" / "validation_traces"
+    helios_slice = traces / "helios_venus_2vc_sept.csv"
+    philly_slice = traces / "philly_slice.csv"
+    for p in (helios_slice, philly_slice):
+        if not p.is_file():
+            print(f"error: vendored slice not found: {p}", file=sys.stderr)
+            return 2
+
+    results: list[tuple[str, bool, str]] = []
+
+    # Helios: strict FIFO mean JCT is clearly worse than strict SJF.
+    df = pd.read_csv(helios_slice, comment="#")
+    pools = {"vcvGl": 20, "vcvlY": 2}
+    fifo = replay_canonical(df, pools, "fifo", cluster="Venus-slice")
+    sjf = replay_canonical(df, pools, "sjf", cluster="Venus-slice")
+    ratio = fifo["avg_jct"] / sjf["avg_jct"]
+    ok = ratio > 1.15 and fifo["n_terminal"] == fifo["n_jobs"] == len(df)
+    results.append(
+        (
+            "Helios (SC '21) FIFO-vs-SJF direction [vendored 2-VC Venus slice]",
+            ok,
+            f"FIFO/SJF mean-JCT ratio = {ratio:.2f}x (> 1.15), "
+            f"{fifo['n_terminal']}/{len(df)} jobs terminal",
+        )
+    )
+
+    # Philly: status shares sum to 1 and hold the paper's ordering.
+    pdf = pd.read_csv(philly_slice, comment="#")
+    bc = status_split_by_count(pdf)
+    bg = status_split_by_gpu_time(pdf)
+    ku_count = bc.get("Killed", 0.0) + bc.get("Unsuccessful", 0.0)
+    ku_gpu = bg.get("Killed", 0.0) + bg.get("Unsuccessful", 0.0)
+    ok = (
+        abs(sum(bc.values()) - 1.0) < 1e-9
+        and abs(sum(bg.values()) - 1.0) < 1e-9
+        and bc["Passed"] > bc["Unsuccessful"] > bc["Killed"]
+        and ku_gpu > ku_count
+    )
+    results.append(
+        (
+            "Philly (ATC '19) status split [SYNTHETIC slice - structure only]",
+            ok,
+            f"by-count Pass {bc['Passed']:.1%} > Unsucc {bc['Unsuccessful']:.1%}"
+            f" > Killed {bc['Killed']:.1%}; Killed+Unsucc GPU-time"
+            f" {ku_gpu:.1%} > headcount {ku_count:.1%}",
+        )
+    )
+
+    width = max(len(name) for name, _, _ in results)
+    all_ok = True
+    for name, ok, detail in results:
+        all_ok = all_ok and ok
+        status = "PASS" if ok else "FAIL"
+        print(f"[{status}] {name:<{width}}  {detail}")
+    print()
+    print(
+        "vendored-slice checks: "
+        + ("all passed" if all_ok else "FAILURES above")
+        + " (full-trace replays are opt-in: FLEETSIM_HELIOS_FULL /"
+        " FLEETSIM_PHILLY_FULL; see docs/validation.md)"
+    )
+    return 0 if all_ok else 1
+
+
+def _cmd_validation(args: argparse.Namespace) -> int:
+    if args.validation_command == "cite":
+        return _cmd_validation_cite(args)
+    if args.validation_command == "run":
+        return _cmd_validation_run(args)
+    raise AssertionError(  # pragma: no cover - argparse requires the subcommand
+        f"unhandled validation command {args.validation_command!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
@@ -528,6 +684,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_viz(args)
         if args.command == "serve":
             return _cmd_serve(args)
+        if args.command == "validation":
+            return _cmd_validation(args)
     except ScenarioError as exc:
         for err in exc.errors:
             print(f"error: {err}", file=sys.stderr)

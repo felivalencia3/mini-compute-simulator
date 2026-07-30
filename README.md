@@ -18,7 +18,7 @@ Gavel, Pollux) have flat GPU counts and no failures; per-job simulators
 ML gang/preemption-cost semantics. That combination is the product — see
 [DESIGN.md](DESIGN.md) §1 for the full survey.
 
-## What it does (honest scope, v0.5)
+## What it does (honest scope, v0.6)
 
 - **Fleet model**: one metro, N clusters, config-defined level trees
   (`[cluster, pod, rack, node]` — vocabulary from config, not code),
@@ -29,9 +29,10 @@ ML gang/preemption-cost semantics. That combination is the product — see
 - **Workloads**: synthetic per-class generator with trace-derived defaults
   (diurnal Poisson arrivals, pow2 sizes, lognormal durations, tenant
   skew, ~30% aborts by default — `abort_prob: 0` opts out) and
-  canonical-CSV trace replay with a Philly converter
-  (`fleetsim.workload.philly`); trace chip counts are quantized to the
-  fleet's node grammar so replay can never wedge on an unplaceable gang.
+  canonical-CSV trace replay with Philly (`fleetsim.workload.philly`) and
+  Helios (`fleetsim.validation.helios`, v0.6) converters; trace chip
+  counts are quantized to the fleet's node grammar so replay can never
+  wedge on an unplaceable gang.
   v0.2 adds CLOSED-LOOP standing-backlog classes
   (`arrival: backlog[target_pending=N]` instead of a rate: the engine
   tops the class back up to N pending jobs at every scheduler wake —
@@ -56,7 +57,9 @@ ML gang/preemption-cost semantics. That combination is the product — see
   `easy_backfill` (FIFO + head-of-line shadow reservation +
   conservative walltime-estimate backfill; the engine never kills at
   the estimate, so lying estimates delay the head exactly like real
-  clusters) — plus out-of-tree plugins via entry points.
+  clusters), and v0.6's `sjf` (shortest-job-first; keyed on the walltime
+  estimate, so an exact estimate is the SJF-oracle the Helios validation
+  replays) — plus out-of-tree plugins via entry points.
 - **Placement physics (v0.4)**: relaxable `within` constraints
   (`within: {level: pod, required: false, relax_after: 10m}`) shipped
   as a matched pair with the crossing penalty (`penalties: {xover:
@@ -91,6 +94,17 @@ ML gang/preemption-cost semantics. That combination is the product — see
   3D view** (vendored, zero external requests). Loopback-only by
   default, strict CSP, path-contained workspace, `yaml.safe_load`
   only, in-process runs ([docs/webapp.md](docs/webapp.md)).
+- **Validation suite** (v0.6): reproduces PUBLISHED cluster-trace results,
+  so the occupancy / queue-wait / JCT numbers are checked against reality,
+  not just internally consistent. fleetsim reproduces the **Helios (SC '21)
+  FIFO-vs-SJF policy effect** across all four clusters (under September-max
+  per-VC sizing) — the SJF advantage, all four queuing ratios inside
+  fleetsim's [3–25]× tolerance band (which brackets the published point
+  ratios), and the Saturn→Uranus JCT-ratio rank — with three of four JCT
+  ratios in fleetsim's [1.3–8]× tolerance band (see the Validation section
+  below and [docs/validation.md](docs/validation.md)). Downloads are
+  stdlib-only and integrity-gated by exact byte size + Git-LFS-pointer
+  detection; CI runs vendored slices only, full replays are opt-in.
 - **Engine**: int-microsecond event core, coalesced scheduler rounds
   (cadence follows `sim.round`). Measured on the shipped 2,048-chip
   example at ρ≈0.9: 14 simulated days in ~4 s, 56 days in ~45 s, 6
@@ -107,8 +121,9 @@ ML gang/preemption-cost semantics. That combination is the product — see
 capacity classes (calendar capacity is the top-level `reservations`
 section), TPU OCS predicates, multi-gang (Multislice) jobs, autoscaling
 inference, Gavel throughput matrices / unpinned chip types, multi-metro
-two-stage scheduling. Roadmap: DESIGN.md §11 plus the v0.2 (§16) and
-v0.4 (§17) addenda — v0.6 targets research replay/validation.
+two-stage scheduling. Roadmap: DESIGN.md §11 plus the v0.2 (§16), v0.4
+(§17), and v0.6 (§18) addenda — v0.7 targets fractional-GPU allocation
+(Alibaba PAI sharing) and delay-cause attribution (Philly Table 2).
 
 ## Quickstart
 
@@ -139,6 +154,10 @@ fleetsim run examples/06_economics/scenario.yaml -o out_econ   # quota + calenda
 
 # the local web app: browse runs, launch scenarios, 2D report + 3D replay
 fleetsim serve --open
+
+# v0.6 validation: reproduce published trace results (docs/validation.md)
+fleetsim validation run                 # vendored-slice checks, no network
+fleetsim validation cite helios         # trace attribution (SC '21)
 
 fleetsim --version
 ```
@@ -197,6 +216,57 @@ server-generated, every path is containment-checked, scenarios are
 `yaml.safe_load`-parsed and executed in-process. Full API contract,
 workspace layout, security posture, 3D controls, and troubleshooting:
 [docs/webapp.md](docs/webapp.md).
+
+## Validation
+
+Are the numbers **real**? v0.6 replays published cluster traces and checks
+fleetsim against the papers' reported results — not just internal
+consistency.
+
+**Headline (stated exactly as strongly as the evidence supports):**
+fleetsim reproduces the **Helios (SC '21, Hu et al.) FIFO-vs-SJF
+average-JCT policy effect** across all four production clusters, under
+per-VC **September-max** capacity sizing (§4.4 of the docs) — the SJF
+advantage, all four queuing ratios inside fleetsim's **[3–25]× tolerance
+band** (which brackets the published point ratios), and the
+**Saturn-strongest → Uranus-weakest** JCT-ratio cross-cluster rank — with
+**three of four** JCT ratios inside fleetsim's [1.3–8]× tolerance band.
+Saturn overshoots (8.75× measured vs 6.59× published) because fleetsim's
+FirstFit placement fragments its large gangs more than the reference
+"consolidate" placer; that single deviation is documented and `xfail`ed,
+not hidden behind a widened tolerance.
+
+FIFO / SJF average-JCT ratio, real Helios September trace (per-VC replay,
+strict scan, September-max sizing — deterministic, seed 0):
+
+| Cluster | Published | fleetsim | In 1.3–8× band |
+|---|---|---|---|
+| Saturn | 6.59× | 8.75× | ✗ (documented FirstFit-vs-consolidate overshoot) |
+| Venus | 3.07× | 4.21× | ✅ |
+| Earth | 2.87× | 2.11× | ✅ |
+| Uranus | 1.49× | 1.69× | ✅ |
+
+All four queuing ratios land in fleetsim's [3–25]× tolerance band, and the
+cross-cluster rank (JCT-ratio *and* queuing-share) reproduces exactly — the
+queuing-*ratio* rank does not (§4.1 of the docs). The full results table
+(including the absolute Table-3 replay and the Philly status split) and the
+honest list of what is deliberately **not** reproducible is in
+[docs/validation.md](docs/validation.md).
+
+```bash
+fleetsim validation run             # vendored-slice checks, no network (~5 s)
+fleetsim validation cite helios     # the SC '21 attribution the trace requires
+
+# full replays are opt-in (excluded from CI); Helios data.zip is 36 MB:
+FLEETSIM_HELIOS_FULL=1 pytest -m trace_full validation/test_helios_ratio.py
+```
+
+CI runs only the vendored slices (real 2-VC Venus + synthetic Philly),
+so `pytest -m "not trace_full"` stays fast and offline. Trace downloads are
+stdlib-only (`urllib` + `hashlib`) and integrity-gated by exact byte size
+plus Git-LFS-pointer detection (a full SHA-256 is also verified when the
+registry carries one; the two shipped real traces are size-gated) — so a
+truncated or wrong-size download is refused, never silently used.
 
 ## Custom schedulers
 

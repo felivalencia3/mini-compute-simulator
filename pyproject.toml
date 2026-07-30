@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fleetsim"
-version = "0.5.0"
-description = "Discrete-event simulator for ML accelerator fleets: topology-aware gang scheduling, stochastic training/inference traffic, failures, and pluggable schedulers"
+version = "0.6.0"
+description = "Discrete-event simulator for ML accelerator fleets: topology-aware gang scheduling, stochastic training/inference traffic, failures, pluggable schedulers, and a published-trace validation suite"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -20,6 +20,9 @@ dependencies = [
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.8"]
+# `validation` pulls in the parquet reader the replay harness uses to read
+# jobs.parquet (pyarrow is already a core dep; the extra documents intent).
+validation = ["pyarrow>=14"]
 dev = ["pytest>=8", "matplotlib>=3.8"]
 
 [project.scripts]
@@ -34,3 +37,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "validation"]
+markers = [
+    "trace_full: opt-in validation tests that download and replay a full published trace (Helios/Philly/PAI); gated behind FLEETSIM_*_FULL env vars and excluded from the default CI run for speed",
+]
