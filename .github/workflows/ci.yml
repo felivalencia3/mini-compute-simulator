@@ -27,6 +27,11 @@ jobs:
           cache: pip
       - name: Install
         run: pip install -e ".[dev]"
+      # The shipped plugin example registers a scheduler through the
+      # fleetsim.schedulers entry point; installing it here keeps the
+      # out-of-tree plugin path (and example 03) under test.
+      - name: Install plugin example
+        run: pip install -e examples/03_custom_scheduler
       - name: Run test suite (unit + validation)
         run: pytest tests validation -q
       - name: Acceptance smoke (example scenario end to end)
