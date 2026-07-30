@@ -260,6 +260,41 @@ MODEL_CACHE_MARKERS = ('"failure_kills_delta":', '"frag_index":')
 _SCENARIO_NAMES = ("scenario.yaml", "scenario.yml", "config.yaml", "config.yml")
 
 
+_CTX_LOCK = threading.Lock()
+_WORKER_CTX = None
+
+
+def _worker_context():
+    """The multiprocessing context every worker pool is built on, created
+    ONCE per process and reused.
+
+    Why once: ``set_forkserver_preload`` mutates interpreter-global state and
+    the forkserver helper is started lazily on first use, so calling it again
+    while a helper is already running is at best a no-op and at worst a race
+    between a pool being built here and a helper being spawned on another
+    thread.  A server that rebuilds its pool (a worker was SIGKILLed) or a
+    test session that builds hundreds of managers must not re-arm it each
+    time.  ``forkserver`` (not bare ``fork``) is required for safety: this
+    parent is multi-threaded, and forking a multi-threaded process can
+    inherit a held lock and deadlock the child.
+    """
+    global _WORKER_CTX
+    with _CTX_LOCK:
+        if _WORKER_CTX is None:
+            try:
+                ctx = multiprocessing.get_context("forkserver")
+                try:
+                    # Preload this module in the helper so every worker
+                    # starts with fleetsim (and pandas) already imported.
+                    multiprocessing.set_forkserver_preload([__name__])
+                except (AttributeError, ValueError):  # pragma: no cover
+                    pass
+            except ValueError:  # pragma: no cover - non-POSIX
+                ctx = multiprocessing.get_context("spawn")
+            _WORKER_CTX = ctx
+        return _WORKER_CTX
+
+
 def default_max_workers() -> int:
     """``min(4, cpu_count - 1)``, at least 1 — the default parallelism.
 
@@ -1934,16 +1969,7 @@ class RunManager:
                 raise RuntimeError("server is shutting down")
             if self._pool is not None:  # rebuilt while we let the corpse go
                 return self._pool
-            try:
-                ctx = multiprocessing.get_context("forkserver")
-                # Preload this module in the forkserver helper so every
-                # forked worker starts with fleetsim (and pandas) imported.
-                try:
-                    multiprocessing.set_forkserver_preload([__name__])
-                except (AttributeError, ValueError):  # pragma: no cover
-                    pass
-            except ValueError:  # pragma: no cover - non-POSIX
-                ctx = multiprocessing.get_context("spawn")
+            ctx = _worker_context()
             self._pool = ProcessPoolExecutor(
                 max_workers=self.max_workers,
                 mp_context=ctx,

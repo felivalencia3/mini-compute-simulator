@@ -42,3 +42,8 @@ markers = [
     "slow: tests that execute a large shipped example end to end (~80 s each). Run them with `pytest -m slow`; the default CI path deselects them with `-m 'not slow'`",
 ]
 addopts = "-m 'not slow'"
+# A hung test must fail LOUDLY with every thread's stack, not silently burn
+# the CI job budget: pytest's built-in faulthandler dumps all tracebacks
+# (main + worker threads) if a single test exceeds this many seconds.  The
+# slowest legitimate test is ~10 s, so 180 s only fires on a real hang.
+faulthandler_timeout = 180
