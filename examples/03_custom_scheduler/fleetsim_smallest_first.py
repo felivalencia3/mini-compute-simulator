@@ -1,10 +1,17 @@
 """Smallest-job-first: an example out-of-tree fleetsim scheduler plugin.
 
 Ordering policy: pending jobs ascending by chip count (FIFO tie-break on
-``(submit_time, id)``), so mice never wait behind hogs.  Placement is
-plain first-fit.  Best-effort by default: unplaceable jobs are skipped,
-not head-of-line blocking (pass ``strict: true`` in ``scheduler.params``
-to block instead).
+``(submit_time, id)``), so mice never wait behind hogs.  Best-effort by
+default: unplaceable jobs are skipped, not head-of-line blocking (pass
+``strict: true`` in ``scheduler.params`` to block instead).
+
+PLACEMENT: this plugin follows the built-in convention of taking a
+``placement`` keyword defaulting to ``None`` (= ``FirstFit``), which is all
+it takes for ``scheduler: {name: smallest_first, params: {placement:
+best_fit}}`` to work from YAML — ``get_scheduler`` resolves the name to a
+policy instance before construction.  An out-of-tree scheduler that omits
+the keyword simply does not offer the *where* axis, and passing the param
+raises a clean config error.
 
 This module registers itself twice, demonstrating both mechanisms:
 
@@ -17,7 +24,7 @@ This module registers itself twice, demonstrating both mechanisms:
 
 from __future__ import annotations
 
-from fleetsim import Action, Place, Scheduler, register
+from fleetsim import Action, Place, PlacementPolicy, Scheduler, register
 from fleetsim.schedulers.base import ClusterView
 from fleetsim.schedulers.placement import FirstFit
 
@@ -28,8 +35,12 @@ __all__ = ["SmallestFirstScheduler"]
 class SmallestFirstScheduler(Scheduler):
     """Place the smallest pending job first (best-effort)."""
 
-    def __init__(self, strict: bool = False):
-        self.placement = FirstFit()
+    def __init__(
+        self, placement: PlacementPolicy | None = None, strict: bool = False
+    ):
+        self.placement: PlacementPolicy = (
+            placement if placement is not None else FirstFit()
+        )
         self.strict = bool(strict)
 
     def schedule(self, view: ClusterView) -> list[Action]:

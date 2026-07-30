@@ -45,6 +45,15 @@ REPLAY FIDELITY (plan §1, held fixed so service time == duration exactly):
 - **BATCH tier** — trace jobs map to class ``finetune`` -> tier BATCH, so
   they are INCLUDED in the papers' JCT/queue distributions (BEST_EFFORT
   would be excluded by ``metrics.summary``).
+- **``placement="consolidate"``** (v0.7) — sub-node jobs are packed into
+  already-partially-used nodes rather than by ascending node id.  This is
+  a stated VALIDATION-MODEL choice on the same footing as
+  ``pool_snapshot="max"``, not an engine default: see
+  :data:`VALIDATION_PLACEMENT` for the measured mechanism (Saturn FIFO JCT
+  75,329 -> 55,978 s against a published 55,984 s).  Every shipped rung
+  PASSES it explicitly; this module's own default
+  (:data:`DEFAULT_PLACEMENT`) is the engine's ``first_fit``, so an
+  unqualified call reproduces its pre-v0.7 numbers.
 
 METRIC AGGREGATION (plan §4).  Per-VC ``jobs.parquet`` frames are
 concatenated into one cluster frame; the cluster metrics are then the
@@ -96,6 +105,8 @@ __all__ = [
     "replay_canonical",
     "HELIOS_CLUSTERS",
     "DEFAULT_GPUS_PER_NODE",
+    "DEFAULT_PLACEMENT",
+    "VALIDATION_PLACEMENT",
 ]
 
 #: The four Helios clusters (data.zip subdirectories), Table 1.
@@ -103,6 +114,45 @@ HELIOS_CLUSTERS: tuple[str, ...] = ("Venus", "Earth", "Saturn", "Uranus")
 
 #: Uniform GPUs per node across all four clusters (Table 1).
 DEFAULT_GPUS_PER_NODE: int = 8
+
+#: Placement policy this harness DEFAULTS to.  It is deliberately the
+#: ENGINE default, so an unqualified ``per_vc_replay(...)`` reproduces what
+#: the same call produced before v0.7 and the model choice lives only where
+#: it is stated.  The shipped validation does NOT rely on it: every rung
+#: passes ``placement=`` explicitly (see :data:`VALIDATION_PLACEMENT`).
+DEFAULT_PLACEMENT: str = "first_fit"
+
+#: Placement policy the shipped Helios replay PASSES — a documented
+#: VALIDATION-MODEL choice, exactly like ``pool_snapshot="max"``, not an
+#: engine default.
+#:
+#: The reference simulator's placer packs sub-node jobs into
+#: already-partially-used nodes; fleetsim's ``first_fit`` opens a fully
+#: free node whenever the lower-id nodes are momentarily full.  Because a
+#: leaf with ANY owner is ineligible for a whole-node request, ``first_fit``
+#: strands free chips as 1..7-GPU remainders no >=8-GPU job can use, and
+#: under the strict scan the FIFO head is very often such a job: 100 % of
+#: measured blocked-idle chip-seconds on Saturn's dominant VC come from
+#: heads needing whole nodes, and 87.7 % of free chips during blocks sit on
+#: partially-used nodes.  Switching to ``consolidate`` (whose sub-node rule
+#: is tightest-fit) moves Saturn's FIFO average JCT from 75,329 s to
+#: 55,978 s against a published 55,984 s.
+#:
+#: HOW FAR THAT GENERALIZES — measured, 6 of the 8 published quantities in
+#: docs/validation.md §5 improve.  Venus, Earth and Saturn move closer to
+#: published on absolute FIFO JCT and Earth/Saturn/Uranus on ``#Queuing``;
+#: two get WORSE: Uranus's absolute FIFO JCT overshoots (+5 % -> -6.4 %) and
+#: Venus's ``#Queuing`` drifts out (-9 % -> -11.2 %).  The claim is
+#: "reproduces the reference placer's aggregate behavior", never "improves
+#: every number".
+#:
+#: On this SINGLE-LEVEL fleet ``consolidate`` and ``best_fit`` are
+#: identical (see :func:`_vc_scenario`); ``consolidate`` is named because
+#: it is what the reference implementation calls its placer.  MEASURED, not
+#: only argued: a full four-cluster FIFO+SJF sweep of all four policies
+#: produced BIT-IDENTICAL cluster metrics for ``best_fit`` and
+#: ``consolidate`` on every cluster under both schedulers.
+VALIDATION_PLACEMENT: str = "consolidate"
 
 #: One-day tail added past the last job's completion so every windowed job
 #: reaches a terminal status before the horizon (a running job at the
@@ -263,11 +313,22 @@ def _vc_scenario(
     gpus_per_node: int,
     round_s: float,
     strict: bool,
+    placement: str,
 ) -> dict[str, Any]:
     """A compact 1-cluster scenario dict for one VC: ``vc_nodes`` nodes of
     ``gpus_per_node`` v100 GPUs, failures off.  The ``workload.source`` is
     a placeholder (the harness feeds a :class:`TraceSource` directly,
-    bypassing ``_make_source``)."""
+    bypassing ``_make_source``).
+
+    NOTE the fleet is SINGLE-LEVEL (``levels: ["node"]``): ``build_fleet``
+    emits one cluster domain, one metro, and ``vc_nodes`` node leaves, so
+    every leaf is a direct child of the cluster root.  Replay jobs carry
+    no ``within`` and no ``segments``, and no ``penalties.xover`` is
+    configured.  Consequences worth stating, because v0.6 got them wrong:
+    a multi-node gang's choice of WHICH free nodes it takes cannot change
+    any outcome here (there is no higher domain to span and no crossing
+    penalty to pay), and the only placement axis that can matter is which
+    leaf a SUB-NODE gang lands on."""
     return {
         "sim": {"horizon": int(horizon_s), "round": f"{int(round_s)}s", "seed": 0},
         "fleet": {
@@ -287,7 +348,10 @@ def _vc_scenario(
         # kind=trace requires a source string to validate; unused (we pass
         # a TraceSource object to the Simulator directly).
         "workload": {"kind": "trace", "source": "__inline__"},
-        "scheduler": {"name": scheduler_name, "params": {"strict": bool(strict)}},
+        "scheduler": {
+            "name": scheduler_name,
+            "params": {"strict": bool(strict), "placement": placement},
+        },
     }
 
 
@@ -321,10 +385,13 @@ def _run_one_vc(
     gpus_per_node: int,
     round_s: float,
     strict: bool,
-) -> "pd.DataFrame":
-    """Run one VC's jobs through an independent simulation and return the
-    per-job ``jobs.parquet`` frame (via
-    :func:`fleetsim.metrics.summary.jobs_dataframe`).
+    placement: str = DEFAULT_PLACEMENT,
+    frag_prefix_s: float | None = None,
+) -> tuple["pd.DataFrame", dict[str, float] | None]:
+    """Run one VC's jobs through an independent simulation and return
+    ``(per-job frame, mechanism stats)`` — the frame via
+    :func:`fleetsim.metrics.summary.jobs_dataframe`, the stats ``None``
+    unless ``frag_prefix_s`` is set.
 
     The scheduler runs **event-driven** (``wake_interval = None``): it is
     woken on every arrival and completion (which mark the engine dirty) but
@@ -351,6 +418,7 @@ def _run_one_vc(
             gpus_per_node,
             round_s,
             strict,
+            placement,
         )
         scenario = load_scenario(doc, strict=True)
         fleet = build_fleet(scenario)
@@ -361,10 +429,51 @@ def _run_one_vc(
         sim = Simulator(scenario, fleet, source, scheduler, collector)
         sim.run()
         jobs_df = jobs_dataframe(collector)
+        frag = (
+            None
+            if frag_prefix_s is None
+            else _stranding_stats(collector.timeseries_rows(), frag_prefix_s)
+        )
         if _n_terminal(jobs_df) == len(jobs_df):
-            return jobs_df
+            return jobs_df, frag
         horizon_s = int(horizon_s * 1.8)
-    return jobs_df  # give up after 8 doublings (should never happen)
+    return jobs_df, frag  # give up after 8 doublings (should never happen)
+
+
+def _stranding_stats(
+    rows: list[dict[str, Any]], prefix_s: float
+) -> dict[str, float]:
+    """Time-average the v0.7 ``stranded_whole_nodes`` mechanism metric over
+    the flush samples of one VC run.
+
+    ``*_prefix`` averages over samples with ``t <= prefix_s`` (the fixed
+    replay window — comparable across placers, whose adaptive horizons
+    differ); ``*_run`` averages over the whole run.  ``n_prefix`` /
+    ``n_run`` are the sample counts, so a caller can re-weight.
+    """
+    cut = float(prefix_s) * 1e6
+    p_nodes = p_chips = r_nodes = r_chips = 0.0
+    p_n = r_n = 0
+    for row in rows:
+        swn = row.get("stranded_whole_nodes")
+        if swn is None:  # policy not named -> metric not collected
+            continue
+        chips = float(row.get("stranded_whole_node_chips") or 0)
+        r_nodes += float(swn)
+        r_chips += chips
+        r_n += 1
+        if row["t_us"] <= cut:
+            p_nodes += float(swn)
+            p_chips += chips
+            p_n += 1
+    return {
+        "nodes_prefix": p_nodes / p_n if p_n else math.nan,
+        "chips_prefix": p_chips / p_n if p_n else math.nan,
+        "nodes_run": r_nodes / r_n if r_n else math.nan,
+        "chips_run": r_chips / r_n if r_n else math.nan,
+        "n_prefix": float(p_n),
+        "n_run": float(r_n),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +537,8 @@ def per_vc_replay(
     round_s: float = 60.0,
     strict: bool = True,
     pool_snapshot: str = POOL_SNAPSHOT_DATE,
+    placement: str = DEFAULT_PLACEMENT,
+    frag_prefix_s: float | None = None,
     data_dir: str | Path | None = None,
     progress_cb: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
@@ -481,6 +592,28 @@ def per_vc_replay(
         available from day 1) and so under-counts early-month queuing.  The
         two are alternatives with different biases; ``max`` is chosen
         because it loses no jobs and reproduces the published rank.
+    placement:
+        Placement-policy name (:mod:`fleetsim.schedulers.placement`),
+        default :data:`DEFAULT_PLACEMENT` = ``"first_fit"`` — the ENGINE
+        default, so an unqualified call reproduces this function's pre-v0.7
+        numbers.  The shipped validation passes
+        :data:`VALIDATION_PLACEMENT` = ``"consolidate"`` explicitly at every
+        call site, exactly as it passes ``pool_snapshot="max"``: it is a
+        **validation-model choice** and belongs where it is stated, not in a
+        default.  ``first_fit`` is what produced the one v0.6 out-of-band
+        number (Saturn's JCT ratio 8.75 vs a published 6.59); ``"spread"``
+        is the control arm.  See :data:`VALIDATION_PLACEMENT` for the
+        mechanism and the measured effect.
+    frag_prefix_s:
+        When set, also collect the v0.7 placement MECHANISM metric
+        (``stranded_whole_nodes``: HEALTHY leaves holding free chips no
+        whole-node gang can claim) and report its time-average over the
+        fixed prefix ``[0, frag_prefix_s]`` of each VC's run, plus the
+        whole-run average.  The fixed prefix matters: a worse placer gets a
+        longer adaptive horizon, and its extra near-idle tail samples would
+        dilute the mean and understate the effect.  ``None`` (the default)
+        collects nothing.  ``scripts/helios_stranding_table.py`` uses this
+        to regenerate docs/validation.md §4.2.3.
     data_dir:
         An already-extracted Helios ``data`` root, to skip the fetch.
     progress_cb:
@@ -498,7 +631,10 @@ def per_vc_replay(
         pool sizing and thus NOT replayed — ``0`` under ``"max"``),
         ``dropped_vcs`` (their VC names), ``per_vc`` (per-VC metric dict),
         ``pool_nodes`` (per-VC node counts), ``cluster``, ``scheduler``,
-        ``window``.
+        ``placement``, ``window`` — and, when ``frag_prefix_s`` is set, a
+        ``stranding`` block (``nodes_prefix`` / ``chips_prefix`` /
+        ``nodes_run`` / ``chips_run``, cluster-wide sums of the per-VC
+        time-averages) plus the same block inside each ``per_vc`` entry.
     """
     cluster_dir = _resolve_cluster_dir(cluster, cache_dir, data_dir)
     gpu_csv = cluster_dir / "cluster_gpu_number.csv"
@@ -526,6 +662,8 @@ def per_vc_replay(
         gpus_per_node=gpus_per_node,
         round_s=round_s,
         strict=strict,
+        placement=placement,
+        frag_prefix_s=frag_prefix_s,
         progress_cb=progress_cb,
     )
     out["window"] = f"{month} (last_day={ld})"
@@ -542,6 +680,8 @@ def replay_canonical(
     gpus_per_node: int = DEFAULT_GPUS_PER_NODE,
     round_s: float = 60.0,
     strict: bool = True,
+    placement: str = DEFAULT_PLACEMENT,
+    frag_prefix_s: float | None = None,
     progress_cb: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Replay an already-windowed canonical frame per VC and aggregate to
@@ -567,6 +707,11 @@ def replay_canonical(
     ``n_terminal == n_jobs`` guard therefore only proves no *replayed* job
     was truncated — pair it with ``n_dropped == 0`` to prove no windowed
     job was lost.
+
+    ``frag_prefix_s`` (see :func:`per_vc_replay`) adds a ``stranding`` block
+    to each ``per_vc`` entry and a cluster-wide ``stranding`` sum — the
+    expected number of partially-occupied nodes across the cluster at a
+    random instant, which is the quantity docs/validation.md §4.2.3 reports.
     """
     win_vcs = {str(v) for v in win["tenant"].unique()} if len(win) else set()
     active_vcs = [vc for vc in sorted(pools) if vc in win_vcs]
@@ -578,8 +723,17 @@ def replay_canonical(
     for i, vc in enumerate(active_vcs, start=1):
         rows = win[win["tenant"] == vc]
         jobs = _build_jobs(rows)
-        jobs_df = _run_one_vc(
-            jobs, pools[vc], scheduler_name, cluster, vc, gpus_per_node, round_s, strict
+        jobs_df, frag = _run_one_vc(
+            jobs,
+            pools[vc],
+            scheduler_name,
+            cluster,
+            vc,
+            gpus_per_node,
+            round_s,
+            strict,
+            placement,
+            frag_prefix_s,
         )
         frames.append(jobs_df)
         per_vc[vc] = {
@@ -590,6 +744,8 @@ def replay_canonical(
             "avg_queuing": _avg_queuing(jobs_df),
             "n_queuing": n_queuing_jobs(jobs_df, round_s),
         }
+        if frag is not None:
+            per_vc[vc]["stranding"] = frag
         if progress_cb is not None:
             progress_cb(
                 vc,
@@ -606,9 +762,10 @@ def replay_canonical(
     else:  # pragma: no cover - a cluster always has active VCs
         alljobs = jobs_dataframe(MetricsCollector(window=(0, 1)))
 
-    return {
+    out: dict[str, Any] = {
         "cluster": cluster,
         "scheduler": scheduler_name,
+        "placement": placement,
         "avg_jct": jct_over_all_terminal(alljobs),
         "avg_queuing": _avg_queuing(alljobs),
         "n_queuing": n_queuing_jobs(alljobs, round_s),
@@ -620,3 +777,23 @@ def replay_canonical(
         "pool_nodes": {vc: int(pools[vc]) for vc in active_vcs},
         "per_vc": per_vc,
     }
+    if frag_prefix_s is not None:
+        # Cluster-wide sum of the per-VC time-averages: each VC is an
+        # independent pool, so the expected count of partially-occupied
+        # nodes cluster-wide at a random instant is the sum of theirs.
+        keys = ("nodes_prefix", "chips_prefix", "nodes_run", "chips_run")
+        out["stranding"] = {
+            k: float(
+                sum(
+                    v["stranding"][k]
+                    for v in per_vc.values()
+                    if "stranding" in v and not math.isnan(v["stranding"][k])
+                )
+            )
+            for k in keys
+        }
+        out["stranding"]["prefix_s"] = float(frag_prefix_s)
+        out["stranding"]["pool_nodes_total"] = float(
+            sum(int(pools[vc]) for vc in active_vcs)
+        )
+    return out

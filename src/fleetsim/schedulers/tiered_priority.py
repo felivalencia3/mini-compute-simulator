@@ -181,8 +181,12 @@ class TieredPriorityScheduler(Scheduler):
     Parameters (all reachable via ``scheduler.params``):
 
     - ``placement``: the :class:`~fleetsim.schedulers.base.PlacementPolicy`
-      (default :class:`~fleetsim.schedulers.placement.FirstFit`);
-      programmatic only — not expressible in YAML.
+      (default :class:`~fleetsim.schedulers.placement.FirstFit`).  Also
+      selectable by NAME from YAML since v0.7 —
+      ``params: {placement: best_fit}`` (see
+      :mod:`fleetsim.schedulers.placement`).  A non-default policy's
+      ``search_mode`` is forwarded to the reclaim dry-run so eviction
+      planning and actual placement never disagree.
     - ``preempt``: ``"requeue"`` (default) or ``"cancel"`` — the
       :class:`~fleetsim.model.PreemptMode` used for every eviction.  A
       ``PreemptMode`` value is also accepted.
@@ -325,21 +329,31 @@ class TieredPriorityScheduler(Scheduler):
         provably cannot help — no thrash).  A repaired plan is pruned to
         an inclusion-minimal feasible set, dropping least-preferred
         victims first, and returned in greedy order.  Views without
-        ``reclaim_feasible`` trust the chip-count plan (v0.1 behavior)."""
+        ``reclaim_feasible`` trust the chip-count plan (v0.1 behavior).
+
+        PLACEMENT-POLICY CONSISTENCY (v0.7): the dry-run must search the
+        way this scheduler PLACES, or a reclaim plan predicts a placement
+        the policy would never make.  When the configured policy is not
+        FirstFit its ``search_mode`` is forwarded as the keyword-only
+        ``mode`` argument; with the default policy the call stays exactly
+        the two-positional-argument form v0.2 used, so custom views that
+        implement only that signature are unaffected."""
         feasible = getattr(view, "reclaim_feasible", None)
         if feasible is None:
             return chosen
-        if feasible(job, [v.id for v in chosen]):
+        search_mode = getattr(self.placement, "search_mode", "first_fit")
+        kw = {} if search_mode == "first_fit" else {"mode": search_mode}
+        if feasible(job, [v.id for v in chosen], **kw):
             return chosen
         full = chosen + [v for v in extras if v not in chosen]
-        if not feasible(job, [v.id for v in full]):
+        if not feasible(job, [v.id for v in full], **kw):
             return []
         kept = list(full)
         for victim in reversed(full):  # drop least-preferred first
             if len(kept) == 1:
                 break
             trial = [v for v in kept if v.id != victim.id]
-            if feasible(job, [v.id for v in trial]):
+            if feasible(job, [v.id for v in trial], **kw):
                 kept = trial
         return kept
 

@@ -519,7 +519,14 @@ def _build_fleet_model(
             )
     else:
         map_level = inferred
-    frag_levels = sorted((_get(run.summary, "full", "fragmentation") or {}))
+    # The `fragmentation` map is keyed by LEVEL name, plus (v0.7) the
+    # placement diagnostics of FRAG_NON_LEVEL_KEYS — subtract those before
+    # treating the keys as the fleet's level vocabulary.
+    from ..metrics.collector import FRAG_NON_LEVEL_KEYS
+
+    frag_levels = sorted(
+        set(_get(run.summary, "full", "fragmentation") or {}) - FRAG_NON_LEVEL_KEYS
+    )
     if frag_levels and map_level not in frag_levels:
         notes.append(
             f"map level {map_level!r} is not among summary.json"

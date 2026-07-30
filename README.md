@@ -18,7 +18,7 @@ Gavel, Pollux) have flat GPU counts and no failures; per-job simulators
 ML gang/preemption-cost semantics. That combination is the product — see
 [DESIGN.md](DESIGN.md) §1 for the full survey.
 
-## What it does (honest scope, v0.6)
+## What it does (honest scope, v0.7)
 
 - **Fleet model**: one metro, N clusters, config-defined level trees
   (`[cluster, pod, rack, node]` — vocabulary from config, not code),
@@ -59,7 +59,9 @@ ML gang/preemption-cost semantics. That combination is the product — see
   the estimate, so lying estimates delay the head exactly like real
   clusters), and v0.6's `sjf` (shortest-job-first; keyed on the walltime
   estimate, so an exact estimate is the SJF-oracle the Helios validation
-  replays) — plus out-of-tree plugins via entry points.
+  replays) — plus out-of-tree plugins via entry points. Every one of them
+  takes a **placement policy** (v0.7, below) on the orthogonal *where*
+  axis.
 - **Placement physics (v0.4)**: relaxable `within` constraints
   (`within: {level: pod, required: false, relax_after: 10m}`) shipped
   as a matched pair with the crossing penalty (`penalties: {xover:
@@ -94,17 +96,35 @@ ML gang/preemption-cost semantics. That combination is the product — see
   3D view** (vendored, zero external requests). Loopback-only by
   default, strict CSP, path-contained workspace, `yaml.safe_load`
   only, in-process runs ([docs/webapp.md](docs/webapp.md)).
-- **Validation suite** (v0.6): reproduces PUBLISHED cluster-trace results,
-  so the occupancy / queue-wait / JCT numbers are checked against reality,
-  not just internally consistent. fleetsim reproduces the **Helios (SC '21)
-  FIFO-vs-SJF policy effect** across all four clusters (under September-max
-  per-VC sizing) — the SJF advantage, all four queuing ratios inside
-  fleetsim's [3–25]× tolerance band (which brackets the published point
-  ratios), and the Saturn→Uranus JCT-ratio rank — with three of four JCT
-  ratios in fleetsim's [1.3–8]× tolerance band (see the Validation section
+- **Validation suite** (v0.6, extended in v0.7): reproduces PUBLISHED
+  cluster-trace results, so the occupancy / queue-wait / JCT numbers are
+  checked against reality, not just internally consistent. fleetsim
+  reproduces the **Helios (SC '21) FIFO-vs-SJF policy effect** across all
+  four clusters (under September-max per-VC sizing, a strict scan, and
+  `consolidate` placement) — the SJF advantage, **all four** JCT ratios
+  inside fleetsim's [1.3–8]× tolerance band, all four queuing ratios inside
+  [3–25]×, the Saturn-strongest → Uranus-weakest JCT-ratio rank and the
+  queuing-share ordering — with **no `xfail`** (see the Validation section
   below and [docs/validation.md](docs/validation.md)). Downloads are
   stdlib-only and integrity-gated by exact byte size + Git-LFS-pointer
   detection; CI runs vendored slices only, full replays are opt-in.
+- **Pluggable placement** (v0.7): ordering and placement are separate axes,
+  and the *where* axis is now selectable per scenario —
+  `scheduler: {name: fifo, params: {placement: best_fit}}` on any scheduler.
+  `first_fit` stays the default (existing scenarios are byte-identical —
+  examples 01 and 04 were verified byte-for-byte against v0.6, and the
+  validation harness's own `placement` default is `first_fit` too, so no
+  pre-v0.7 caller's numbers move);
+  `best_fit` packs sub-node gangs tightest-first so whole nodes stay whole
+  for gangs, `consolidate` minimizes the number of leaf-*parent* domains a
+  spanning gang touches (not crossings at coarser levels — see
+  [docs/placement.md](docs/placement.md)), and `spread` is the deliberate
+  anti-policy for control arms. Naming a policy also switches on
+  a `stranded_whole_nodes` fleet metric, so the mechanism is observable in
+  `timeseries.parquet` instead of inferred from JCT. This is what closed
+  the last Helios deviation; semantics, selection and measured effects in
+  [docs/placement.md](docs/placement.md), a 10-second worked study in
+  `examples/07_placement_study/`.
 - **Engine**: int-microsecond event core, coalesced scheduler rounds
   (cadence follows `sim.round`). Measured on the shipped 2,048-chip
   example at ρ≈0.9: 14 simulated days in ~4 s, 56 days in ~45 s, 6
@@ -122,8 +142,11 @@ capacity classes (calendar capacity is the top-level `reservations`
 section), TPU OCS predicates, multi-gang (Multislice) jobs, autoscaling
 inference, Gavel throughput matrices / unpinned chip types, multi-metro
 two-stage scheduling. Roadmap: DESIGN.md §11 plus the v0.2 (§16), v0.4
-(§17), and v0.6 (§18) addenda — v0.7 targets fractional-GPU allocation
-(Alibaba PAI sharing) and delay-cause attribution (Philly Table 2).
+(§17), v0.6 (§18), and v0.7 (§19) addenda. **Still deferred after v0.7**
+(v0.6 had pencilled both in for v0.7; v0.7 spent its budget on placement
+instead): fractional / sub-chip GPU allocation (unlocks the Alibaba PAI
+sharing result) and per-job delay-cause attribution (unlocks Philly
+Table 2's fair-share vs fragmentation split).
 
 ## Quickstart
 
@@ -152,10 +175,17 @@ fleetsim run examples/05_topology_tradeoff/scenario.yaml \
 fleetsim compare out_penalty out_free               # relax vs pay, measured
 fleetsim run examples/06_economics/scenario.yaml -o out_econ   # quota + calendar block + spot
 
+# v0.7 placement: same ordering, same seed, different WHERE (~10 s total)
+for P in first_fit best_fit consolidate spread; do
+  fleetsim run examples/07_placement_study/scenario.yaml \
+      --override scheduler.params.placement=$P -o out_$P
+done
+fleetsim compare out_first_fit out_best_fit out_spread
+
 # the local web app: browse runs, launch scenarios, 2D report + 3D replay
 fleetsim serve --open
 
-# v0.6 validation: reproduce published trace results (docs/validation.md)
+# validation: reproduce published trace results (docs/validation.md)
 fleetsim validation run                 # vendored-slice checks, no network
 fleetsim validation cite helios         # trace attribution (SC '21)
 
@@ -219,39 +249,71 @@ workspace layout, security posture, 3D controls, and troubleshooting:
 
 ## Validation
 
-Are the numbers **real**? v0.6 replays published cluster traces and checks
-fleetsim against the papers' reported results — not just internal
+Are the numbers **real**? The suite replays published cluster traces and
+checks fleetsim against the papers' reported results — not just internal
 consistency.
 
 **Headline (stated exactly as strongly as the evidence supports):**
 fleetsim reproduces the **Helios (SC '21, Hu et al.) FIFO-vs-SJF
 average-JCT policy effect** across all four production clusters, under
-per-VC **September-max** capacity sizing (§4.4 of the docs) — the SJF
-advantage, all four queuing ratios inside fleetsim's **[3–25]× tolerance
-band** (which brackets the published point ratios), and the
-**Saturn-strongest → Uranus-weakest** JCT-ratio cross-cluster rank — with
-**three of four** JCT ratios inside fleetsim's [1.3–8]× tolerance band.
-Saturn overshoots (8.75× measured vs 6.59× published) because fleetsim's
-FirstFit placement fragments its large gangs more than the reference
-"consolidate" placer; that single deviation is documented and `xfail`ed,
-not hidden behind a widened tolerance.
+per-VC **September-max** capacity sizing (§4.4 of the docs), a strict
+(blocking) scan (§4.3) and **`consolidate`** placement (§4.2) — the SJF
+advantage, **all four** JCT ratios inside fleetsim's **[1.3–8]×**
+tolerance band, all four queuing ratios inside **[3–25]×**, the
+**Saturn-strongest → Uranus-weakest** JCT-ratio rank, and the
+queuing-share ordering. Absolute FIFO JCT lands within ±14 % on every
+cluster and `#Queuing` within ±12 %.
+
+As of v0.7 that rung is **complete — no out-of-band number, no `xfail`**
+(the four-cluster test passes in 266 s against the real 36 MB trace).
+"Complete" is bounded, and the docs say how: it holds under the three
+modeling choices named above; the *absolute* rung is "right ballpark"
+(±14 %), not reproduced, and does not reproduce the published absolute-JCT
+rank because two of its values are a dead tie; and passing the ratio bands
+is not by itself evidence for the placement model, since `spread` passes
+them too.
 
 FIFO / SJF average-JCT ratio, real Helios September trace (per-VC replay,
-strict scan, September-max sizing — deterministic, seed 0):
+strict scan, September-max sizing, `consolidate` placement — deterministic,
+seed 0):
 
-| Cluster | Published | fleetsim | In 1.3–8× band |
-|---|---|---|---|
-| Saturn | 6.59× | 8.75× | ✗ (documented FirstFit-vs-consolidate overshoot) |
-| Venus | 3.07× | 4.21× | ✅ |
-| Earth | 2.87× | 2.11× | ✅ |
-| Uranus | 1.49× | 1.69× | ✅ |
+| Cluster | Published | fleetsim v0.7 | v0.6 (`first_fit`) | In 1.3–8× band |
+|---|---|---|---|---|
+| Saturn | 6.59× | **6.87×** | 8.75× ✗ | ✅ |
+| Venus | 3.07× | **3.21×** | 4.21× | ✅ |
+| Earth | 2.87× | **2.95×** | 2.11× | ✅ |
+| Uranus | 1.49× | **1.51×** | 1.69× | ✅ |
 
-All four queuing ratios land in fleetsim's [3–25]× tolerance band, and the
-cross-cluster rank (JCT-ratio *and* queuing-share) reproduces exactly — the
-queuing-*ratio* rank does not (§4.1 of the docs). The full results table
-(including the absolute Table-3 replay and the Philly status split) and the
-honest list of what is deliberately **not** reproducible is in
-[docs/validation.md](docs/validation.md).
+The tolerance bands are **not** tightened to match, even though every point
+value is now within 5 %: the paper's analysis window is unpublished and the
+per-VC capacity model is a choice. The result is also order-sensitive —
+35.5 % of Saturn's jobs share an exact submit second, and reordering within
+those seconds moves its FIFO JCT by 17 %. So the agreement is reported, not
+asserted, and the placer selection rests on the four-cluster aggregate rather
+than on any single number (§4.5 of the docs).
+
+And a limit on what that table proves, measured rather than assumed: the
+same bands and ranks are also satisfied by `spread`, the deliberate
+**anti**-policy, which is 45 % off Saturn's absolute FIFO JCT and 99 % off
+Earth's. Choosing a placer takes the *absolute* numbers, not the band — so
+the validation asserts both (§4.2.3).
+
+v0.6's one out-of-band number (Saturn 8.75×) was blamed on "FirstFit
+fragmenting large gangs." **That was wrong** — the replay fleet is
+single-level, so which nodes a gang takes cannot matter, and the VC carrying
+84 % of the gap has no gang above 56 GPU. The real cause was *sub-node*
+stranding: 97 % of that VC's jobs are 1-GPU, and first-fit-by-id placement
+leaves free chips as 1–7-GPU remainders that no ≥ 8-GPU job can use, so the
+FIFO head idles behind them. Packing small jobs tightest-first fixed it, and
+the wrong diagnosis is kept in the record. Full story, counterfactuals, and
+the hypotheses that were measured and rejected:
+[docs/validation.md](docs/validation.md) §4.2.
+
+Want the same mechanism without a 36 MB download? `examples/07_placement_study/`
+runs all four placers on 256 chips in ~10 s and reports the measured
+deltas — stranded whole nodes 6.55 → 5.31 of 32, 8-node-gang mean queue
+wait 19,057 s → 16,195 s, and `spread` never placing 80 of 109 of them —
+plus the seed where `best_fit` loses.
 
 ```bash
 fleetsim validation run             # vendored-slice checks, no network (~5 s)
@@ -261,8 +323,12 @@ fleetsim validation cite helios     # the SC '21 attribution the trace requires
 FLEETSIM_HELIOS_FULL=1 pytest -m trace_full validation/test_helios_ratio.py
 ```
 
-CI runs only the vendored slices (real 2-VC Venus + synthetic Philly),
-so `pytest -m "not trace_full"` stays fast and offline. Trace downloads are
+CI runs only the vendored slices (real 2-VC Venus + synthetic Philly): the
+full-trace rungs self-skip unless their `FLEETSIM_*_FULL` env var is set, so
+the whole suite runs with no network in **~80 s with exactly 4 skips** (two
+Helios `trace_full`, one Philly `trace_full`, one `FLEETSIM_FRONTIER_BUDGET`
+gate — anything else skipping is a real signal), and `-m "not trace_full"`
+deselects them outright. Trace downloads are
 stdlib-only (`urllib` + `hashlib`) and integrity-gated by exact byte size
 plus Git-LFS-pointer detection (a full SHA-256 is also verified when the
 registry carries one; the two shipped real traces are size-gated) — so a
@@ -294,6 +360,12 @@ preemption cost. Ship it out-of-tree by declaring an entry point in the
 `fleetsim.schedulers` group — `examples/03_custom_scheduler/` is a
 complete plugin package to copy.
 
+`self.placement` is the orthogonal *where* axis: swap `FirstFit()` for
+`BestFit()`, `Consolidate()`, `Spread()`, or your own one-method policy —
+and accept `placement=None` in `__init__` so YAML can select one by name.
+[docs/placement.md](docs/placement.md) has the exact semantics of each,
+when to use which, and the measured differences.
+
 ## Metrics (DESIGN §9)
 
 | Metric | Definition |
@@ -310,6 +382,7 @@ complete plugin package to copy.
 | Replica availability | inference replica-time running / desired (`services:` section) |
 | Per-tenant share | chip-hours, queue waits, submissions by tenant |
 | v0.4 feature-keyed | `relaxed` / `quota_demoted` job columns, `counts.relaxed_placements` / `counts.quota_demotions`, and the per-reservation report (`reservations` in summary.json: nodes, evictions at claim/hard-end, `utilization`) — present only when the matching config section is used, so feature-off runs stay byte-identical to pre-v0.4 |
+| **Stranded whole nodes** (v0.7) | count of HEALTHY nodes that are *partially* occupied — free capacity no whole-node gang can claim — plus the chips on them (`stranded_whole_nodes` / `stranded_whole_node_chips` timeseries columns, `fragmentation.stranded_whole_nodes` mean/max, `counts.placement_policy`). Gated on `scheduler.params.placement` naming a policy, so a scenario that names none keeps the exact pre-v0.7 schema |
 
 All distributional metrics are reported both job-weighted and
 chip-hour-weighted (mice vs hogs), over the full run and a configurable

@@ -520,6 +520,27 @@ class _EngineView:
     ) -> Placement | None:
         return self._sim.fleet.search_segmented(spec, tenant)
 
+    def search_best_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw tightest-fit search (v0.7; see
+        :meth:`fleetsim.fleet.tree.FleetTree.search_best_fit`)."""
+        return self._sim.fleet.search_best_fit(spec, tenant)
+
+    def search_consolidate(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw fewest-domains-touched search (v0.7; see
+        :meth:`fleetsim.fleet.tree.FleetTree.search_consolidate`)."""
+        return self._sim.fleet.search_consolidate(spec, tenant)
+
+    def search_spread(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw maximum-spread search (v0.7; see
+        :meth:`fleetsim.fleet.tree.FleetTree.search_spread`)."""
+        return self._sim.fleet.search_spread(spec, tenant)
+
     def graced_job_ids(self) -> tuple[str, ...]:
         """Ids of jobs currently in a preemption grace window (PREEMPTED,
         still holding their chips), sorted.  These jobs appear in neither
@@ -528,7 +549,11 @@ class _EngineView:
         return tuple(sorted(self._sim._graced))
 
     def reclaim_feasible(
-        self, job: JobView, victim_ids: Sequence[str]
+        self,
+        job: JobView,
+        victim_ids: Sequence[str],
+        *,
+        mode: str = "first_fit",
     ) -> bool:
         """Dry-run: would releasing the allocations of ``victim_ids`` let
         ``job`` place right now?  Runs the real placement search on the
@@ -543,7 +568,15 @@ class _EngineView:
         segments) and its ``relax_after_s`` has elapsed at ``view.now``,
         a failed constrained search retries UNCONSTRAINED — so reclaim
         planning never reports infeasible for a victim set the very next
-        wake's relaxed placement would use."""
+        wake's relaxed placement would use.
+
+        ``mode`` (v0.7, keyword-only) is the PACKING MODE of the caller's
+        placement policy (``PlacementPolicy.search_mode``).  It must match
+        what the scheduler actually places with, or a reclaim plan
+        predicts a placement the policy would never make.  It defaults to
+        ``"first_fit"`` — the v0.2 behavior — and preempting schedulers
+        pass it only when their policy is not FirstFit, so existing
+        two-argument callers and custom views are untouched."""
         con = (
             Constraint(
                 level=job.within,
@@ -560,7 +593,9 @@ class _EngineView:
             segments=job.segments,
         )
         if (
-            self._sim.fleet.search_after_release(spec, victim_ids, job.tenant)
+            self._sim.fleet.search_after_release(
+                spec, victim_ids, job.tenant, mode=mode
+            )
             is not None
         ):
             return True
@@ -573,7 +608,7 @@ class _EngineView:
             relaxed = GangSpec(chips=job.chips, chip_type=job.chip_type)
             return (
                 self._sim.fleet.search_after_release(
-                    relaxed, victim_ids, job.tenant
+                    relaxed, victim_ids, job.tenant, mode=mode
                 )
                 is not None
             )

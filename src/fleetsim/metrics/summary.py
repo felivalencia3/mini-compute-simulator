@@ -27,6 +27,15 @@ WINDOW.  Scope membership (window = closed ``[w0, w1]``):
   scope-clipped allocated integral;
 - per-tenant ``n_jobs_submitted``: ``submit_t`` in scope.
 
+FEATURE-GATED KEYS.  A few keys appear only when the scenario CONFIGURED
+the matching feature, so a feature-off run's schema is byte-identical to
+the release that predates the feature: ``counts.relaxed_placements`` /
+``counts.quota_demotions`` (v0.4), ``reservations`` (v0.4), and — v0.7,
+gated on ``scheduler.params.placement`` naming a policy —
+``counts.placement_policy`` plus ``fragmentation[*].stranded_whole_nodes``
+and the ``stranded_whole_nodes`` / ``stranded_whole_node_chips``
+timeseries columns.
+
 Percentiles use the weighted inverted-CDF rule: the smallest value whose
 cumulative weight reaches ``q * total_weight`` (job-weighted p50 of
 ``[1, 2]`` is 1).  Deterministic: values sort ascending, ties stable.
@@ -74,7 +83,10 @@ _JOB_FLOAT_COLS = frozenset(
 )
 
 #: Fixed timeseries columns (per-level frag columns are appended by the
-#: collector after the first flush).
+#: collector after the first flush, as are v0.7's ``stranded_whole_node*``
+#: columns when the scenario named a placement policy).  This tuple is only
+#: the EMPTY-run fallback; a real run's columns come from the flush rows, so
+#: conditional columns must not be listed here.
 _TS_BASE_COLS = (
     "t_us",
     "allocated_chips",
@@ -230,11 +242,18 @@ def _scope_summary(collector: "MetricsCollector", scope: str) -> dict[str, Any]:
 
     # v0.4 opt-in counters: present in the collector's counts only when
     # the matching feature is configured (schema-stable per feature).
-    extra_counts = {
+    extra_counts: dict[str, Any] = {
         k: counts[k]
         for k in ("relaxed_placements", "quota_demotions")
         if k in counts
     }
+    # v0.7: which placer ran.  Present only when the scenario NAMED a
+    # placement policy — a scenario that names none ran the `first_fit`
+    # default and keeps the exact pre-v0.7 summary schema (a report that
+    # finds the key absent should read it as "first_fit").
+    placer = getattr(collector, "placement_policy", None)
+    if placer is not None:
+        extra_counts["placement_policy"] = placer
 
     trig = counts["preemptions_by_trigger"]
     preempt_total = sum(trig.values())
@@ -530,6 +549,21 @@ def format_summary_table(summary: dict[str, Any]) -> str:
     row("node failures", full["counts"]["node_failures"], win["counts"]["node_failures"])
     row("drains started", full["counts"]["drains_started"], win["counts"]["drains_started"])
     row("jobs finished", full["counts"]["jobs_finished"], win["counts"]["jobs_finished"])
+    # v0.7 placement diagnostics: present ONLY when the scenario named a
+    # placement policy, so a scenario that names none prints exactly the
+    # pre-v0.7 table (examples/07_placement_study is the one that does).
+    swn_f = (full.get("fragmentation") or {}).get("stranded_whole_nodes")
+    if swn_f is not None:
+        swn_w = (win.get("fragmentation") or {}).get("stranded_whole_nodes")
+        row(
+            "stranded whole nodes (mean)",
+            swn_f["mean"],
+            swn_w["mean"] if swn_w else None,
+            "{:.2f}",
+        )
+        policy = full["counts"].get("placement_policy")
+        if policy is not None:
+            lines.append(f"{'placement policy':<30}{policy:>12}")
 
     blocks = (
         ("queue wait", "queue_wait_s", "class", True),

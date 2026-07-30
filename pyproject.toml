@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fleetsim"
-version = "0.6.0"
+version = "0.7.0"
 description = "Discrete-event simulator for ML accelerator fleets: topology-aware gang scheduling, stochastic training/inference traffic, failures, pluggable schedulers, and a published-trace validation suite"
 readme = "README.md"
 requires-python = ">=3.11"

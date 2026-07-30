@@ -407,6 +407,30 @@ def _compare_rows(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str]]
     add("node failures (full)", "full", "counts", "node_failures")
     add("jobs finished (full)", "full", "counts", "jobs_finished")
     add("jobs started (full)", "full", "counts", "jobs_started")
+    # v0.7 placement rows: shown only when at least one run NAMED a
+    # placement policy (a run that named none has neither key, and a
+    # pre-v0.7 output directory therefore compares exactly as before).
+    # These are what actually separate placers — occupancy and goodput can
+    # be bit-identical across them (docs/placement.md), so a placement A/B
+    # read off the rows above alone would look like a null result.
+    if any(_get(s, "full", "counts", "placement_policy") for s in summaries):
+        add(
+            "stranded whole nodes (full mean)",
+            "full",
+            "fragmentation",
+            "stranded_whole_nodes",
+            "mean",
+            spec="{:.2f}",
+        )
+        rows.append(
+            (
+                "placement policy",
+                [
+                    str(_get(s, "full", "counts", "placement_policy") or "-")
+                    for s in summaries
+                ],
+            )
+        )
     return rows
 
 
@@ -600,10 +624,16 @@ def _cmd_validation_run(_args: argparse.Namespace) -> int:
     results: list[tuple[str, bool, str]] = []
 
     # Helios: strict FIFO mean JCT is clearly worse than strict SJF.
+    # The validation model's placer is passed EXPLICITLY (the harness default
+    # is the engine default, first_fit), exactly as the pytest rungs do.
     df = pd.read_csv(helios_slice, comment="#")
     pools = {"vcvGl": 20, "vcvlY": 2}
-    fifo = replay_canonical(df, pools, "fifo", cluster="Venus-slice")
-    sjf = replay_canonical(df, pools, "sjf", cluster="Venus-slice")
+    fifo = replay_canonical(
+        df, pools, "fifo", cluster="Venus-slice", placement="consolidate"
+    )
+    sjf = replay_canonical(
+        df, pools, "sjf", cluster="Venus-slice", placement="consolidate"
+    )
     ratio = fifo["avg_jct"] / sjf["avg_jct"]
     ok = ratio > 1.15 and fifo["n_terminal"] == fifo["n_jobs"] == len(df)
     results.append(
@@ -611,7 +641,39 @@ def _cmd_validation_run(_args: argparse.Namespace) -> int:
             "Helios (SC '21) FIFO-vs-SJF direction [vendored 2-VC Venus slice]",
             ok,
             f"FIFO/SJF mean-JCT ratio = {ratio:.2f}x (> 1.15), "
-            f"{fifo['n_terminal']}/{len(df)} jobs terminal",
+            f"{fifo['n_terminal']}/{len(df)} jobs terminal, "
+            f"placement={fifo['placement']}",
+        )
+    )
+
+    # Helios placement model (v0.7) — WIRING ONLY.  The gate is specifically
+    # first_fit != consolidate: `spread` alone would satisfy a weaker
+    # "not all equal" check, so degrading `consolidate` (the policy carrying
+    # the whole v0.7 result) back to first-fit would pass it.  This 2-VC
+    # slice does NOT exhibit the Saturn stranding pathology at any meaningful
+    # magnitude (the spread is ~1 s on ~28,500 s), so no direction or
+    # magnitude is claimed here; that lives in the opt-in full-trace rung
+    # (docs/validation.md §4.2, ~26 % on Saturn) and in
+    # tests/test_placement.py's unit-scale mechanism test.
+    spread = replay_canonical(
+        df, pools, "fifo", cluster="Venus-slice", placement="spread"
+    )
+    ff = replay_canonical(
+        df, pools, "fifo", cluster="Venus-slice", placement="first_fit"
+    )
+    jcts = (fifo["avg_jct"], ff["avg_jct"], spread["avg_jct"])
+    ok = (
+        fifo["placement"] == "consolidate"
+        and jcts[0] != jcts[1]  # consolidate != first_fit
+        and jcts[1] != jcts[2]  # first_fit != spread
+    )
+    results.append(
+        (
+            "Helios placement selection reaches the engine [wiring, 2-VC slice]",
+            ok,
+            f"FIFO mean JCT differs by placer: consolidate={jcts[0]:.1f}s, "
+            f"first_fit={jcts[1]:.1f}s, spread={jcts[2]:.1f}s "
+            f"(slice is too small to show the effect's magnitude)",
         )
     )
 

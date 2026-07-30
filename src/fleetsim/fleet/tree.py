@@ -1,4 +1,4 @@
-"""Fleet domain tree: capacity counters, gang allocation, first-fit search.
+"""Fleet domain tree: capacity counters, gang allocation, placement search.
 
 The :class:`FleetTree` is the runtime view over
 :class:`~fleetsim.model.Domain` objects built by
@@ -16,6 +16,27 @@ ALLOCATION MODEL (DESIGN 4.1)
   ANY owner (sub-node or otherwise) is not eligible.
 - ``alloc_id`` is the owning job id (``Allocation.job_id``); multi-gang
   allocations of one job merge into a single owner entry per leaf.
+
+SEARCH PRIMITIVES
+-----------------
+Every search is a pure, non-mutating query returning a
+:class:`Placement` or ``None``.  On uniform leaf sizes they all answer the
+same feasibility question and differ only in WHICH fitting leaves they
+choose; on mixed leaf sizes (template-form fleets only) the exact
+whole-node cover is a subset-sum problem, and the packed modes' answer is
+a SUPERSET of first-fit's — never a subset (:meth:`_scan_leaves_packed`):
+
+- :meth:`FleetTree.search_first_fit` — the v0.1 default: ascending
+  domain/leaf id.  **Frozen**: nothing in v0.7 changes its behavior.
+- :meth:`FleetTree.search_segmented` — v0.2 Slurm-block segment packing.
+- :meth:`FleetTree.search_best_fit` / :meth:`FleetTree.search_consolidate`
+  / :meth:`FleetTree.search_spread` — v0.7, OPT-IN (see
+  :mod:`fleetsim.schedulers.placement`).  ``search_best_fit`` packs
+  sub-node gangs tightest-fit-first so partially-used nodes get filled
+  instead of fresh ones being opened; that is what keeps whole nodes
+  available for gangs, since a leaf with ANY owner is invisible to every
+  whole-node request.  :meth:`FleetTree.search` dispatches all four by
+  mode name.
 
 UNITS: every quantity in this module is an integer chip count; nothing
 here is a time.
@@ -651,8 +672,9 @@ class FleetTree:
         or the cluster roots, tried first-fit in ascending id order.
         Inside an outer domain, segment-hosting domains are packed by
         DESCENDING free-node capacity (ties ascending id) — bin-packing
-        that concentrates the job into the fewest domains and preserves
-        empty domains for future large jobs.  ``anchor`` is the LCA of
+        that concentrates the job into the fewest SEGMENT-LEVEL domains
+        (the only level grouped; nothing coarser is minimized) and
+        preserves empty ones for future large jobs.  ``anchor`` is the LCA of
         all segment domains.  Feasibility is unchanged by penalties;
         when ``penalties.xover`` is configured (v0.4) the engine prices
         the multi-domain span at stint start (see ``Simulator.speed`` /
@@ -837,10 +859,12 @@ class FleetTree:
         """One-domain scan: first-fit sub-node placement (ascending leaf-id
         order), else an exact whole-node cover accumulated LARGEST leaves
         first (ties by ascending id).  Largest-first is exact whenever leaf
-        sizes under the domain are uniform (every v1-config fleet) or form
-        a divisor chain (8/16/32...); for arbitrary mixed sizes an exact
-        cover is a subset-sum problem and this greedy may miss one — a
-        documented v0.1 limitation, not silent (returns None = no fit).
+        sizes under the domain are uniform (every COMPACT-form fleet — the
+        template form can mix ``chips`` across a cluster's ``children``
+        templates) or form a divisor chain (8/16/32...); for arbitrary
+        mixed sizes an exact cover is a subset-sum problem and this greedy
+        may miss one — a documented v0.1 limitation, not silent (returns
+        None = no fit).
         Leaves reserved for a different tenant are skipped (v0.4).
         """
         candidates: list[tuple[str, int]] = []
@@ -869,22 +893,365 @@ class FleetTree:
                     return tuple(whole), True
         return None
 
+    # ------------------------------------------------------------------
+    # Packed placement search (v0.7): best-fit / consolidate / spread
+    #
+    # These are ADDITIVE raw primitives, exactly like search_first_fit and
+    # search_segmented: they never mutate the tree and they leave
+    # search_first_fit / _scan_leaves untouched (the v0.1 default path is
+    # byte-identical).  On UNIFORM leaf sizes a gang's FEASIBILITY is the
+    # same question for all of them — they differ only in WHICH of the
+    # fitting leaves is chosen.  On mixed leaf sizes (reachable only via
+    # the template form) the packed modes' whole-node feasibility is a
+    # SUPERSET of first-fit's, never a subset: see _scan_leaves_packed.
+    # ------------------------------------------------------------------
+
+    #: The packing modes :meth:`search` understands (v0.7).  ``first_fit``
+    #: is the v0.1 default; the other three are the opt-in policies.
+    PACK_MODES: tuple[str, ...] = ("first_fit", "best_fit", "consolidate", "spread")
+
+    def search(
+        self, spec: GangSpec, tenant: str | None = None, *, mode: str = "first_fit"
+    ) -> Placement | None:
+        """Dispatch a raw placement search by packing ``mode`` (one of
+        :data:`PACK_MODES`; unknown modes raise ``ValueError``).
+
+        ``mode="first_fit"`` is exactly :meth:`search_first_fit` — the
+        v0.1 default path, unchanged.
+        """
+        if mode == "first_fit":
+            return self.search_first_fit(spec, tenant)
+        if mode == "best_fit":
+            return self.search_best_fit(spec, tenant)
+        if mode == "consolidate":
+            return self.search_consolidate(spec, tenant)
+        if mode == "spread":
+            return self.search_spread(spec, tenant)
+        raise ValueError(
+            f"unknown placement search mode {mode!r}"
+            f" (available: {', '.join(self.PACK_MODES)})"
+        )
+
+    def search_best_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """TIGHTEST-FIT search for one gang, or ``None`` if nothing fits.
+
+        Same feasibility as :meth:`search_first_fit` on uniform leaf sizes
+        (a superset of it on mixed ones — see :meth:`_scan_leaves_packed`),
+        different choice:
+
+        - **search domains** (``spec.within.level`` domains, else the
+          cluster roots) are tried in ascending ``(free_chips, id)`` order
+          — the tightest-fitting domain first — instead of ascending id.
+          A single-root fleet has exactly one candidate, so this is a
+          no-op there.
+        - **sub-node** requests (``chips < leaf.chips``) take the eligible
+          leaf whose FREE chips are smallest-but-sufficient, ties by
+          ascending leaf id, with an early exit on an exact fit.  This is
+          Slurm ``cons_tres`` best-fit / ``CR_Pack_Nodes``: small gangs
+          fill existing remainders instead of manufacturing new ones, so
+          fully-free leaves stay whole for gangs that need whole nodes.
+        - **whole-node** requests take the tightest of the leaves' PARENT
+          domains whose free whole-node capacity covers the request; when
+          no single parent covers it, parents are consumed in ASCENDING
+          capacity order (fill the tight holes first, keep big empty
+          domains intact).  Leaves inside a chosen parent are taken
+          largest-first, ties ascending id — unchanged from
+          :meth:`_scan_leaves`.
+
+        A spec with ``segments`` delegates unchanged to
+        :meth:`search_segmented` (segment packing already bin-packs by
+        free-node capacity).
+
+        WHY THIS MATTERS (v0.7 Helios finding): a leaf with ANY owner is
+        invisible to every whole-node request, so first-fit-by-id
+        placement of sub-node gangs strands free chips as 1..n-1-chip
+        remainders that no whole-node gang can use.  On the Helios Saturn
+        replay (70.8% single-GPU jobs) that stranding, not gang
+        consolidation, was the whole FIFO-inflation mechanism — see
+        docs/validation.md §4.2.
+
+        DETERMINISM: the total order ``(free_chips, leaf_id)`` is a pure
+        function of tree state.  NOTE that leaf ids sort
+        LEXICOGRAPHICALLY (``node0, node1, node10, ..., node2``), so
+        "ascending leaf id" is not numeric order — the same convention
+        :meth:`_scan_leaves` has always used.
+        """
+        return self._search_packed(spec, tenant, "best_fit")
+
+    def search_consolidate(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """FEWEST-DOMAINS-TOUCHED search for one gang, or ``None``.
+
+        Identical to :meth:`search_best_fit` except for a whole-node
+        request that no single parent domain can cover alone: parents are
+        then consumed in DESCENDING free-node capacity (ties ascending
+        id), which minimizes the NUMBER of distinct parent domains the
+        gang touches — the same bin-packing rule
+        :meth:`_pack_segments` uses for segmented gangs.
+
+        The minimized quantity is the count of PARENT domains (the deepest
+        grouping level) and nothing coarser: on a 3-level fleet this policy
+        can span MORE pods than ``first_fit`` while touching the same
+        number of racks (worked example and measured numbers in
+        :meth:`_packed_whole_order`).  "Fewest domains" therefore means
+        "fewest parents", not "fewest crossings at every level".
+
+        HONEST DEGENERACY: on a fleet whose leaves are all direct children
+        of the searched domain — one level, i.e. every ``levels: ["node"]``
+        config, including the Helios validation replay — there is exactly
+        ONE parent domain, so the whole-node path here is *identical* to
+        :meth:`search_first_fit`'s and the only behavior change is the
+        sub-node tightest-fit.  That is precisely why the v0.6
+        "consolidate large gangs across domains" hypothesis could not
+        have explained the Helios Saturn gap: there were no domains to
+        consolidate within.
+        """
+        return self._search_packed(spec, tenant, "consolidate")
+
+    def search_spread(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """MAXIMUM-SPREAD search for one gang, or ``None`` — the
+        deliberate ANTI-policy (a control arm for placement studies, and
+        the proof that the policies really differ).
+
+        - search domains in DESCENDING ``free_chips`` (ties ascending id);
+        - sub-node requests take the eligible leaf with the MOST free
+          chips (worst fit) — it opens fresh leaves and manufactures the
+          remainders best-fit avoids;
+        - whole-node requests round-robin one leaf at a time across the
+          leaves' parent domains (parents by descending capacity, ties
+          ascending id; leaves inside a parent largest-first) so a gang
+          lands on as many distinct domains as it can.
+
+        Use it to bracket a placement study: on the Helios replay it is
+        measurably WORSE than first-fit, which is the point.
+        """
+        return self._search_packed(spec, tenant, "spread")
+
+    def _search_packed(
+        self, spec: GangSpec, tenant: str | None, mode: str
+    ) -> Placement | None:
+        """Shared driver for the three packed modes (see their docstrings)."""
+        if spec.chips <= 0:
+            raise ValueError(f"gang spec needs a positive chip count, got {spec.chips}")
+        if spec.segments is not None:
+            return self.search_segmented(spec, tenant)
+        if spec.within is not None:
+            search_domains: Sequence[str] = self.domains_at(spec.within.level)
+        else:
+            search_domains = self._cluster_roots
+        if len(search_domains) > 1:
+            sign = -1 if mode == "spread" else 1
+            search_domains = sorted(
+                search_domains,
+                key=lambda did: (sign * self._domains[did].free_chips, did),
+            )
+        for did in search_domains:
+            placement = self._search_domain_packed(did, spec, tenant, mode)
+            if placement is not None:
+                return placement
+        return None
+
+    def _search_domain_packed(
+        self, did: str, spec: GangSpec, tenant: str | None, mode: str
+    ) -> Placement | None:
+        """One-domain packed search — the :meth:`_search_domain` shape
+        (same chip-type order, same cheap free-chip prune)."""
+        types = (
+            (spec.chip_type,) if spec.chip_type is not None else self._types_under[did]
+        )
+        for ct in types:
+            if self._free_ct[did].get(ct, 0) < spec.chips:
+                continue  # cheap upper-bound prune
+            found = self._scan_leaves_packed(did, ct, spec.chips, tenant, mode)
+            if found is not None:
+                leaves, whole = found
+                return Placement(
+                    leaves=leaves, anchor=did, chip_type=ct, whole_node=whole
+                )
+        return None
+
+    def _scan_leaves_packed(
+        self, did: str, chip_type: str, chips: int, tenant: str | None, mode: str
+    ) -> tuple[tuple[tuple[str, int], ...], bool] | None:
+        """One-domain scan under a packed ``mode``.
+
+        Mirrors :meth:`_scan_leaves`'s structure and rules exactly — same
+        eligibility filter (chip type, HEALTHY, v0.4 tenant reservation
+        holds), same sub-node-beats-whole-node precedence, same
+        largest-leaf-first greedy exact cover inside a chosen group — and
+        changes only WHICH candidate wins.
+
+        FEASIBILITY CAVEAT (identical in kind to :meth:`_scan_leaves`'s):
+        with MIXED leaf sizes under one domain, an exact whole-node cover
+        is a subset-sum problem and any greedy may miss one.  Grouping the
+        leaves before the greedy runs can hide a cover the UNGROUPED
+        largest-first order finds, so when the candidates are not all the
+        same size the scan retries once in exactly
+        :meth:`_scan_leaves`'s order.  That makes a packed mode's
+        whole-node feasibility a SUPERSET of ``first_fit``'s — never a
+        subset — so opting into a policy can never strand a gang the
+        default would have placed.  (Mixed leaf sizes are reachable in a
+        v1 config: the COMPACT form is uniform by construction, but the
+        template form lets one cluster hold ``children`` templates with
+        different ``chips``.)  Uniform candidates take exactly one pass,
+        so every compact-form fleet is bit-identical to the un-retried
+        version.
+        """
+        sub: list[tuple[int, str]] = []  # (sort key, leaf id)
+        whole_cands: list[tuple[str, int]] = []  # (leaf id, leaf chips)
+        reserved = bool(self._reserved)
+        for lid in self._leaves_under[did]:
+            leaf = self._domains[lid]
+            if leaf.chip_type != chip_type or leaf.state is not NodeState.HEALTHY:
+                continue
+            if reserved and not self._leaf_eligible(lid, tenant):
+                continue
+            if chips < leaf.chips:
+                free = leaf.free_chips
+                if free < chips:
+                    continue
+                if mode == "spread":
+                    sub.append((-free, lid))  # worst fit: most free first
+                else:
+                    if free == chips:
+                        return ((lid, chips),), False  # exact fit is minimal
+                    sub.append((free, lid))
+            elif leaf.free_chips == leaf.chips:
+                whole_cands.append((lid, leaf.chips))
+        if sub:
+            sub.sort()  # (key, id) — deterministic total order
+            return ((sub[0][1], chips),), False
+        if not whole_cands:
+            return None
+        orders = [self._packed_whole_order(whole_cands, chips, mode)]
+        if len({size for _, size in whole_cands}) > 1:
+            # MIXED leaf sizes only: grouping can hide a cover the ungrouped
+            # largest-first greedy finds, so retry in _scan_leaves' exact
+            # order rather than lose feasibility to the policy choice.
+            orders.append(sorted(whole_cands, key=lambda pair: (-pair[1], pair[0])))
+        for order in orders:
+            whole: list[tuple[str, int]] = []
+            total = 0
+            for lid, size in order:
+                if total + size <= chips:
+                    whole.append((lid, size))
+                    total += size
+                    if total == chips:
+                        whole.sort(key=lambda pair: pair[0])  # Placement invariant
+                        return tuple(whole), True
+        return None
+
+    def _packed_whole_order(
+        self, cands: list[tuple[str, int]], chips: int, mode: str
+    ) -> list[tuple[str, int]]:
+        """Order whole-node candidates for the greedy exact cover, by mode.
+
+        Candidates are grouped by their PARENT domain — the deepest
+        grouping level, which is the searched domain itself when the
+        leaves are its direct children (or when the searched domain IS a
+        leaf).  Within every group leaves stay largest-first, ties
+        ascending id: exactly :meth:`_scan_leaves`'s order.  Groups are
+        then visited:
+
+        - ``best_fit`` / ``consolidate``: groups whose capacity covers
+          ``chips`` ALONE come first, tightest (smallest sufficient)
+          capacity first — so the gang lands inside one domain and the
+          domain it lands in is the one with the least room to spare.
+          Groups that cannot cover it alone follow, ASCENDING by capacity
+          for ``best_fit`` (fill the tight holes, keep big empty domains
+          intact) and DESCENDING for ``consolidate`` (fewest PARENT
+          domains touched — the :meth:`_pack_segments` rule).
+        - ``spread``: round-robin one leaf per group, groups by descending
+          capacity, ties ascending id.
+
+        SCOPE OF "FEWEST DOMAINS" (measured, not argued).  The grouping is
+        FLAT and happens at the parent level only, so ``consolidate``
+        minimizes the number of PARENT domains — never the number of
+        domains at any coarser level.  On a 3-level fleet
+        (``levels: [pod, rack, node]``, ``counts: [2, 2, 4]``) with
+        pod0/rack0 3 free nodes, pod0/rack1 2 free, pod1/rack0 4 free and
+        pod1/rack1 none, a 40-chip gang goes: ``first_fit`` and
+        ``best_fit`` 1 pod / 2 racks, ``consolidate`` **2 pods** / 2 racks
+        — more pods and no fewer racks.  So ``consolidate`` is NOT the
+        policy to reach for to minimize ``penalties.xover`` crossings above
+        the parent level; ``tests/test_placement.py`` pins this case so the
+        limitation stays visible.
+
+        With ONE group — every single-level fleet, e.g. the Helios replay's
+        ``levels: ["node"]`` — all three modes return precisely
+        :meth:`_scan_leaves`'s order, so the whole-node path is unchanged
+        there.  Ties break on ascending group id throughout.
+        """
+        groups: dict[str, list[tuple[str, int]]] = {}
+        for lid, size in cands:
+            gid = self._domains[lid].parent or lid
+            groups.setdefault(gid, []).append((lid, size))
+        for members in groups.values():
+            members.sort(key=lambda pair: (-pair[1], pair[0]))
+        if len(groups) == 1:
+            return next(iter(groups.values()))
+        caps = {gid: sum(size for _, size in m) for gid, m in groups.items()}
+        if mode == "spread":
+            order = sorted(groups, key=lambda gid: (-caps[gid], gid))
+            out: list[tuple[str, int]] = []
+            i = 0
+            while any(i < len(groups[gid]) for gid in order):
+                for gid in order:
+                    members = groups[gid]
+                    if i < len(members):
+                        out.append(members[i])
+                i += 1
+            return out
+        fits = sorted(
+            (gid for gid in groups if caps[gid] >= chips),
+            key=lambda gid: (caps[gid], gid),
+        )
+        short = [gid for gid in groups if caps[gid] < chips]
+        if mode == "consolidate":
+            # Fewest groups: biggest first, ties ASCENDING id.
+            rest = sorted(short, key=lambda gid: (-caps[gid], gid))
+        else:
+            # best_fit: tightest holes first, ties ascending id.
+            rest = sorted(short, key=lambda gid: (caps[gid], gid))
+        out = []
+        for gid in fits + rest:
+            out.extend(groups[gid])
+        return out
+
     def search_after_release(
-        self, spec: GangSpec, job_ids: Iterable[str], tenant: str | None = None
+        self,
+        spec: GangSpec,
+        job_ids: Iterable[str],
+        tenant: str | None = None,
+        *,
+        mode: str = "first_fit",
     ) -> Placement | None:
         """Dry-run search: the placement ``spec`` would find if the
         allocations of ``job_ids`` were released — WITHOUT changing tree
         state (v0.2, preemption planning).
 
         Releases each applied allocation in ``job_ids`` (ids without an
-        applied allocation are skipped), runs :meth:`search_first_fit`
-        (which delegates segmented specs), then restores every released
-        allocation exactly — including on non-HEALTHY leaves, whose chips
-        correctly contribute nothing to the free counters in either
-        direction.  This makes reclaim planning exact under both leaf
-        health and node-shape effects: a victim on a DRAINING node frees
-        nothing, and sub-node co-residents keep their leaves out of the
-        whole-node pool.
+        applied allocation are skipped), runs :meth:`search` under
+        ``mode`` (which delegates segmented specs), then restores every
+        released allocation exactly — including on non-HEALTHY leaves,
+        whose chips correctly contribute nothing to the free counters in
+        either direction.  This makes reclaim planning exact under both
+        leaf health and node-shape effects: a victim on a DRAINING node
+        frees nothing, and sub-node co-residents keep their leaves out of
+        the whole-node pool.
+
+        ``mode`` (v0.7) must match the PLACEMENT POLICY the calling
+        scheduler actually places with, or reclaim planning silently
+        predicts a placement the policy would not make.  It defaults to
+        ``"first_fit"`` — the v0.2 behavior, unchanged — because that is
+        the default policy; a scheduler running an opt-in packed policy
+        passes its own mode (see
+        :attr:`fleetsim.schedulers.placement.FirstFit.search_mode`).
 
         INVARIANT: tree state (counters, owners, allocations) is
         byte-identical on exit; only the insertion order of restored
@@ -899,7 +1266,7 @@ class FleetTree:
                     continue
                 self.release(jid)
                 saved.append(alloc)
-            return self.search_first_fit(spec, tenant)
+            return self.search(spec, tenant, mode=mode)
         finally:
             for alloc in saved:
                 self._reapply(alloc)
@@ -1043,6 +1410,47 @@ class FleetTree:
                 continue
             free = leaf.free_chips
             if free < quantum:
+                total += free
+        return total
+
+    def stranded_whole_nodes(self, chip_type: str | None = None) -> int:
+        """Count of HEALTHY leaves that are PARTIALLY occupied
+        (``0 < free_chips < leaf.chips``) — v0.7.
+
+        This is the node-granularity fragmentation the allocation model
+        creates: a leaf with ANY owner is ineligible for every whole-node
+        request (see the module docstring), so a partially-used node's
+        free chips can be claimed only by another SUB-NODE gang.  A rising
+        count means small gangs are manufacturing remainders that starve
+        whole-node gangs — the exact mechanism
+        :meth:`search_best_fit` exists to suppress.
+
+        O(leaves); the metrics collector samples it at flush.
+        """
+        n = 0
+        for lid in self._leaf_ids:
+            leaf = self._domains[lid]
+            if chip_type is not None and leaf.chip_type != chip_type:
+                continue
+            if leaf.state is not NodeState.HEALTHY:
+                continue
+            if 0 < leaf.free_chips < leaf.chips:
+                n += 1
+        return n
+
+    def stranded_whole_node_chips(self, chip_type: str | None = None) -> int:
+        """Free chips sitting on partially-occupied HEALTHY leaves (the
+        chip-weighted companion of :meth:`stranded_whole_nodes`) — free
+        capacity that no whole-node gang can ever claim, v0.7."""
+        total = 0
+        for lid in self._leaf_ids:
+            leaf = self._domains[lid]
+            if chip_type is not None and leaf.chip_type != chip_type:
+                continue
+            if leaf.state is not NodeState.HEALTHY:
+                continue
+            free = leaf.free_chips
+            if 0 < free < leaf.chips:
                 total += free
         return total
 

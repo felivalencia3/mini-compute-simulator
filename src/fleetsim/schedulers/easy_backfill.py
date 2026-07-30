@@ -131,8 +131,10 @@ class EasyBackfillScheduler(Scheduler):
     Parameters:
 
     - ``placement``: the :class:`~fleetsim.schedulers.base.PlacementPolicy`
-      (default :class:`~fleetsim.schedulers.placement.FirstFit`);
-      programmatic only — not expressible in YAML.
+      (default :class:`~fleetsim.schedulers.placement.FirstFit`).  Also
+      selectable by NAME from YAML since v0.7 —
+      ``params: {placement: best_fit}`` (see
+      :mod:`fleetsim.schedulers.placement`).
     """
 
     def __init__(self, placement: PlacementPolicy | None = None):
