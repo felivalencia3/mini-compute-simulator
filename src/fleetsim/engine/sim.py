@@ -97,7 +97,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ..config import FailureModelConfig, QuotaConfig, ReservationConfig, Scenario
 from ..fleet.tree import FleetTree, Placement
@@ -681,6 +681,19 @@ class Simulator:
 
     ``rng`` overrides the seed-derived stream factory (e.g. to vary only
     the ``"failures"`` stream between paired runs).
+
+    ``progress_cb`` (v0.5, opt-in) is invoked at every METRICS_FLUSH —
+    including the final flush at the horizon — with one dict::
+
+        {t_us, horizon_us, jobs_finished, jobs_running, pending,
+         occupancy_to_date, allocated_chips, healthy_chips}
+
+    The last three mirror the sink's flush-sampled timeseries row and are
+    ``None`` when the sink does not expose ``last_flush_sample`` (custom
+    sinks).  The callback only OBSERVES: with ``progress_cb=None`` (the
+    default) no code path changes and outputs stay byte-identical.  An
+    exception raised by the callback aborts the run (``fleetsim serve``
+    uses exactly this for cooperative cancellation).
     """
 
     def __init__(
@@ -694,6 +707,7 @@ class Simulator:
         *,
         rng: RngStreams | None = None,
         strict: bool = True,
+        progress_cb: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.scenario = scenario
         self.fleet = fleet
@@ -705,6 +719,8 @@ class Simulator:
         )
         self.rng = rng if rng is not None else RngStreams(scenario.sim.seed)
         self.strict = bool(strict)
+        self.progress_cb = progress_cb
+        self._n_finished = 0  # sink.job_finished calls (terminal jobs)
         self.queue = EventQueue()
         self.now: int = 0
 
@@ -899,6 +915,7 @@ class Simulator:
         self.sink.flush(
             self._horizon_us, self.fleet, len(self._pending), len(self._running)
         )
+        self._emit_progress(self._horizon_us)
 
     def _report_live_progress(self) -> None:
         """At the horizon, credit the checkpoint-banked (durable) work of
@@ -920,6 +937,53 @@ class Simulator:
                 self.sink.job_progress(
                     rt.job, rt.stint_start_us, horizon, delta * rt.spec.chips, 0.0
                 )
+
+    def _emit_progress(self, t: int) -> None:
+        """Invoke ``progress_cb`` (if set) with the pinned snapshot dict.
+
+        Called immediately after every ``sink.flush``.  The chip/occupancy
+        fields are read from the sink's just-sampled timeseries row via the
+        optional ``last_flush_sample`` accessor (:class:`MetricsCollector`
+        provides it; other sinks yield ``None`` fields).  Pure observation:
+        no engine state is touched."""
+        cb = self.progress_cb
+        if cb is None:
+            return
+        row: dict[str, Any] | None = None
+        probe = getattr(self.sink, "last_flush_sample", None)
+        if probe is not None:
+            row = probe()
+        cb(
+            {
+                "t_us": t,
+                "horizon_us": self._horizon_us,
+                "jobs_finished": self._n_finished,
+                "jobs_running": len(self._running),
+                "pending": len(self._pending),
+                "occupancy_to_date": (
+                    row["occupancy_to_date"] if row is not None else None
+                ),
+                "allocated_chips": (
+                    row["allocated_chips"] if row is not None else None
+                ),
+                "healthy_chips": (
+                    row["healthy_chips"] if row is not None else None
+                ),
+            }
+        )
+
+    def _job_finished(
+        self,
+        job: Job,
+        t: int,
+        status: JobStatus,
+        productive_chip_s: float,
+        lost_chip_s: float,
+    ) -> None:
+        """The single funnel for terminal job reports: counts the job for
+        ``progress_cb`` snapshots, then forwards to the sink verbatim."""
+        self._n_finished += 1
+        self.sink.job_finished(job, t, status, productive_chip_s, lost_chip_s)
 
     def _dispatch(self, ev) -> None:
         et = ev.type
@@ -1329,7 +1393,7 @@ class Simulator:
             )
             self.sink.job_submitted(job, t)
             job.status = JobStatus.FAILED
-            self.sink.job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
+            self._job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
             return
         rt = _JobRt(
             job=job,
@@ -1353,7 +1417,7 @@ class Simulator:
                 self._mark_dirty(t)
         else:
             job.status = JobStatus.FAILED
-            self.sink.job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
+            self._job_finished(job, t, JobStatus.FAILED, 0.0, 0.0)
 
     def _start_job(
         self, rt: _JobRt, alloc: Allocation, placement: Placement, t: int
@@ -1486,7 +1550,7 @@ class Simulator:
             self._admission_terminal(job, t)  # quota commitment release
         productive = rt.kept_work_s * rt.spec.chips
         lost = rt.lost_work_s * rt.spec.chips
-        self.sink.job_finished(job, t, status, productive, lost)
+        self._job_finished(job, t, status, productive, lost)
         if freed or was_pending:
             self._mark_dirty(t)
 
@@ -2020,6 +2084,7 @@ class Simulator:
     def _on_flush(self, ev) -> None:
         t = self.now
         self.sink.flush(t, self.fleet, len(self._pending), len(self._running))
+        self._emit_progress(t)
         nxt = t + self._round_us
         if nxt < self._horizon_us:
             self.queue.push(nxt, EventType.METRICS_FLUSH, None)

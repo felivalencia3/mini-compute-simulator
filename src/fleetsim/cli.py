@@ -8,6 +8,7 @@ Subcommands::
     fleetsim compare out_a/ out_b/ [...]
     fleetsim viz out/ [out_b/] [-o report.html] [--title T]
                      [--map-level L] [--open]
+    fleetsim serve [-p 8500] [--workspace DIR] [--host H] [--open]
 
 ``run`` executes the scenario and prints the summary table; ``validate``
 checks schema + feasibility (fleet buildable, scheduler resolvable,
@@ -15,7 +16,9 @@ trace file present) and exits nonzero on any error; ``plot`` renders the
 standard charts from an output directory; ``compare`` prints headline
 metrics of two or more runs side by side; ``viz`` renders one run (or an
 A/B pair) into a single self-contained interactive HTML replay
-(docs/visualizer.md).
+(docs/visualizer.md); ``serve`` starts the local web app (v0.5): browse
+workspace runs, launch scenarios with live progress, open the 2D report
+and the three.js 3D fleet replay (docs/webapp.md).
 
 Exit codes: 0 success, 1 validation/comparison failure, 2 usage or
 runtime error.  All output is deterministic given the inputs.
@@ -110,6 +113,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="open_browser",
         help="open the written report in the default browser",
+    )
+
+    p_srv = sub.add_parser(
+        "serve",
+        help="start the local fleetsim web app (browse, launch, replay runs)",
+    )
+    p_srv.add_argument(
+        "-p", "--port", type=int, default=8500, help="port (default 8500)"
+    )
+    p_srv.add_argument(
+        "--workspace",
+        default="./fleetsim-runs",
+        help="run workspace directory, created if missing"
+        " (default ./fleetsim-runs)",
+    )
+    p_srv.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="bind address; NON-LOOPBACK VALUES EXPOSE THE APP TO YOUR"
+        " NETWORK and print a warning (default 127.0.0.1)",
+    )
+    p_srv.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="open the app in the default browser",
     )
     return parser
 
@@ -440,6 +469,22 @@ def _cmd_viz(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# serve
+# ---------------------------------------------------------------------------
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    from .serve.server import serve
+
+    return serve(
+        port=args.port,
+        workspace=args.workspace,
+        host=args.host,
+        open_browser=args.open_browser,
+    )
+
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
@@ -458,6 +503,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_compare(args)
         if args.command == "viz":
             return _cmd_viz(args)
+        if args.command == "serve":
+            return _cmd_serve(args)
     except ScenarioError as exc:
         for err in exc.errors:
             print(f"error: {err}", file=sys.stderr)
