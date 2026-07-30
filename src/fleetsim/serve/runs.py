@@ -46,17 +46,27 @@ checked inside the progress callback, so the run stops at its next
 metrics flush and is marked ``failed`` before the worker exits.  On boot
 any leftover ``queued``/``running`` meta (a crashed previous server) is
 repaired to ``failed``.
+
+ONE SERVER PER WORKSPACE: a ``workspace/.serve.lock`` file (created
+``O_EXCL``, containing the owner pid) is taken at init and released at
+shutdown.  A second live server pointed at the same workspace would
+otherwise "repair" the first server's queued/running meta to ``failed``
+while those runs are still executing; instead it refuses to start with
+:class:`WorkspaceLockError`.  A lock left behind by a crashed process
+(dead pid, or unparseable content) is reclaimed automatically.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import queue
 import random
 import re
 import shutil
 import threading
 import time
+import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -66,7 +76,7 @@ import yaml
 from .. import api
 from ..config import ScenarioError, load_scenario, validate
 
-__all__ = ["RunManager", "validate_scenario_text"]
+__all__ = ["RunManager", "WorkspaceLockError", "validate_scenario_text"]
 
 _SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 _STOP = object()  # worker-queue sentinel
@@ -78,6 +88,31 @@ _STATUSES = ("queued", "running", "done", "failed")
 class _RunAborted(Exception):
     """Raised inside the engine's progress callback to stop the active
     run cooperatively at the next metrics flush (server shutdown)."""
+
+
+class WorkspaceLockError(RuntimeError):
+    """Another live ``fleetsim serve`` process owns this workspace."""
+
+
+def _pid_alive(pid: int) -> bool:
+    """Best-effort liveness probe for a lockfile pid.
+
+    POSIX: signal 0 probes without side effects.  Elsewhere (Windows —
+    where ``os.kill`` with an arbitrary signal would TERMINATE the
+    process) be conservative and treat any recorded pid as live; the
+    lock error message tells the operator how to clear a stale lock.
+    """
+    if pid <= 0:
+        return False
+    if os.name != "posix":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:  # EPERM etc.: some process with that pid exists
+        return True
+    return True
 
 
 def validate_scenario_text(text: str, base_dir: Path) -> list[str]:
@@ -105,14 +140,45 @@ def validate_scenario_text(text: str, base_dir: Path) -> list[str]:
         from ..cli import _feasibility_errors
 
         errors = _feasibility_errors(scenario, base_dir)
-    return errors
+    return [_hide_base_dir(e, base_dir) for e in errors]
+
+
+def _hide_base_dir(error: str, base_dir: Path) -> str:
+    """Web-friendly feasibility messages: the internal anchor directory
+    (``workspace/_pending-run``) means nothing to a web user and leaks
+    the operator's directory layout, so strip it back to the scenario's
+    own relative path and state the actual remedy."""
+    base = str(base_dir)
+    if base not in error:
+        return error
+    error = error.replace(base + os.sep, "").replace(base, "")
+    return (
+        error
+        + " (web-submitted runs execute from a fresh run directory, so a"
+        " relative path cannot resolve — use an absolute path)"
+    )
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
-    """Write-then-rename so readers never observe a torn file."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    """Write-then-rename so readers never observe a torn file.
+
+    The temp name is UNIQUE PER WRITER (pid + random) — a shared
+    ``<name>.tmp`` would let concurrent builders of the same target
+    rename each other's temp file away, turning the loser's ``replace``
+    into ``FileNotFoundError`` (review: concurrent cold-cache /model
+    requests 500'd).  With unique names every writer renames its own
+    file; the last rename wins and losers replaced an identical,
+    already-published payload."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
+    except BaseException:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def _summary_headline(summary: Mapping[str, Any]) -> dict[str, Any]:
@@ -144,11 +210,23 @@ class RunManager:
         self._queue: queue.Queue[Any] = queue.Queue()
         self._progress: dict[str, dict[str, Any]] = {}
         self._cancelled: set[str] = set()
+        #: Runs whose RUNNING execution should stop at the next metrics
+        #: flush (cooperative cancel; POST /api/runs/{id}/cancel).
+        self._cancel_requested: set[str] = set()
+        #: Per-run build serialization for the model/report caches (an
+        #: RLock because report_html builds the model inside its own
+        #: hold).  Guarded by ``self._lock``.
+        self._build_locks: dict[str, threading.RLock] = {}
         self._abort = threading.Event()
         self._shutdown = False
         self._active: str | None = None
         self._rng = random.Random()  # seeded once at boot (OS entropy)
         self._seq = 0
+        self._owns_lock = False
+        # The workspace lock MUST come before boot repair: repairing
+        # another live server's queued/running meta is exactly the
+        # corruption the lock exists to prevent.
+        self._acquire_workspace_lock()
         self._repair_stale_meta()
         self._worker: threading.Thread | None = None
         if start_worker:
@@ -156,6 +234,60 @@ class RunManager:
                 target=self._work_loop, name="fleetsim-run-worker", daemon=True
             )
             self._worker.start()
+
+    # -- workspace lock (one live server per workspace) --------------------
+
+    @property
+    def _lock_path(self) -> Path:
+        return self.workspace / ".serve.lock"
+
+    def _acquire_workspace_lock(self) -> None:
+        """Take ``workspace/.serve.lock`` (O_EXCL, owner pid inside), or
+        raise :class:`WorkspaceLockError` when a LIVE process holds it.
+        A stale lock (dead pid / unreadable content) is reclaimed."""
+        for _ in range(2):
+            try:
+                fd = os.open(
+                    self._lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                )
+            except FileExistsError:
+                pid = self._read_lock_pid()
+                if pid is not None and _pid_alive(pid):
+                    raise WorkspaceLockError(
+                        f"workspace {self.workspace} is already owned by a"
+                        f" running fleetsim serve (pid {pid}) — two servers"
+                        f" on one workspace would corrupt each other's run"
+                        f" state. Use a different --workspace, or if that"
+                        f" process is really gone delete {self._lock_path}"
+                    )
+                try:  # stale lock from a crash: reclaim and retry once
+                    self._lock_path.unlink()
+                except OSError:
+                    pass
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(f"{os.getpid()}\n")
+            self._owns_lock = True
+            return
+        raise WorkspaceLockError(
+            f"cannot acquire {self._lock_path} — another server keeps"
+            f" re-locking the workspace"
+        )
+
+    def _read_lock_pid(self) -> int | None:
+        try:
+            return int(self._lock_path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+
+    def _release_workspace_lock(self) -> None:
+        if not self._owns_lock:
+            return
+        self._owns_lock = False
+        try:
+            self._lock_path.unlink()
+        except OSError:
+            pass
 
     # -- boot repair -----------------------------------------------------
 
@@ -208,12 +340,17 @@ class RunManager:
             or run_id.startswith(".")
         ):
             return None
-        candidate = (self.workspace / run_id).resolve()
-        if not candidate.is_relative_to(self.workspace):
-            return None
-        if candidate.parent != self.workspace:
-            return None
-        if not candidate.is_dir():
+        try:
+            # ValueError: an embedded NUL byte (e.g. percent-encoded %00)
+            # makes resolve()/stat() raise — a malformed id, not a 500.
+            candidate = (self.workspace / run_id).resolve()
+            if not candidate.is_relative_to(self.workspace):
+                return None
+            if candidate.parent != self.workspace:
+                return None
+            if not candidate.is_dir():
+                return None
+        except (OSError, ValueError):
             return None
         return candidate
 
@@ -404,30 +541,101 @@ class RunManager:
             shutil.rmtree(run_dir, ignore_errors=True)
         return 200, "ok"
 
+    def cancel_run(self, run_id: str) -> tuple[int, str]:
+        """Request cooperative cancellation of a RUNNING run:
+        ``(200, "ok")`` on acceptance, else ``(404 | 409, reason)``.
+
+        The flag is polled inside the engine's progress callback (the
+        same hook the shutdown abort uses), so the run stops at its next
+        metrics flush and is marked ``failed`` with ``cancelled by
+        request``.  Queued runs are dequeued with DELETE; done/failed
+        history stays immutable."""
+        run_dir = self.resolve_dir(run_id)
+        meta = self._read_meta(run_dir) if run_dir is not None else None
+        if run_dir is None or meta is None:
+            return 404, "no such run"
+        status = meta.get("status")
+        if status != "running":
+            return (
+                409,
+                f"only running runs can be cancelled (status: {status})"
+                f" — queued runs are removed with DELETE",
+            )
+        with self._lock:
+            self._cancel_requested.add(run_id)
+        return 200, "ok"
+
     # -- viz model / report caches ----------------------------------------
+
+    def _build_lock(self, run_id: str) -> threading.RLock:
+        """The per-run cache-build lock (created on first use)."""
+        with self._lock:
+            lock = self._build_locks.get(run_id)
+            if lock is None:
+                lock = self._build_locks[run_id] = threading.RLock()
+            return lock
+
+    @staticmethod
+    def _read_cache(cache: Path) -> str | None:
+        if cache.is_file():
+            try:
+                return cache.read_text(encoding="utf-8")
+            except OSError:
+                pass  # rebuild
+        return None
+
+    def _scrub_paths(self, message: str) -> str:
+        """Strip the operator's absolute workspace path from a message
+        bound for an HTTP response body (same privacy rule as
+        ``_hide_base_dir`` for validation errors)."""
+        base = str(self.workspace)
+        return message.replace(base + os.sep, "").replace(base, "workspace")
 
     def model_json(self, run_id: str) -> tuple[int, str]:
         """``(200, model-json)`` for a done run; else ``(404|409|500,
         error message)``.  Built once via ``build_viz_model`` and cached
         as ``viz_model.json`` in the run directory (runs are immutable
-        once done, so the cache never invalidates)."""
+        once done, so the cache never invalidates).  Builds are
+        serialized per run so concurrent cold-cache requests wait for
+        one build instead of racing it."""
         status, run_dir, msg = self._require_done(run_id)
         if run_dir is None:
             return status, msg
         cache = run_dir / "viz_model.json"
-        if cache.is_file():
-            try:
-                return 200, cache.read_text(encoding="utf-8")
-            except OSError:
-                pass  # rebuild below
-        from ..viz import build_viz_model, to_json
+        payload = self._read_cache(cache)
+        if payload is not None:
+            return 200, payload
+        with self._build_lock(run_id):
+            payload = self._read_cache(cache)  # built while we waited?
+            if payload is not None:
+                return 200, payload
+            from ..viz import build_viz_model, to_json
 
-        try:
-            payload = to_json(build_viz_model(run_dir))
-        except (FileNotFoundError, ValueError, KeyError) as exc:
-            return 500, f"cannot build viz model: {exc}"
-        _atomic_write_text(cache, payload)
-        return 200, payload
+            try:
+                model = build_viz_model(run_dir)
+                # Display path only: the report footer/meta shows
+                # out_dir, and "Download report.html" invites sharing
+                # the file — the operator's absolute workspace path
+                # (username, machine layout) must not travel with it.
+                # The run id is the directory name, so nothing else
+                # changes.
+                model["meta"]["out_dir"] = run_id
+                # The one human-chosen name (the submit-time title)
+                # heads the report instead of the server slug; the slug
+                # stays available as out_dir.
+                meta = self._read_meta(run_dir)
+                title = (meta or {}).get("title")
+                if isinstance(title, str) and title.strip():
+                    model["meta"]["title"] = (
+                        f"fleetsim replay — {title.strip()}"
+                    )
+                payload = to_json(model)
+            except (FileNotFoundError, ValueError, KeyError) as exc:
+                return 500, self._scrub_paths(
+                    f"cannot build viz model: {exc}"
+                )
+            _atomic_write_text(cache, payload)
+            return 200, payload
 
     def report_html(self, run_id: str) -> tuple[int, str]:
         """``(200, html)`` for a done run's self-contained 2D report,
@@ -436,19 +644,21 @@ class RunManager:
         if run_dir is None:
             return status, msg
         cache = run_dir / "report.html"
-        if cache.is_file():
-            try:
-                return 200, cache.read_text(encoding="utf-8")
-            except OSError:
-                pass  # rebuild below
-        code, payload = self.model_json(run_id)
-        if code != 200:
-            return code, payload
-        from ..viz import render_html
+        html = self._read_cache(cache)
+        if html is not None:
+            return 200, html
+        with self._build_lock(run_id):  # RLock: model_json re-enters
+            html = self._read_cache(cache)
+            if html is not None:
+                return 200, html
+            code, payload = self.model_json(run_id)
+            if code != 200:
+                return code, payload
+            from ..viz import render_html
 
-        html = render_html(json.loads(payload))
-        _atomic_write_text(cache, html)
-        return 200, html
+            html = render_html(json.loads(payload))
+            _atomic_write_text(cache, html)
+            return 200, html
 
     def _require_done(
         self, run_id: str
@@ -491,6 +701,7 @@ class RunManager:
             self._execute(slug)
             with self._lock:
                 self._active = None
+                self._cancel_requested.discard(slug)
 
     def _execute(self, slug: str) -> None:
         run_dir = self.workspace / slug
@@ -499,6 +710,8 @@ class RunManager:
             if self._abort.is_set():
                 raise _RunAborted()
             with self._lock:
+                if slug in self._cancel_requested:
+                    raise _RunAborted()
                 self._progress[slug] = snapshot
 
         try:
@@ -511,7 +724,14 @@ class RunManager:
                 progress_cb=on_progress,
             )
         except _RunAborted:
-            self._set_status(slug, "failed", error="aborted at server shutdown")
+            with self._lock:
+                cancelled = slug in self._cancel_requested
+            if cancelled:
+                self._set_status(slug, "failed", error="cancelled by request")
+            else:
+                self._set_status(
+                    slug, "failed", error="aborted at server shutdown"
+                )
         except ScenarioError as exc:
             self._set_status(slug, "failed", error="; ".join(exc.errors))
         except Exception as exc:  # noqa: BLE001 - one run never kills the worker
@@ -551,3 +771,4 @@ class RunManager:
         self._queue.put(_STOP)
         if self._worker is not None:
             self._worker.join(timeout=timeout)
+        self._release_workspace_lock()

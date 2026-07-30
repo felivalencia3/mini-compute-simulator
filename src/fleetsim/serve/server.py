@@ -22,6 +22,10 @@ ROUTES (pinned contract; the app-shell phases code against THIS):
   only (dequeue); 409 otherwise, 404 for unknown ids.  Running/done runs
   are never deleted by the API — deleting history is a filesystem
   concern, done while the server is down.
+- ``POST /api/runs/{id}/cancel``    -> 200 ``{ok: true}`` for RUNNING
+  runs: cooperative cancel at the next metrics flush (the run is marked
+  ``failed`` with ``cancelled by request``); 409 for any other status,
+  404 unknown.
 - ``GET /api/examples``             -> ``[{name, yaml}]`` — the bundled
   ``examples/*/scenario.yaml`` starter scenarios, read-only, sorted by
   name (``[]`` when the examples directory is not present, e.g. an
@@ -43,9 +47,18 @@ SECURITY MODEL (local-first, DESIGN v0.5):
   with ``yaml.safe_load`` only (inside the config layer), and runs
   execute IN-PROCESS in a worker thread — no subprocess, no shell, no
   string ever reaches an interpreter.
-- errors are always JSON (``{"error": ...}``); tracebacks never leave
+- errors are always JSON (``{"error": ...}``) — including framework
+  errors (bad request line, unsupported method), which override the
+  stdlib's HTML pages; tracebacks and exception MESSAGES never leave
   the process (they would leak paths and internals to any local page
-  that can make a request).
+  that can make a request) — a 500 carries the exception class only,
+  the detail goes to the operator's terminal.
+- the Host header is pinned to loopback authorities (anti
+  DNS-rebinding: a rebound attacker domain resolves here but sends its
+  own name in Host -> 421), and state-changing routes reject requests
+  bearing a foreign ``Origin`` / cross-site ``Sec-Fetch-Site`` and
+  require ``Content-Type: application/json`` (no CORS-"simple" CSRF
+  POSTs; OPTIONS grants nothing, so preflights fail).
 - every HTML response carries a Content-Security-Policy.  The app shell
   gets the strict pin ``default-src 'self'; img-src 'self' data:;
   style-src 'self' 'unsafe-inline'; script-src 'self'`` — belt on top of
@@ -64,12 +77,15 @@ from __future__ import annotations
 import json
 import sys
 import threading
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from .runs import RunManager
+import yaml
+
+from .runs import RunManager, WorkspaceLockError
 
 __all__ = ["FleetsimHTTPServer", "list_examples", "serve"]
 
@@ -87,12 +103,37 @@ _MAX_BODY = 5 * 1024 * 1024
 _MAX_EXAMPLE_BYTES = 256 * 1024
 
 
-def list_examples(examples_dir: Path | None = None) -> list[dict[str, str]]:
-    """The bundled starter scenarios as ``[{name, yaml}]``, sorted by
-    name.  Read-only and defensive: a missing directory, unreadable file,
-    or oversized file simply drops out — never an error."""
+def _example_web_note(text: str) -> str | None:
+    """A short caveat for a starter scenario that cannot run as
+    web-submitted (today: a trace workload with a RELATIVE source path —
+    web runs execute from a fresh run directory, so it can never
+    resolve).  ``None`` when the example runs as shipped."""
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None  # validation reports the real problem
+    if not isinstance(doc, Mapping):
+        return None
+    workload = doc.get("workload")
+    if not isinstance(workload, Mapping):
+        return None
+    if str(workload.get("kind", "")) != "trace":
+        return None
+    source = str(workload.get("source") or "")
+    if source and not Path(source).is_absolute():
+        return "CLI-only as shipped — web runs need an absolute trace path"
+    return None
+
+
+def list_examples(examples_dir: Path | None = None) -> list[dict[str, Any]]:
+    """The bundled starter scenarios as ``[{name, yaml, runnable,
+    note?}]``, sorted by name.  ``yaml`` is served VERBATIM; ``runnable``
+    is false (with a human ``note``) when the scenario cannot run as
+    web-submitted, so the editor can say so BEFORE the user hits
+    Validate.  Read-only and defensive: a missing directory, unreadable
+    file, or oversized file simply drops out — never an error."""
     root = examples_dir if examples_dir is not None else _EXAMPLES_DIR
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     try:
         children = sorted(p for p in root.iterdir() if p.is_dir())
     except OSError:
@@ -105,18 +146,31 @@ def list_examples(examples_dir: Path | None = None) -> list[dict[str, str]]:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        out.append({"name": child.name, "yaml": text})
+        note = _example_web_note(text)
+        entry: dict[str, Any] = {
+            "name": child.name,
+            "yaml": text,
+            "runnable": note is None,
+        }
+        if note is not None:
+            entry["note"] = note
+        out.append(entry)
     return out
 
 #: Pinned CSP for app-shell HTML (see module docstring).
+#: ``frame-ancestors`` does NOT fall back to default-src, so it is pinned
+#: explicitly: only same-origin pages may frame the shell or the report.
 CSP_APP = (
     "default-src 'self'; img-src 'self' data:;"
-    " style-src 'self' 'unsafe-inline'; script-src 'self'"
+    " style-src 'self' 'unsafe-inline'; script-src 'self';"
+    " frame-ancestors 'self'"
 )
-#: CSP for the self-contained report (inline script/style by design).
+#: CSP for the self-contained report (inline script/style by design; the
+#: app shell frames it same-origin, which 'self' permits).
 CSP_REPORT = (
     "default-src 'self'; img-src 'self' data:;"
-    " style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    " style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+    " frame-ancestors 'self'"
 )
 
 _CONTENT_TYPES = {
@@ -152,6 +206,27 @@ class FleetsimHTTPServer(ThreadingHTTPServer):
         self.static_dir = (static_dir or _STATIC_DIR).resolve()
         self.examples_dir = examples_dir  # None -> repo default
         super().__init__(address, _Handler)
+        # HOST-HEADER PIN (anti DNS-rebinding): the loopback bind is only
+        # a defense if the browser reached us via a loopback NAME — a
+        # rebound attacker domain resolves to 127.0.0.1 but sends its own
+        # name in Host, becoming same-origin with this server otherwise.
+        # ``allowed_hosts`` is the exact authority set the handler
+        # accepts; ``None`` disables the check (wildcard binds — the
+        # operator explicitly exposed the app and client names are
+        # unknowable).
+        bind_host = str(address[0])
+        port = int(self.server_address[1])
+        if bind_host in ("", "0.0.0.0", "::"):
+            self.allowed_hosts: frozenset[str] | None = None
+        else:
+            names = {"127.0.0.1", "localhost", "[::1]"}
+            h = bind_host.lower()
+            names.add(f"[{h}]" if ":" in h and not h.startswith("[") else h)
+            allowed = set()
+            for name in names:
+                allowed.add(name)
+                allowed.add(f"{name}:{port}")
+            self.allowed_hosts = frozenset(allowed)
 
     def handle_error(self, request, client_address):  # noqa: D102
         # A browser closing a keep-alive connection mid-read (tab close,
@@ -169,6 +244,10 @@ class _Handler(BaseHTTPRequestHandler):
     server_version = "fleetsim"
     sys_version = ""  # no Python version fingerprint in headers
     protocol_version = "HTTP/1.1"
+    #: Socket timeout: a connection that stalls mid-request (or declares
+    #: a large Content-Length and never sends it) releases its thread
+    #: instead of pinning it forever.
+    timeout = 30
 
     server: FleetsimHTTPServer  # narrowed for type checkers
 
@@ -208,20 +287,70 @@ class _Handler(BaseHTTPRequestHandler):
             extra={"Content-Security-Policy": csp},
         )
 
+    def send_error(self, code, message=None, explain=None):  # noqa: D102
+        # Framework-level failures (unsupported method, bad request line,
+        # oversized request line, unknown HTTP version) route through
+        # here BEFORE any do_* handler exists.  The stdlib default is a
+        # text/html page with none of the hardening headers — the API
+        # contract pins "every error is JSON, never an HTML error page",
+        # so emit the same envelope _send_error_json uses.
+        self.close_connection = True
+        short = "error"
+        if code in self.responses:
+            short = self.responses[code][0]
+        body = json.dumps({"error": message or short}).encode("utf-8")
+        try:
+            # A malformed request line leaves request_version at the
+            # HTTP/0.9 default, which would suppress the status line and
+            # headers entirely; real 0.9 clients do not exist, so always
+            # emit a full response.
+            if self.request_version == "HTTP/0.9":
+                self.request_version = "HTTP/1.0"
+            self.send_response(code, short)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD" and code >= 200 and code not in (204, 304):
+                self.wfile.write(body)
+        except OSError:
+            pass  # socket already gone
+
     def _read_json_body(self) -> dict[str, Any] | None:
         """The request body as a JSON object, or ``None`` after having
         already sent a 4xx JSON error."""
+        ctype = (
+            (self.headers.get("Content-Type") or "")
+            .split(";", 1)[0]
+            .strip()
+            .lower()
+        )
+        if ctype != "application/json":
+            # CSRF belt: text/plain (and form) POSTs are CORS-"simple" —
+            # a hostile page can fire them cross-origin with no
+            # preflight.  Requiring application/json forces a preflight,
+            # which fails because OPTIONS carries no CORS grants.
+            self._send_error_json(415, "Content-Type must be application/json")
+            return None
         try:
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
             self.close_connection = True  # unread body would desync keep-alive
             self._send_error_json(411, "Content-Length required")
             return None
-        if length < 0 or length > _MAX_BODY:
+        if length < 0:
+            self.close_connection = True
+            self._send_error_json(400, "invalid Content-Length")
+            return None
+        if length > _MAX_BODY:
             self.close_connection = True
             self._send_error_json(413, f"body too large (max {_MAX_BODY} bytes)")
             return None
         raw = self.rfile.read(length)
+        self._body_consumed = True
         try:
             doc = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -231,6 +360,35 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_error_json(400, "body must be a JSON object")
             return None
         return doc
+
+    def _drain_unread_body(self) -> None:
+        """Consume a request body no route read, so HTTP/1.1 keep-alive
+        never parses leftover body bytes as the next request line.
+        Anything undrainable closes the connection instead."""
+        if self._body_consumed:
+            return
+        if self.headers.get("Transfer-Encoding"):
+            self.close_connection = True  # chunked: not supported here
+            return
+        raw = self.headers.get("Content-Length")
+        if raw is None:
+            return
+        try:
+            length = int(raw)
+        except ValueError:
+            self.close_connection = True
+            return
+        if length < 0 or length > _MAX_BODY:
+            self.close_connection = True
+            return
+        remaining = length
+        while remaining > 0:
+            chunk = self.rfile.read(min(65536, remaining))
+            if not chunk:
+                self.close_connection = True
+                return
+            remaining -= len(chunk)
+        self._body_consumed = True
 
     # -- routing -----------------------------------------------------------
 
@@ -242,37 +400,110 @@ class _Handler(BaseHTTPRequestHandler):
         return [unquote(seg) for seg in path.split("/") if seg]
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
+        self._dispatch(self._route_get)
+
+    def do_HEAD(self) -> None:  # noqa: N802
+        self._dispatch(self._route_get)
+
+    def do_POST(self) -> None:  # noqa: N802
+        self._dispatch(self._route_post)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        self._dispatch(self._route_delete)
+
+    def do_PUT(self) -> None:  # noqa: N802
+        self._dispatch(self._method_not_allowed)
+
+    def do_PATCH(self) -> None:  # noqa: N802
+        self._dispatch(self._method_not_allowed)
+
+    def do_OPTIONS(self) -> None:  # noqa: N802
+        # Deliberately NO Access-Control-* headers: a cross-origin
+        # preflight must fail, keeping non-simple requests unsendable
+        # from other origins.
+        self._dispatch(self._method_not_allowed)
+
+    def _dispatch(self, route) -> None:
+        self._body_consumed = False
         try:
-            self._route_get()
+            if not self._host_ok():
+                self.close_connection = True
+                self._send_error_json(
+                    421,
+                    "misdirected request: unexpected Host header"
+                    " (use the address fleetsim serve printed)",
+                )
+            else:
+                route()
         except BrokenPipeError:  # client went away mid-response
             pass
         except Exception as exc:  # noqa: BLE001 - JSON errors, never tracebacks
             self._safe_500(exc)
+        finally:
+            try:
+                self._drain_unread_body()
+            except Exception:  # noqa: BLE001 - never let cleanup raise
+                self.close_connection = True
 
-    def do_HEAD(self) -> None:  # noqa: N802
-        self.do_GET()
+    def _method_not_allowed(self) -> None:
+        body = json.dumps(
+            {"error": f"method {self.command} not allowed"}
+        ).encode("utf-8")
+        self._send_bytes(
+            405,
+            body,
+            "application/json; charset=utf-8",
+            extra={"Allow": "GET, HEAD, POST, DELETE"},
+        )
 
-    def do_POST(self) -> None:  # noqa: N802
-        try:
-            self._route_post()
-        except BrokenPipeError:
-            pass
-        except Exception as exc:  # noqa: BLE001
-            self._safe_500(exc)
+    def _host_ok(self) -> bool:
+        """Anti DNS-rebinding: the client must have addressed us by a
+        pinned loopback authority (see ``allowed_hosts``)."""
+        allowed = self.server.allowed_hosts
+        if allowed is None:
+            return True
+        host = (self.headers.get("Host") or "").strip().lower()
+        return host in allowed
 
-    def do_DELETE(self) -> None:  # noqa: N802
-        try:
-            self._route_delete()
-        except BrokenPipeError:
-            pass
-        except Exception as exc:  # noqa: BLE001
-            self._safe_500(exc)
+    def _cross_origin_rejected(self) -> bool:
+        """CSRF gate for state-changing routes: reject any request that
+        a browser marks as coming from ANOTHER origin.  Non-browser
+        clients (curl, scripts) send neither header and pass.  Returns
+        True after sending the 403."""
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if origin:
+            ok = False
+            if origin != "null":
+                parts = urlsplit(origin)
+                allowed = self.server.allowed_hosts
+                if allowed is not None:
+                    ok = parts.scheme == "http" and parts.netloc in allowed
+                else:  # widened bind: same-authority check via Host
+                    host = (self.headers.get("Host") or "").strip().lower()
+                    ok = bool(host) and parts.netloc == host
+            if not ok:
+                self._send_error_json(403, "cross-origin request rejected")
+                return True
+        fetch_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if fetch_site and fetch_site not in ("same-origin", "none"):
+            self._send_error_json(403, "cross-site request rejected")
+            return True
+        return False
 
     def _safe_500(self, exc: Exception) -> None:
+        # Full detail (whose message can embed filesystem paths) goes to
+        # the operator's terminal ONLY; the client sees the exception
+        # class alone — same privacy rule as the report path scrub.
         try:
-            self._send_error_json(
-                500, f"internal error: {type(exc).__name__}: {exc}"
+            sys.stderr.write(
+                f"fleetsim serve: internal error on"
+                f" {self.command} {self.path}:"
+                f" {type(exc).__name__}: {exc}\n"
             )
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self._send_error_json(500, f"internal error: {type(exc).__name__}")
         except Exception:  # headers already sent / socket dead
             pass
 
@@ -338,13 +569,14 @@ class _Handler(BaseHTTPRequestHandler):
         if not parts or any(p in (".", "..") for p in parts):
             self._send_error_json(404, "not found")
             return
-        target = root.joinpath(*parts)
         try:
-            resolved = target.resolve()
-        except OSError:
-            self._send_error_json(404, "not found")
-            return
-        if not resolved.is_relative_to(root) or not resolved.is_file():
+            # ValueError: embedded NUL bytes (%00) make resolve()/stat()
+            # raise — malformed path, not a 500.
+            resolved = root.joinpath(*parts).resolve()
+            if not resolved.is_relative_to(root) or not resolved.is_file():
+                self._send_error_json(404, "not found")
+                return
+        except (OSError, ValueError):
             self._send_error_json(404, "not found")
             return
         ctype = _CONTENT_TYPES.get(
@@ -361,6 +593,8 @@ class _Handler(BaseHTTPRequestHandler):
     # -- POST ----------------------------------------------------------------
 
     def _route_post(self) -> None:
+        if self._cross_origin_rejected():
+            return
         seg = self._segments()
         if seg == ["api", "validate"]:
             doc = self._read_json_body()
@@ -392,11 +626,25 @@ class _Handler(BaseHTTPRequestHandler):
             run_id = self.server.runs.submit(text, title)
             self._send_json({"id": run_id})
             return
+        if (
+            len(seg) == 4
+            and seg[0] == "api"
+            and seg[1] == "runs"
+            and seg[3] == "cancel"
+        ):
+            code, msg = self.server.runs.cancel_run(seg[2])
+            if code == 200:
+                self._send_json({"ok": True})
+            else:
+                self._send_error_json(code, msg)
+            return
         self._send_error_json(404, "not found")
 
     # -- DELETE ----------------------------------------------------------------
 
     def _route_delete(self) -> None:
+        if self._cross_origin_rejected():
+            return
         seg = self._segments()
         if len(seg) == 3 and seg[0] == "api" and seg[1] == "runs":
             code, msg = self.server.runs.delete_queued(seg[2])
@@ -433,7 +681,11 @@ def serve(
     (marked ``failed`` with a clear error) — the process never hangs on
     a long simulation.
     """
-    manager = RunManager(workspace)
+    try:
+        manager = RunManager(workspace)
+    except WorkspaceLockError as exc:
+        print(f"error: {exc}")
+        return 2
     try:
         httpd = FleetsimHTTPServer((host, port), manager)
     except OSError as exc:

@@ -58,23 +58,33 @@ serve(port=8500, workspace="./fleetsim-runs")   # blocks until Ctrl-C
 - **Run view** (`#run/<id>/report`): while the run is queued/running, a
   live progress panel (sim time, occupancy to date, jobs
   finished/running/pending, chips allocated — one update per scheduler
-  round, polled every 1 s); when it finishes, the full **2D report**
+  round, polled every 1 s) with a **Cancel run** button while it
+  executes; when it finishes, the full **2D report**
   (the same self-contained HTML `fleetsim viz` writes) in an iframe,
   plus a **Download report.html** button — the downloaded file works
   from `file://`, email, anywhere.
 - **3D fleet** (`#run/<id>/fleet3d`): the showcase view, below.
 
-Tip: give scenarios `outputs: {stints: pod}` (or `stints: true`) — the
-fleet map in the 2D report and the entire 3D view replay
-`stints.parquet`. Without it both degrade honestly and tell you what to
-add. The starter template sets it.
+Tip: give scenarios `outputs: {stints: true}` — the fleet map in the 2D
+report and the entire 3D view replay `stints.parquet`. Without it both
+degrade honestly and tell you what to add. The starter template sets it.
+(`true` records at the level below the cluster root, which is what the
+fleet views want; a level name like `stints: pod` also works, but only
+when the scenario's tree actually has a level with that name.)
 
 ## API contract
 
 All endpoints are same-origin JSON unless noted; every response carries
 `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`; every
-error is JSON `{"error": str}` — never an HTML error page, never a
-traceback. Request bodies are capped at 5 MB.
+error is JSON `{"error": str}` — never an HTML error page (framework
+errors like an unsupported method or a bad request line included),
+never a traceback (a 500 carries the exception *class* only; the detail
+goes to the server terminal). Request bodies are capped at 5 MB, and
+`POST` bodies must be `Content-Type: application/json`. The `Host`
+header must be a loopback authority (`127.0.0.1[:port]`,
+`localhost[:port]`, `[::1][:port]`, plus an explicit `--host` value) —
+anything else is `421`; state-changing routes additionally reject
+requests bearing a foreign `Origin` or a cross-site `Sec-Fetch-Site`.
 
 | Route | Returns |
 |---|---|
@@ -86,7 +96,8 @@ traceback. Request bodies are capped at 5 MB.
 | `POST /api/validate` | body `{yaml: str}` → always 200 `{ok, errors: [str]}` for a well-formed request; 400 for a bad envelope |
 | `POST /api/runs` | body `{yaml: str, title?: str}` → 200 `{id}`; 400 `{ok: false, errors}` for an invalid scenario |
 | `DELETE /api/runs/{id}` | 200 `{ok: true}` for **queued** runs only (dequeue); 409 for running/done/failed, 404 unknown |
-| `GET /api/examples` | `[{name, yaml}]` — the bundled starter scenarios, read-only, sorted (`[]` on an installed wheel without the repo checkout) |
+| `POST /api/runs/{id}/cancel` | 200 `{ok: true}` for **running** runs: cooperative cancel — the run stops at its next metrics flush and is marked `failed` with `cancelled by request`; 409 for any other status, 404 unknown |
+| `GET /api/examples` | `[{name, yaml, runnable, note?}]` — the bundled starter scenarios, read-only, sorted; `yaml` is verbatim, `runnable: false` (+ human `note`) marks a starter that cannot run as web-submitted (`[]` on an installed wheel without the repo checkout) |
 | `GET /`, `GET /static/*` | the app shell (packaged static files, no build step) |
 
 ## Workspace layout
@@ -111,6 +122,14 @@ The scenario's own `outputs.dir` is **ignored** for web-submitted runs:
 the server forces all output into the run directory, so a scenario
 (typo'd or hostile) can never choose where the server writes.
 
+**One live server per workspace.** The server takes a
+`workspace/.serve.lock` file (owner pid inside) at startup and releases
+it on shutdown. A second `fleetsim serve` pointed at the same workspace
+— even on a different port — refuses to start (exit 2) instead of
+"repairing" the first server's queued/running runs to `failed` while
+they are still executing. A lock left behind by a crashed process (dead
+pid) is reclaimed automatically.
+
 ## Security posture
 
 Local-first, defense in depth — the HTTP surface is treated as untrusted
@@ -119,6 +138,23 @@ even though it binds loopback:
 - **Loopback bind by default.** `--host` can widen it, prints a loud
   warning, and is on you; the app exposes your runs and accepts scenario
   submissions from anyone who can reach the address.
+- **Host-header pin (anti DNS-rebinding).** A rebound attacker domain
+  resolves to 127.0.0.1 but sends its own name in `Host`; the server
+  answers `421` for any authority that is not the pinned loopback set
+  (or the explicit `--host` value), so a hostile page can never become
+  same-origin with the app. Wildcard binds (`0.0.0.0`/`::`) disable the
+  pin — client names are unknowable there.
+- **CSRF rejection on state-changing routes.** `POST`/`DELETE` reject
+  any request carrying a foreign `Origin` or a cross-site
+  `Sec-Fetch-Site`, and JSON bodies must be
+  `Content-Type: application/json` (a non-simple type, so cross-origin
+  browsers must preflight — and `OPTIONS` grants no CORS headers, so
+  the preflight fails).
+- **Bounded validation.** The declared fleet size is checked
+  arithmetically from the topology counts *before* any node is
+  materialized — a 200-byte YAML declaring billions of nodes is a
+  validation error, not an OOM (ceiling: 262,144 nodes / 4,194,304
+  chips, shared with `fleetsim validate`).
 - **Path containment.** Run ids are server-generated slugs; every id or
   static path from a request is re-validated (no separators, no
   dot-names) and then resolved with
@@ -135,11 +171,12 @@ even though it binds loopback:
   stack.
 - **Strict CSP.** The app shell is pinned to `default-src 'self';
   img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src
-  'self'` — no inline scripts, no external anything. The 2D report (a
+  'self'; frame-ancestors 'self'` — no inline scripts, no external
+  anything, no framing by foreign pages. The 2D report (a
   self-contained single file whose one inline script *is* the app)
   additionally allows `'unsafe-inline'` while keeping
-  `default-src 'self'`; its data payload is script-escaped at render
-  time.
+  `default-src 'self'` and `frame-ancestors 'self'`; its data payload
+  is script-escaped at render time.
 - **Server-side hygiene.** Bodies capped at 5 MB, no `Server:` version
   fingerprint, quiet request logging.
 
@@ -150,13 +187,15 @@ power-of-two chips-per-slab budget keeps the whole fleet inside one
 instanced draw call, capped at 40,000 instances). Slabs fill bottom-up
 with the classes running on that pod at time T, in the same palette as
 the 2D report; idle capacity is near-black. A translucent shell pulses
-red/orange around a pod for a short window after a failure/drain — the
-same pulse rule as the 2D map. Playback state (time, speed, pin,
-camera) persists per run while the tab is open, so switching 2D ↔ 3D
-never loses your place.
+red/orange around a pod for a short window after a node failure or
+drain. Red pulses are scoped to genuine *node-failure* kills (stints
+whose end coincides with a node-failure event) — routine job aborts
+(`abort_prob`) end stints with the same `failed` reason but do not
+pulse. Playback state (time, speed, pin, camera) persists per run
+while the tab is open, so switching 2D ↔ 3D never loses your place.
 
-Requires `outputs: {stints: pod}` in the scenario — without stints the
-view shows a notice saying exactly that.
+Requires stint output (`outputs: {stints: true}`) in the scenario —
+without stints the view shows a notice saying exactly that.
 
 ### Controls
 
@@ -185,10 +224,17 @@ tweening; there is no ambient camera drift in any mode.
   use`** — another process (often a previous `fleetsim serve`) owns the
   port. Pick another with `-p`, or stop the other server. The process
   exits 2 without touching the workspace.
+- **`error: workspace … is already owned by a running fleetsim serve
+  (pid N)`** — one live server per workspace: a second server on the
+  same workspace (any port) would corrupt the first one's run state, so
+  it refuses to start (exit 2). Use a different `--workspace`, or stop
+  the other server. If that pid is really gone, delete
+  `workspace/.serve.lock` (a lock whose pid is dead is normally
+  reclaimed automatically).
 - **"no stints" notice / no fleet map** — the run was executed without
-  `outputs: {stints: pod}`. The 2D report degrades to fleet-level replay
-  and the 3D view shows a notice; re-run the scenario with stints on.
-  The starter template and examples 01/04 already set it.
+  `outputs: {stints: true}`. The 2D report degrades to fleet-level
+  replay and the 3D view shows a notice; re-run the scenario with stints
+  on. The starter template and examples 01/04 already set it.
 - **Report/model return 409** — the run isn't finished; the UI shows
   live progress until it is. For a `failed` run, `GET /api/runs/{id}`
   carries the error string.
@@ -208,6 +254,12 @@ tweening; there is no ambient camera drift in any mode.
   chips-per-slab instead. Runs execute **one at a time** (the simulator
   is CPU-bound pure Python; parallel runs would timeslice the GIL and
   finish later) — queued submissions wait their turn and say so.
+- **Cancelling a runaway run** — the progress panel's **Cancel run**
+  button (or `POST /api/runs/{id}/cancel`) stops the *running* run at
+  its next metrics flush and marks it `failed (cancelled by request)`;
+  queued submissions behind it then start. Use it when a mistyped
+  horizon or an oversized fleet would otherwise hold the single FIFO
+  worker for hours.
 - **Deleting runs** — only *queued* runs can be deleted through the API
   (the × on the rail row). Anything that ever ran is immutable history
   to the server: delete its directory on disk while the server is down.

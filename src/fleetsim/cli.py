@@ -184,16 +184,39 @@ def _cmd_run(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _feasibility_errors(scenario, scenario_dir: Path) -> list[str]:
-    """Checks beyond the schema: fleet buildable, scheduler resolvable,
-    trace source present.  Run only on schema-clean scenarios."""
-    errors: list[str] = []
-    try:
-        from .fleet.build import build_fleet
+#: Ceiling on the DECLARED fleet size, checked arithmetically from the
+#: topology counts BEFORE any node object is materialized.  Building
+#: costs ~30 µs and ~1.4 KB per node, so an unbounded declaration (a
+#: 200-byte YAML can declare billions of nodes) would pin a core for
+#: minutes or OOM the process — including the `fleetsim serve` HTTP
+#: handler that validates submissions.  The ceiling is 4x the frontier
+#: example (65,536 nodes / 524,288 chips).
+_MAX_FLEET_NODES = 262_144  # 2**18
+_MAX_FLEET_CHIPS = 4_194_304  # 2**22
 
-        build_fleet(scenario)
-    except ValueError as exc:
-        errors.append(f"fleet: {exc}")
+
+def _feasibility_errors(scenario, scenario_dir: Path) -> list[str]:
+    """Checks beyond the schema: fleet buildable (and bounded), scheduler
+    resolvable, trace source present.  Run only on schema-clean
+    scenarios."""
+    errors: list[str] = []
+    clusters = scenario.fleet.clusters()
+    total_nodes = sum(cl.total_nodes() for cl in clusters)
+    total_chips = sum(cl.total_chips() for cl in clusters)
+    if total_nodes > _MAX_FLEET_NODES or total_chips > _MAX_FLEET_CHIPS:
+        errors.append(
+            f"fleet: declared fleet is too large to build"
+            f" ({total_nodes:,} nodes / {total_chips:,} chips; the"
+            f" ceiling is {_MAX_FLEET_NODES:,} nodes /"
+            f" {_MAX_FLEET_CHIPS:,} chips)"
+        )
+    else:
+        try:
+            from .fleet.build import build_fleet
+
+            build_fleet(scenario)
+        except ValueError as exc:
+            errors.append(f"fleet: {exc}")
     try:
         from .schedulers.base import get_scheduler
 

@@ -21,8 +21,10 @@
       <h2>Runs</h2>
       <span id="runsCount" class="sub"></span>
     </div>
-    <ul id="runsList" role="list"></ul>
+    <!-- the empty note sits ABOVE the flex:1 list so it hugs the RUNS
+         header instead of being pushed to the bottom of the rail -->
     <div id="railEmpty" class="railnote hidden">No runs yet. Start one with <span class="kbd">New run</span>.</div>
+    <ul id="runsList" role="list"></ul>
     <div id="railError" class="railnote err hidden"></div>
   </nav>
 
@@ -48,9 +50,12 @@
           <h1 id="runTitle"></h1>
           <span id="runMeta" class="sub mono"></span>
         </div>
-        <div id="runTabs" role="tablist" aria-label="run views">
-          <a id="tabReport" class="tab" role="tab">2D report</a>
-          <a id="tab3d" class="tab" role="tab">3D fleet</a>
+        <!-- plain navigation links (aria-current marks the active view);
+             deliberately NOT role=tablist/tab, which would promise
+             arrow-key tab-widget semantics these links don't implement -->
+        <div id="runTabs" aria-label="run views">
+          <a id="tabReport" class="tab">2D report</a>
+          <a id="tab3d" class="tab">3D fleet</a>
           <a id="downloadReport" class="btn" download>Download report.html</a>
         </div>
       </div>
@@ -69,6 +74,10 @@
             <div class="stat"><span class="clabel">pending</span><span id="statPending" class="cval mono">–</span></div>
             <div class="stat"><span class="clabel">chips allocated</span><span id="statChips" class="cval mono">–</span></div>
           </div>
+          <div class="ctlrow" style="margin-top: 10px;">
+            <button id="cancelRunBtn" class="btn hidden" type="button"
+              title="stop this run at its next metrics flush (it will be marked failed)">Cancel run</button>
+          </div>
           <p id="progressNote" class="sub">The report opens automatically when the run finishes.</p>
         </div>
         <div id="runFailed" class="panel failpanel hidden">
@@ -78,6 +87,10 @@
         <div id="runMissing" class="panel failpanel hidden">
           <div class="phead"><h2>No such run</h2></div>
           <p class="sub">This run is not in the workspace. It may have been dequeued or removed.</p>
+        </div>
+        <div id="runUnreachable" class="panel failpanel hidden">
+          <div class="phead"><h2>Cannot reach the server</h2></div>
+          <p class="sub">Is <span class="kbd">fleetsim serve</span> still running? This view retries automatically.</p>
         </div>
         <iframe id="reportFrame" class="hidden" title="fleetsim 2D report"></iframe>
         <div id="fleet3d" class="panel hidden">

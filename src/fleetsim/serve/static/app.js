@@ -80,7 +80,18 @@ function parseRoute() {
   const h = location.hash.replace(/^#/, "");
   if (h === "new") return { view: "new" };
   const m = /^run\/([^/]+)\/(report|fleet3d)$/.exec(h);
-  if (m) return { view: "run", id: decodeURIComponent(m[1]), mode: m[2] };
+  if (m) {
+    let id = m[1];
+    try {
+      id = decodeURIComponent(id);
+    } catch (err) {
+      /* malformed percent-escape (hand-edited or truncated URL): fall
+         back to the raw match as a literal id — the server 404s it into
+         the "No such run" panel instead of an uncaught URIError killing
+         the navigation */
+    }
+    return { view: "run", id, mode: m[2] };
+  }
   return { view: "home" };
 }
 
@@ -144,6 +155,27 @@ function statusStats(run) {
   return run.status;
 }
 
+function rowMetaText(run) {
+  return [fmtWhen(run.created), statusStats(run)].filter(Boolean).join(" · ");
+}
+
+/* Relative timestamps ("3m ago") age even when /api/runs is unchanged;
+   rewrite just the .rmeta text in place so DOM and focus stay intact. */
+function refreshRunTimes() {
+  const byId = new Map(runsCache.map((r) => [r.id, r]));
+  for (const row of $("#runsList").querySelectorAll(".runrow")) {
+    const run = byId.get(row.dataset.runId);
+    const meta = row.querySelector(".rmeta");
+    if (run && meta) meta.textContent = rowMetaText(run);
+  }
+  if (route.view === "run") {
+    const run = byId.get(route.id);
+    if (run && run.created != null) {
+      $("#runMeta").textContent = fmtWhen(run.created);
+    }
+  }
+}
+
 function buildRunRow(run) {
   const li = document.createElement("li");
   li.className = "runrow";
@@ -163,8 +195,7 @@ function buildRunRow(run) {
   title.textContent = run.title || run.id;
   const meta = document.createElement("span");
   meta.className = "rmeta";
-  const when = fmtWhen(run.created);
-  meta.textContent = [when, statusStats(run)].filter(Boolean).join(" · ");
+  meta.textContent = rowMetaText(run);
   main.appendChild(title);
   main.appendChild(meta);
   a.appendChild(main);
@@ -263,10 +294,11 @@ function stopProgressPoll() {
 }
 
 function setRunBodyPanel(name) {
-  // one of: progress | failed | missing | report | fleet3d | none
+  // one of: progress | failed | missing | unreachable | report | fleet3d | none
   $("#runProgress").classList.toggle("hidden", name !== "progress");
   $("#runFailed").classList.toggle("hidden", name !== "failed");
   $("#runMissing").classList.toggle("hidden", name !== "missing");
+  $("#runUnreachable").classList.toggle("hidden", name !== "unreachable");
   $("#reportFrame").classList.toggle("hidden", name !== "report");
   $("#fleet3d").classList.toggle("hidden", name !== "fleet3d");
   if (name !== "fleet3d" && fleet3dMod) fleet3dMod.hideFleet3d();
@@ -283,8 +315,10 @@ function renderToolbar(id, info) {
   const tab3d = $("#tab3d");
   tabReport.href = base + "report";
   tab3d.href = base + "fleet3d";
-  tabReport.setAttribute("aria-selected", route.mode === "report" ? "true" : "false");
-  tab3d.setAttribute("aria-selected", route.mode === "fleet3d" ? "true" : "false");
+  if (route.mode === "report") tabReport.setAttribute("aria-current", "true");
+  else tabReport.removeAttribute("aria-current");
+  if (route.mode === "fleet3d") tab3d.setAttribute("aria-current", "true");
+  else tab3d.removeAttribute("aria-current");
 
   const dl = $("#downloadReport");
   if (info && info.status === "done") {
@@ -314,6 +348,7 @@ function renderProgressSnapshot(status, prog) {
       : prog
         ? "live — one update per metrics flush"
         : "starting — waiting for the first metrics flush";
+  $("#cancelRunBtn").classList.toggle("hidden", status !== "running");
 
   const track = $("#progressTrack");
   const fill = $("#progressFill");
@@ -329,10 +364,23 @@ function renderProgressSnapshot(status, prog) {
   $("#statFinished").textContent = prog ? fmtInt(prog.jobs_finished) : "–";
   $("#statRunning").textContent = prog ? fmtInt(prog.jobs_running) : "–";
   $("#statPending").textContent = prog ? fmtInt(prog.pending) : "–";
-  $("#statChips").textContent =
+  const chipsEl = $("#statChips");
+  chipsEl.textContent =
     prog && prog.allocated_chips != null
       ? prog.allocated_chips + (prog.healthy_chips != null ? " / " + prog.healthy_chips : "")
       : "–";
+  // allocated > healthy is real, not corruption: jobs on draining/failed
+  // nodes stay allocated through their grace window — say so.
+  const over =
+    prog && prog.healthy_chips != null && prog.allocated_chips > prog.healthy_chips;
+  chipsEl.title = over
+    ? "allocated exceeds healthy while grace-period jobs finish on draining/failed nodes"
+    : "";
+  $("#progressNote").textContent =
+    "The report opens automatically when the run finishes." +
+    (over
+      ? " Chips allocated can exceed healthy chips while grace-period jobs finish on draining nodes."
+      : "");
 }
 
 async function showFailed(id) {
@@ -401,17 +449,47 @@ async function fetchRunInfo(id) {
   return ok ? doc : null;
 }
 
+/* A transient server outage must NOT render as "No such run" (review
+   fix): only a real 404 means the run is gone.  Anything else (network
+   error, 5xx) shows the unreachable panel and retries. */
+let runRetryTimer = null;
+
+function clearRunRetry() {
+  if (runRetryTimer !== null) {
+    clearTimeout(runRetryTimer);
+    runRetryTimer = null;
+  }
+}
+
+function scheduleRunRetry() {
+  clearRunRetry();
+  const { id, mode } = route;
+  runRetryTimer = setTimeout(() => {
+    runRetryTimer = null;
+    if (route.view === "run" && route.id === id && route.mode === mode) {
+      renderRunView();
+    }
+  }, RUNS_POLL_MS);
+}
+
 async function renderRunView() {
   const { id, mode } = route;
   showView("run");
-  const info = await fetchRunInfo(id);
+  clearRunRetry();
+  const { ok, status, doc } = await apiGet("/api/runs/" + encodeURIComponent(id));
   if (route.view !== "run" || route.id !== id || route.mode !== mode) return;
+  const info = ok ? doc : null;
   renderToolbar(id, info);
   updateSelection();
 
-  if (info === null) {
+  if (!ok) {
     stopProgressPoll();
-    setRunBodyPanel("missing");
+    if (status === 404) {
+      setRunBodyPanel("missing");
+    } else {
+      setRunBodyPanel("unreachable");
+      scheduleRunRetry();
+    }
     return;
   }
   if (mode === "fleet3d" && info.status === "done") {
@@ -573,7 +651,12 @@ async function loadExamples() {
     examplesByName.set(ex.name, ex.yaml);
     const opt = document.createElement("option");
     opt.value = ex.name;
-    opt.textContent = ex.name;
+    // A starter that cannot run as web-submitted (e.g. a relative trace
+    // path) says so in the dropdown instead of surprising at Validate.
+    opt.textContent =
+      ex.runnable === false && typeof ex.note === "string"
+        ? ex.name + " — " + ex.note
+        : ex.name;
     select.appendChild(opt);
   }
 }
@@ -627,6 +710,7 @@ function onRoute() {
   route = parseRoute();
   if (route.view === "new") {
     stopProgressPoll();
+    clearRunRetry();
     initEditor();
     showView("new");
     updateSelection();
@@ -635,12 +719,39 @@ function onRoute() {
     renderRunView();
   } else {
     stopProgressPoll();
+    clearRunRetry();
     showView("home");
     updateSelection();
   }
 }
 
+async function cancelActiveRun() {
+  if (route.view !== "run") return;
+  const id = route.id;
+  const run = runsCache.find((r) => r.id === id);
+  const label = run ? run.title || run.id : id;
+  if (
+    !window.confirm(
+      'Cancel running run "' + label + '"? It stops at the next metrics flush and is marked failed.'
+    )
+  ) {
+    return;
+  }
+  const { ok, doc } = await apiPost("/api/runs/" + encodeURIComponent(id) + "/cancel", {});
+  if (!ok) {
+    // 409 (already finished) or the server went away: the poll shows
+    // the real state momentarily; surface the reason meanwhile.
+    $("#progressSub").textContent =
+      (doc && doc.error) || "cancel failed — is the server still running?";
+    return;
+  }
+  $("#progressSub").textContent = "cancelling — waiting for the next metrics flush";
+}
+
+$("#cancelRunBtn").addEventListener("click", cancelActiveRun);
+
 window.addEventListener("hashchange", onRoute);
 refreshRuns();
 setInterval(refreshRuns, RUNS_POLL_MS);
+setInterval(refreshRunTimes, 60000); // keep "Xm ago" honest between polls
 onRoute();

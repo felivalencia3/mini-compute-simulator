@@ -258,11 +258,22 @@ def test_api_examples_serves_bundled_scenarios(served):
     assert "01_minimal" in names
     assert len(examples) >= 6
     for ex in examples:
-        assert set(ex) == {"name", "yaml"}
+        assert set(ex) in ({"name", "yaml", "runnable"}, {"name", "yaml", "runnable", "note"})
         on_disk = (EXAMPLES_DIR / ex["name"] / "scenario.yaml").read_text(
             encoding="utf-8"
         )
         assert ex["yaml"] == on_disk  # read-only, verbatim
+    # 02_trace_replay ships a RELATIVE trace path: it cannot run as
+    # web-submitted, and the listing says so up front (review fix) —
+    # while the YAML itself stays verbatim.
+    by_name = {e["name"]: e for e in examples}
+    trace = by_name["02_trace_replay"]
+    assert trace["runnable"] is False
+    assert "absolute trace path" in trace["note"]
+    for name, ex in by_name.items():
+        if name != "02_trace_replay":
+            assert ex["runnable"] is True, name
+            assert "note" not in ex, name
 
 
 def test_list_examples_is_defensive(tmp_path):

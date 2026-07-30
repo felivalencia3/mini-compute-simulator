@@ -26,8 +26,12 @@ const TEXT_HEX = "#e6e8eb";
 const MUTED_HEX = "#8b93a1";
 const SPEEDS = [1, 4, 16, 64]; /* sim-hours per wall-second, as in 2D */
 
-const REDUCED = typeof matchMedia === "function" &&
-  matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* Live media query (not a boot-time snapshot): toggling the OS
+   Reduce Motion setting mid-session takes effect immediately because
+   every use site reads .matches at call time. */
+const REDUCED_MQ = typeof matchMedia === "function"
+  ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+const reducedMotion = () => !!(REDUCED_MQ && REDUCED_MQ.matches);
 
 /* ------------------------------------------------------------------ *
  * small utils (ported from the 2D report where noted)
@@ -103,7 +107,7 @@ export async function mountFleet3d(runId) {
     /* same degradation as the 2D fleet map */
     renderNotice(mount, "This run has no stint data", [
       "the 3D fleet replay (like the 2D fleet map) needs who-ran-where data:",
-      "set  outputs: {stints: pod}  in the scenario and re-run",
+      "set  outputs: {stints: true}  in the scenario and re-run",
     ]);
     return;
   }
@@ -263,6 +267,28 @@ class _View {
       r === "preempted" ? 1 : r === "failed" ? 2 : r === "drained" ? 3 : 0));
     this.sRel = Float64Array.from(st.end_reason, (r, i) => (
       r === "running_at_horizon" ? Infinity : this.sT1[i]));
+    /* end_reason "failed" covers BOTH node-failure kills and routine
+       job aborts (abort_prob) — pulsing red on every abort painted the
+       fleet on fire even with node failures disabled (review fix).
+       Scope the failure pulse to stints whose end sits within one
+       scheduler round of an actual node-failure event: failure counts
+       flush on round boundaries, so a kill at t lands in an event at
+       the flush right after it. */
+    const failTimes = (M.events || [])
+      .filter((e) => e.kind === "failure")
+      .map((e) => e.t_us)
+      .sort((a, b) => a - b);
+    this.sNodeKill = new Uint8Array(NSt);
+    if (failTimes.length) {
+      for (let i = 0; i < NSt; i++) {
+        if (this.sReason[i] !== 2) continue;
+        const t1 = this.sT1[i];
+        const j = bisect(failTimes, t1 - this.ROUND);
+        if (j < failTimes.length && failTimes[j] <= t1 + this.ROUND) {
+          this.sNodeKill[i] = 1;
+        }
+      }
+    }
     const order = Array.from({ length: NSt }, (_, i) => i);
     order.sort((a, b) => (this.sRel[a] < this.sRel[b] ? -1 : this.sRel[a] > this.sRel[b] ? 1 : a - b));
     this.byRel = Uint32Array.from(order);
@@ -302,7 +328,8 @@ class _View {
       cur.occ[this.sUnit[i] * this.NC + this.sCls[i]] -= this.sChips[i];
       cur.active.delete(i);
       const u = this.sUnit[i];
-      if (this.sReason[i] === 2) cur.lastFail[u] = Math.max(cur.lastFail[u], this.sT1[i]);
+      /* only genuine node-failure kills pulse — not job aborts */
+      if (this.sNodeKill[i]) cur.lastFail[u] = Math.max(cur.lastFail[u], this.sT1[i]);
       else if (this.sReason[i] === 3) cur.lastDrain[u] = Math.max(cur.lastDrain[u], this.sT1[i]);
     }
     cur.t = T;
@@ -715,11 +742,15 @@ class _View {
     this.slabMesh.instanceColor.needsUpdate = true;
   }
 
-  /* shells: failure / drain pulse (subtle), pin, hover */
+  /* shells: failure / drain pulse (subtle), pin, hover.  The steady
+     (paused / reduced-motion) intensity is deliberately low: at 0.9 the
+     additive shell tinted the whole pod so strongly that slab class
+     colors stopped matching the legend on exactly the pods with recent
+     failures. */
   _updateShells(now) {
     const t = this.S.t;
-    const pulseA = (this.S.playing && !REDUCED && now != null)
-      ? 0.5 + 0.45 * Math.sin(now / 170) : 0.9;
+    const pulseA = (this.S.playing && !reducedMotion() && now != null)
+      ? 0.5 + 0.45 * Math.sin(now / 170) : 0.35;
     const col = new THREE.Color();
     let any = false;
     for (let u = 0; u < this.NU; u++) {
@@ -727,9 +758,11 @@ class _View {
       const pd = t - this.cur.lastDrain[u] < this.PULSE;
       if (pf) { col.copy(this.failColor).multiplyScalar(pulseA); any = true; }
       else if (pd) { col.copy(this.drainColor).multiplyScalar(pulseA); any = true; }
-      else if (this.S.pin === u) col.copy(this.pinColor);
-      else if (this.S.hover === u) col.copy(this.hoverColor);
       else col.setRGB(0, 0, 0);
+      /* the pin cue ADDS to any pulse instead of losing to it — a
+         pinned pod stays findable even inside a failure window */
+      if (this.S.pin === u) col.add(this.pinColor);
+      else if (this.S.hover === u && !pf && !pd) col.copy(this.hoverColor);
       this.shellMesh.setColorAt(u, col);
     }
     this.shellMesh.instanceColor.needsUpdate = true;
@@ -872,14 +905,18 @@ class _View {
     this.hudT.textContent = "T " + fmtClock(this.S.t);
     const i = this.nearestFrame(this.S.t);
     const occ = i >= 0 ? (this.M.frames.occupancy || [])[i] : null;
-    this.hudOcc.textContent = "occupancy " + fmtPct(occ);
+    /* occupancy can legitimately top 100% while grace-period jobs
+       finish on draining/failed nodes — annotate instead of looking
+       like corrupted data */
+    this.hudOcc.textContent = "occupancy " + fmtPct(occ) +
+      (occ != null && occ > 1 ? " (incl. draining-node grace)" : "");
     this.readout.textContent = fmtClock(this.S.t) + " / " + fmtClock(this.HOR);
   }
 
   goPose(i, snap) {
     const p = this.poses[i];
     if (!p) return;
-    this.orbit.flyTo(p, snap || REDUCED);
+    this.orbit.flyTo(p, snap || reducedMotion());
   }
 
   /* ---------------- lifecycle --------------------------------------- */

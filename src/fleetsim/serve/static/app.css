@@ -54,7 +54,10 @@ select, input[type="text"] {
 #newRunBtn { padding: 6px 10px; }
 #railHead { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
 #runsCount { font-family: var(--mono); }
-#runsList { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+/* horizontal padding (offset by the negative margin, so rows keep their
+   visual position) gives :focus-visible outlines room to render inside
+   the scroll container instead of being clipped at its left/right edge */
+#runsList { list-style: none; margin: 0 -5px; padding: 4px 5px; overflow-y: auto; flex: 1; min-height: 0; }
 .railnote { color: var(--muted); font-size: 11.5px; padding: 8px 2px; }
 .railnote.err { color: #ffa8a8; }
 
@@ -111,7 +114,7 @@ select, input[type="text"] {
   background: rgba(255,255,255,.05);
 }
 .tab:hover { background: rgba(255,255,255,.1); }
-.tab[aria-selected="true"] { background: rgba(77,171,247,.15); border-color: rgba(77,171,247,.5); }
+.tab[aria-current="true"] { background: rgba(77,171,247,.15); border-color: rgba(77,171,247,.5); }
 
 #runBody { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
 #reportFrame { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); }
