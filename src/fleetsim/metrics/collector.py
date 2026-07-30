@@ -962,6 +962,13 @@ class MetricsCollector:
         """Flush samples in flush order (shallow copies)."""
         return [dict(r) for r in self._ts]
 
+    def last_flush_sample(self) -> dict[str, Any] | None:
+        """The most recent flush-sampled timeseries row (shallow copy),
+        or ``None`` before the first flush.  O(1), read-side only — the
+        engine's opt-in ``progress_cb`` (v0.5 ``fleetsim serve``) probes
+        this for its live occupancy/chip fields."""
+        return dict(self._ts[-1]) if self._ts else None
+
     def integral_report(self) -> dict[str, dict[str, Any]]:
         """All time-weighted integrals as float (chip-/job-)seconds, for
         both scopes: ``{"full": {...}, "window": {...}}``.

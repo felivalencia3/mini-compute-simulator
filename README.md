@@ -18,7 +18,7 @@ Gavel, Pollux) have flat GPU counts and no failures; per-job simulators
 ML gang/preemption-cost semantics. That combination is the product — see
 [DESIGN.md](DESIGN.md) §1 for the full survey.
 
-## What it does (honest scope, v0.4)
+## What it does (honest scope, v0.5)
 
 - **Fleet model**: one metro, N clusters, config-defined level trees
   (`[cluster, pod, rack, node]` — vocabulary from config, not code),
@@ -84,6 +84,13 @@ ML gang/preemption-cost semantics. That combination is the product — see
   time, watch preemption waves and the reclaim of 32 pods for a
   131K-chip gang — with zero external requests, every pixel traceable
   to the output files ([docs/visualizer.md](docs/visualizer.md)).
+- **Web app** (v0.5): `fleetsim serve --open` runs a local,
+  pure-stdlib web app — browse workspace runs, open any run as the
+  interactive 2D report, submit scenario YAML from an editor with
+  validation and live progress, and replay the fleet in a **three.js
+  3D view** (vendored, zero external requests). Loopback-only by
+  default, strict CSP, path-contained workspace, `yaml.safe_load`
+  only, in-process runs ([docs/webapp.md](docs/webapp.md)).
 - **Engine**: int-microsecond event core, coalesced scheduler rounds
   (cadence follows `sim.round`). Measured on the shipped 2,048-chip
   example at ρ≈0.9: 14 simulated days in ~4 s, 56 days in ~45 s, 6
@@ -101,8 +108,7 @@ capacity classes (calendar capacity is the top-level `reservations`
 section), TPU OCS predicates, multi-gang (Multislice) jobs, autoscaling
 inference, Gavel throughput matrices / unpinned chip types, multi-metro
 two-stage scheduling. Roadmap: DESIGN.md §11 plus the v0.2 (§16) and
-v0.4 (§17) addenda — v0.5 targets the web app surface, v0.6 research
-replay/validation.
+v0.4 (§17) addenda — v0.6 targets research replay/validation.
 
 ## Quickstart
 
@@ -130,6 +136,9 @@ fleetsim run examples/05_topology_tradeoff/scenario.yaml \
     --override penalties.xover.pod=1.0 -o out_free
 fleetsim compare out_penalty out_free               # relax vs pay, measured
 fleetsim run examples/06_economics/scenario.yaml -o out_econ   # quota + calendar block + spot
+
+# the local web app: browse runs, launch scenarios, 2D report + 3D replay
+fleetsim serve --open
 
 fleetsim --version
 ```
@@ -168,6 +177,26 @@ cards. The fleet map needs `outputs: {stints: pod}` in the scenario
 fleet-level replay and says so. Every pixel maps to a documented
 column of the run outputs — the full honesty contract, controls, and
 performance notes live in [docs/visualizer.md](docs/visualizer.md).
+
+## Web app
+
+```
+fleetsim serve [-p 8500] [--workspace ./fleetsim-runs] [--host 127.0.0.1] [--open]
+```
+
+A local web app on the same pipeline (pure stdlib `http.server`, no new
+dependencies, no build step): a runs rail with status and headline
+metrics, a YAML editor with the bundled examples as templates,
+validate-before-run with CLI-parity errors, live per-round progress
+while a run executes, the 2D report inline (and downloadable), and a
+three.js **3D fleet replay** — halls of pods as stacks of node slabs,
+colored by class, with failure/drain pulses and camera poses (three.js
+is vendored into the package; the app makes zero external requests).
+Binds 127.0.0.1 only unless you explicitly widen it; run ids are
+server-generated, every path is containment-checked, scenarios are
+`yaml.safe_load`-parsed and executed in-process. Full API contract,
+workspace layout, security posture, 3D controls, and troubleshooting:
+[docs/webapp.md](docs/webapp.md).
 
 ## Custom schedulers
 

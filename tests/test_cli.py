@@ -397,10 +397,24 @@ def test_cli_viz_open_flag_opens_report(tmp_path, monkeypatch, capsys):
 
 
 def test_public_api_exports():
-    assert fleetsim.__version__ == "0.4.0"
+    assert fleetsim.__version__ == "0.5.0"
     for name in fleetsim.__all__:
         assert getattr(fleetsim, name, None) is not None, name
     # The documented plugin surface is importable from the package root.
     assert fleetsim.run_scenario is api.run_scenario
     assert issubclass(fleetsim.Place, object)
     assert callable(fleetsim.register)
+
+
+def test_pyproject_version_matches_package():
+    """The two version declarations (pyproject.toml, __init__.py) must
+    never drift — `fleetsim --version` and the wheel metadata both feed
+    off one of them."""
+    import tomllib
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    if not pyproject.is_file():  # running from an installed wheel
+        pytest.skip("no repo checkout")
+    with pyproject.open("rb") as fh:
+        doc = tomllib.load(fh)
+    assert doc["project"]["version"] == fleetsim.__version__

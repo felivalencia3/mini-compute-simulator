@@ -8,6 +8,7 @@ Subcommands::
     fleetsim compare out_a/ out_b/ [...]
     fleetsim viz out/ [out_b/] [-o report.html] [--title T]
                      [--map-level L] [--open]
+    fleetsim serve [-p 8500] [--workspace DIR] [--host H] [--open]
 
 ``run`` executes the scenario and prints the summary table; ``validate``
 checks schema + feasibility (fleet buildable, scheduler resolvable,
@@ -15,7 +16,9 @@ trace file present) and exits nonzero on any error; ``plot`` renders the
 standard charts from an output directory; ``compare`` prints headline
 metrics of two or more runs side by side; ``viz`` renders one run (or an
 A/B pair) into a single self-contained interactive HTML replay
-(docs/visualizer.md).
+(docs/visualizer.md); ``serve`` starts the local web app (v0.5): browse
+workspace runs, launch scenarios with live progress, open the 2D report
+and the three.js 3D fleet replay (docs/webapp.md).
 
 Exit codes: 0 success, 1 validation/comparison failure, 2 usage or
 runtime error.  All output is deterministic given the inputs.
@@ -111,6 +114,32 @@ def build_parser() -> argparse.ArgumentParser:
         dest="open_browser",
         help="open the written report in the default browser",
     )
+
+    p_srv = sub.add_parser(
+        "serve",
+        help="start the local fleetsim web app (browse, launch, replay runs)",
+    )
+    p_srv.add_argument(
+        "-p", "--port", type=int, default=8500, help="port (default 8500)"
+    )
+    p_srv.add_argument(
+        "--workspace",
+        default="./fleetsim-runs",
+        help="run workspace directory, created if missing"
+        " (default ./fleetsim-runs)",
+    )
+    p_srv.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="bind address; NON-LOOPBACK VALUES EXPOSE THE APP TO YOUR"
+        " NETWORK and print a warning (default 127.0.0.1)",
+    )
+    p_srv.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="open the app in the default browser",
+    )
     return parser
 
 
@@ -155,16 +184,39 @@ def _cmd_run(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _feasibility_errors(scenario, scenario_dir: Path) -> list[str]:
-    """Checks beyond the schema: fleet buildable, scheduler resolvable,
-    trace source present.  Run only on schema-clean scenarios."""
-    errors: list[str] = []
-    try:
-        from .fleet.build import build_fleet
+#: Ceiling on the DECLARED fleet size, checked arithmetically from the
+#: topology counts BEFORE any node object is materialized.  Building
+#: costs ~30 µs and ~1.4 KB per node, so an unbounded declaration (a
+#: 200-byte YAML can declare billions of nodes) would pin a core for
+#: minutes or OOM the process — including the `fleetsim serve` HTTP
+#: handler that validates submissions.  The ceiling is 4x the frontier
+#: example (65,536 nodes / 524,288 chips).
+_MAX_FLEET_NODES = 262_144  # 2**18
+_MAX_FLEET_CHIPS = 4_194_304  # 2**22
 
-        build_fleet(scenario)
-    except ValueError as exc:
-        errors.append(f"fleet: {exc}")
+
+def _feasibility_errors(scenario, scenario_dir: Path) -> list[str]:
+    """Checks beyond the schema: fleet buildable (and bounded), scheduler
+    resolvable, trace source present.  Run only on schema-clean
+    scenarios."""
+    errors: list[str] = []
+    clusters = scenario.fleet.clusters()
+    total_nodes = sum(cl.total_nodes() for cl in clusters)
+    total_chips = sum(cl.total_chips() for cl in clusters)
+    if total_nodes > _MAX_FLEET_NODES or total_chips > _MAX_FLEET_CHIPS:
+        errors.append(
+            f"fleet: declared fleet is too large to build"
+            f" ({total_nodes:,} nodes / {total_chips:,} chips; the"
+            f" ceiling is {_MAX_FLEET_NODES:,} nodes /"
+            f" {_MAX_FLEET_CHIPS:,} chips)"
+        )
+    else:
+        try:
+            from .fleet.build import build_fleet
+
+            build_fleet(scenario)
+        except ValueError as exc:
+            errors.append(f"fleet: {exc}")
     try:
         from .schedulers.base import get_scheduler
 
@@ -440,6 +492,22 @@ def _cmd_viz(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# serve
+# ---------------------------------------------------------------------------
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    from .serve.server import serve
+
+    return serve(
+        port=args.port,
+        workspace=args.workspace,
+        host=args.host,
+        open_browser=args.open_browser,
+    )
+
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
@@ -458,6 +526,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_compare(args)
         if args.command == "viz":
             return _cmd_viz(args)
+        if args.command == "serve":
+            return _cmd_serve(args)
     except ScenarioError as exc:
         for err in exc.errors:
             print(f"error: {err}", file=sys.stderr)

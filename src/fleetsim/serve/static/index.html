@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>fleetsim</title>
+<!-- the xmlns URI below is an XML namespace identifier inside a data:
+     URI, not a network request; the CSP img-src allows data: -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b0e14'/%3E%3Crect x='2.5' y='2.5' width='5' height='5' rx='1' fill='%234c6ef5'/%3E%3Crect x='8.5' y='2.5' width='5' height='5' rx='1' fill='%2312b886'/%3E%3Crect x='2.5' y='8.5' width='5' height='5' rx='1' fill='%23fab005'/%3E%3Crect x='8.5' y='8.5' width='5' height='5' rx='1' fill='%239775fa'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <nav id="rail" aria-label="runs">
+    <div id="brand">
+      <a href="#" id="brandLink"><span class="wordmark">fleetsim</span><span class="ver">v0.5</span></a>
+    </div>
+    <a id="newRunBtn" class="btn primary" href="#new">New run</a>
+    <div id="railHead">
+      <h2>Runs</h2>
+      <span id="runsCount" class="sub"></span>
+    </div>
+    <!-- the empty note sits ABOVE the flex:1 list so it hugs the RUNS
+         header instead of being pushed to the bottom of the rail -->
+    <div id="railEmpty" class="railnote hidden">No runs yet. Start one with <span class="kbd">New run</span>.</div>
+    <ul id="runsList" role="list"></ul>
+    <div id="railError" class="railnote err hidden"></div>
+  </nav>
+
+  <main id="main">
+    <!-- home -->
+    <section id="view-home" class="view" aria-label="welcome">
+      <div class="panel homepanel">
+        <h1>fleetsim</h1>
+        <p class="sub">Local mission control for the fleet simulator.</p>
+        <ul class="homelist">
+          <li>Pick a run on the left to open its interactive 2D report.</li>
+          <li><a href="#new">New run</a> opens the scenario editor: validate YAML, launch, watch live progress.</li>
+          <li>Runs finished from the CLI into this workspace show up here too.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- run (report / progress / 3d) -->
+    <section id="view-run" class="view hidden" aria-label="run">
+      <div id="runToolbar">
+        <div id="runTitleWrap">
+          <span id="runDot" class="dot" aria-hidden="true"></span>
+          <h1 id="runTitle"></h1>
+          <span id="runMeta" class="sub mono"></span>
+        </div>
+        <!-- plain navigation links (aria-current marks the active view);
+             deliberately NOT role=tablist/tab, which would promise
+             arrow-key tab-widget semantics these links don't implement -->
+        <div id="runTabs" aria-label="run views">
+          <a id="tabReport" class="tab">2D report</a>
+          <a id="tab3d" class="tab">3D fleet</a>
+          <a id="downloadReport" class="btn" download>Download report.html</a>
+        </div>
+      </div>
+      <div id="runBody">
+        <div id="runProgress" class="panel progresspanel hidden" aria-live="polite">
+          <div class="phead"><h2 id="progressHead">Running</h2><span id="progressSub" class="sub"></span></div>
+          <div id="progressTrack" role="progressbar" aria-label="simulation progress"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="progressFill"></div>
+          </div>
+          <div id="progressStats" class="statrow">
+            <div class="stat"><span class="clabel">sim time</span><span id="statTime" class="cval mono">–</span></div>
+            <div class="stat"><span class="clabel">occupancy to date</span><span id="statOcc" class="cval mono">–</span></div>
+            <div class="stat"><span class="clabel">jobs finished</span><span id="statFinished" class="cval mono">–</span></div>
+            <div class="stat"><span class="clabel">running</span><span id="statRunning" class="cval mono">–</span></div>
+            <div class="stat"><span class="clabel">pending</span><span id="statPending" class="cval mono">–</span></div>
+            <div class="stat"><span class="clabel">chips allocated</span><span id="statChips" class="cval mono">–</span></div>
+          </div>
+          <div class="ctlrow" style="margin-top: 10px;">
+            <button id="cancelRunBtn" class="btn hidden" type="button"
+              title="stop this run at its next metrics flush (it will be marked failed)">Cancel run</button>
+          </div>
+          <p id="progressNote" class="sub">The report opens automatically when the run finishes.</p>
+        </div>
+        <div id="runFailed" class="panel failpanel hidden">
+          <div class="phead"><h2>Run failed</h2></div>
+          <pre id="failError" class="errtext mono"></pre>
+        </div>
+        <div id="runMissing" class="panel failpanel hidden">
+          <div class="phead"><h2>No such run</h2></div>
+          <p class="sub">This run is not in the workspace. It may have been dequeued or removed.</p>
+        </div>
+        <div id="runUnreachable" class="panel failpanel hidden">
+          <div class="phead"><h2>Cannot reach the server</h2></div>
+          <p class="sub">Is <span class="kbd">fleetsim serve</span> still running? This view retries automatically.</p>
+        </div>
+        <iframe id="reportFrame" class="hidden" title="fleetsim 2D report"></iframe>
+        <div id="fleet3d" class="panel hidden">
+          <div id="fleet3dMount" class="threedph">
+            <div class="threedbadge" aria-hidden="true">
+              <span class="cube c1"></span><span class="cube c2"></span><span class="cube c3"></span>
+            </div>
+            <h2>Loading 3D fleet replay…</h2>
+            <p class="sub">The three.js renderer and the run&#39;s replay model
+            load on first open.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- new run (scenario editor) -->
+    <section id="view-new" class="view hidden" aria-label="new run">
+      <div class="panel editorpanel">
+        <div class="phead">
+          <h2>New run</h2>
+          <span class="sub">Scenario YAML — validated server-side before anything executes.</span>
+        </div>
+        <div class="editrow">
+          <label class="ctl" for="tplSelect">starter template</label>
+          <select id="tplSelect" aria-label="starter template">
+            <option value="">— pick a starter —</option>
+          </select>
+          <label class="ctl" for="titleInput">title</label>
+          <input id="titleInput" type="text" placeholder="optional run title" maxlength="120">
+        </div>
+        <div id="editorWrap">
+          <div id="gutter" aria-hidden="true"></div>
+          <textarea id="yamlBox" spellcheck="false" autocomplete="off" autocapitalize="off"
+            wrap="off" aria-label="scenario YAML"></textarea>
+        </div>
+        <div class="editorHint sub">Tip: keep <span class="kbd">outputs: {stints: true}</span> in the scenario —
+          the report&#39;s fleet map needs stint data. <span class="kbd">Cmd/Ctrl-Enter</span> validates.</div>
+        <div class="ctlrow">
+          <button id="validateBtn" class="btn" type="button">Validate</button>
+          <button id="runBtn" class="btn primary" type="button">Run scenario</button>
+          <span id="editorStatus" class="sub" role="status"></span>
+        </div>
+        <div id="valOk" class="valok hidden" role="status">Scenario is valid.</div>
+        <ul id="valErrors" class="valerrors hidden"></ul>
+      </div>
+    </section>
+  </main>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

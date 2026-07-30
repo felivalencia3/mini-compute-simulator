@@ -27,7 +27,7 @@ output entirely (the summary dict is still returned).
 from __future__ import annotations
 
 import copy
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -155,6 +155,8 @@ def run_scenario(
     out_dir: str | Path | None = None,
     seed_override: int | None = None,
     overrides: Mapping[str, str] | None = None,
+    *,
+    progress_cb: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Run one scenario end to end and return its summary dict.
 
@@ -172,6 +174,11 @@ def run_scenario(
     overrides:
         Dotted-path document edits applied before parsing, e.g.
         ``{"scheduler.name": "fifo", "sim.seed": "7"}`` (values are YAML).
+    progress_cb:
+        Optional observer forwarded to the :class:`Simulator` — invoked
+        at every metrics flush with the engine's progress snapshot dict
+        (see the Simulator docstring).  ``None`` (default) changes
+        nothing; outputs stay byte-identical.
 
     Raises :class:`ScenarioError` (listing every problem) for invalid
     scenarios and ``ValueError`` for unknown scheduler names.
@@ -197,7 +204,14 @@ def run_scenario(
         QuotaAdmission(scenario.quota) if scenario.quota is not None else None
     )
     sim = Simulator(
-        scenario, fleet, source, scheduler, collector, admission, rng=rng
+        scenario,
+        fleet,
+        source,
+        scheduler,
+        collector,
+        admission,
+        rng=rng,
+        progress_cb=progress_cb,
     )
     sim.run()
 
