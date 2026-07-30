@@ -92,6 +92,15 @@ INVARIANTS
   (DESIGN §9): the minimum gang chip count observed among submitted jobs
   so far, capped at the node quantum (before any job arrives, the node
   quantum) — free chips a gang of that size cannot use.
+- **v0.7 placement diagnostics** (``stranded_whole_nodes`` /
+  ``stranded_whole_node_chips`` timeseries columns, the
+  ``stranded_whole_nodes`` entry in :meth:`frag_stats`, and
+  ``placement_policy``) are recorded ONLY when the scenario NAMED a
+  placement policy (``scheduler.params.placement``) — the same
+  feature-enablement gating as the v0.4 trackers, so a scenario that names
+  none produces byte-identical output to a pre-v0.7 build.  These count
+  partially-occupied nodes: free capacity that, by the whole-node
+  allocation rule, no gang needing whole nodes can ever claim.
 """
 
 from __future__ import annotations
@@ -106,7 +115,15 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..config import Scenario
     from ..fleet.tree import FleetTree
 
-__all__ = ["TimeWeighted", "MetricsCollector"]
+__all__ = ["TimeWeighted", "MetricsCollector", "FRAG_NON_LEVEL_KEYS"]
+
+#: Keys in :meth:`MetricsCollector.frag_stats` (and hence the summary's
+#: ``fragmentation`` map) that are NOT fleet level names — v0.7 placement
+#: diagnostics living alongside the per-level fragmentation indices.
+#: Consumers that iterate the map as "the fleet's levels" must subtract
+#: these; the config layer rejects a cluster level with any of these names
+#: so the two can never actually collide.
+FRAG_NON_LEVEL_KEYS: frozenset[str] = frozenset({"stranded_whole_nodes"})
 
 _US = 1_000_000  # microseconds per second
 
@@ -314,6 +331,7 @@ class MetricsCollector:
         track_relaxed: bool = False,
         track_quota: bool = False,
         track_reservations: bool = False,
+        placement_policy: str | None = None,
     ):
         if horizon_us <= 0:
             raise ValueError(f"horizon_us must be positive, got {horizon_us}")
@@ -382,6 +400,18 @@ class MetricsCollector:
         self._demotions_win = 0
         self._res_reports: list[dict[str, Any]] = []
 
+        # v0.7 placement-study mode, keyed on FEATURE ENABLEMENT exactly
+        # like the v0.4 trackers above: a scenario that NAMES a placement
+        # policy (`scheduler.params.placement`, including an explicit
+        # `first_fit`) gets the extra placement diagnostics; a scenario
+        # that names none keeps the pre-v0.7 output schema byte for byte.
+        self._placement_policy = (
+            str(placement_policy) if placement_policy is not None else None
+        )
+        # [sum, max, n] of the stranded-whole-node count over flush samples.
+        self._swn_full: list[float] | None = None
+        self._swn_win: list[float] | None = None
+
         # Allocation stints (v0.3 visualizer, opt-in; see module docstring).
         self._stint_level: str | bool | None = None if stints is False else stints
         self._stint_leaf: dict[str, tuple[str, int]] = {}
@@ -412,7 +442,10 @@ class MetricsCollector:
         """Build from a scenario: horizon from ``sim``, window fractions
         from optional ``outputs`` keys ``warmup_frac`` / ``drain_frac``
         (they land in ``OutputsConfig.extra``), stint recording from
-        ``outputs.stints``."""
+        ``outputs.stints``, placement diagnostics from
+        ``scheduler.params.placement``."""
+        from ..config import scheduler_placement_name
+
         extra = scenario.outputs.extra or {}
         return cls(
             scenario.sim.horizon_us,
@@ -429,6 +462,9 @@ class MetricsCollector:
             ),
             track_quota=scenario.quota is not None,
             track_reservations=bool(scenario.reservations),
+            # v0.7: only when the scenario NAMES a placement policy, so
+            # scenarios that don't keep the exact pre-v0.7 schema.
+            placement_policy=scheduler_placement_name(scenario),
         )
 
     def _init_fleet_statics(self, fleet: "FleetTree") -> None:
@@ -779,6 +815,35 @@ class MetricsCollector:
             ),
         }
         in_win = self._in_window(t)
+        if self._placement_policy is not None:
+            # v0.7 placement diagnostics (opt-in with a named policy): how
+            # many HEALTHY leaves are PARTIALLY occupied, i.e. hold free
+            # chips that no whole-node gang can ever claim.  This is the
+            # quantity a best-fit placer suppresses and a spread placer
+            # inflates, so a study can SEE the mechanism rather than
+            # inferring it from JCT.
+            swn = fleet.stranded_whole_nodes()
+            row["stranded_whole_nodes"] = swn
+            row["stranded_whole_node_chips"] = fleet.stranded_whole_node_chips()
+            # NOTE ``float(swn)`` on BOTH sides of the running max: ``swn``
+            # is an int, so ``max(acc, swn)`` would keep whichever operand
+            # won and make the emitted ``max`` an int or a float depending
+            # on where in the run the maximum happened to fall.  Every
+            # per-level ``max`` in the same summary map is a float, and
+            # consumers pin that schema.
+            if self._swn_full is None:
+                self._swn_full = [float(swn), float(swn), 1]
+            else:
+                self._swn_full[0] += swn
+                self._swn_full[1] = max(self._swn_full[1], float(swn))
+                self._swn_full[2] += 1
+            if in_win:
+                if self._swn_win is None:
+                    self._swn_win = [float(swn), float(swn), 1]
+                else:
+                    self._swn_win[0] += swn
+                    self._swn_win[1] = max(self._swn_win[1], float(swn))
+                    self._swn_win[2] += 1
         for level in self._fleet_levels:
             largest = fleet.largest_placeable(level)
             frag = fleet.fragmentation_index(level)
@@ -1043,18 +1108,46 @@ class MetricsCollector:
             out["window"]["quota_demotions"] = self._demotions_win
         return out
 
+    @property
+    def placement_policy(self) -> str | None:
+        """The placement-policy NAME the scenario selected, or ``None``
+        when it named none (then the scheduler default, ``first_fit``, ran
+        and the v0.7 placement diagnostics are switched off)."""
+        return self._placement_policy
+
     def frag_stats(self) -> dict[str, dict[str, dict[str, float]]]:
-        """Fragmentation-index stats over flush samples, per level:
-        ``{"full"|"window": {level: {"mean", "max", "n_samples"}}}``.
-        Levels with no in-scope samples are absent."""
+        """Fragmentation stats over flush samples:
+        ``{"full"|"window": {key: {"mean", "max", "n_samples"}}}``.
+
+        Keys are LEVEL names carrying that level's fragmentation index,
+        plus — only when the scenario named a placement policy (v0.7) —
+        the reserved key ``"stranded_whole_nodes"`` carrying the count of
+        partially-occupied HEALTHY leaves (see
+        :meth:`fleetsim.fleet.tree.FleetTree.stranded_whole_nodes`).  No
+        fleet level can collide with it: level names come from a cluster's
+        declared level list, and a level called ``stranded_whole_nodes``
+        would be rejected as a reserved name by the config layer.  Keys
+        with no in-scope samples are absent."""
         out: dict[str, dict[str, dict[str, float]]] = {}
+        swn = {"full": self._swn_full, "window": self._swn_win}
+        # ``float`` on every emitted value: this map's schema is all-float
+        # (``n_samples`` aside), and a consumer pinning it must not see an
+        # int for one key because that key's running max happened to be
+        # updated from an int sample.
         for scope, table in (("full", self._frag_full), ("window", self._frag_win)):
             out[scope] = {
                 level: {
                     "mean": acc[0] / acc[2],
-                    "max": acc[1],
+                    "max": float(acc[1]),
                     "n_samples": int(acc[2]),
                 }
                 for level, acc in sorted(table.items())
             }
+            acc = swn[scope]
+            if acc is not None:
+                out[scope]["stranded_whole_nodes"] = {
+                    "mean": acc[0] / acc[2],
+                    "max": float(acc[1]),
+                    "n_samples": int(acc[2]),
+                }
         return out

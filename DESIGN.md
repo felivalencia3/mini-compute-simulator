@@ -940,6 +940,14 @@ over-inflates.  The V1 opt-in test asserts [1.3, 8]× for the other three and
 `xfail`s Saturn with exactly this diagnosis — the band is **not** widened to
 pass; a consolidate placer (v0.7) is the remedy.
 
+> **SUPERSEDED BY §19.** The gap is closed, but the diagnosis in the
+> paragraph above is **wrong**: the replay fleet is single-level, so gang
+> consolidation cannot change any outcome there, and the VC carrying 84% of
+> the gap has no gang above 56 GPU. The real cause is *sub-node* stranding
+> of whole-node capacity. Kept here as written because getting the
+> mechanism wrong while getting the fix direction right is exactly the
+> failure mode §19 exists to record.
+
 Two plan assumptions were wrong and were corrected in the harness, not
 fudged: (1) the reference scan is **strict/blocking**, not best-effort — a
 best-effort scan collapses FIFO's head-of-line queuing (the whole point of
@@ -989,3 +997,272 @@ expected to bring Saturn's JCT ratio into band (§18.4).  The Gavel throughput
 matrix / unpinned chip types and multi-metro two-stage scheduling (carried on
 the roadmap since §17.6) remain future work.  v1.0 trust release unchanged
 (§11).
+
+---
+
+## 19. v0.7 addendum — the placement update
+
+v0.7's theme: **the *where* axis becomes a real, selectable policy family**,
+and the last Helios deviation closes. Everything here is opt-in; `first_fit`
+remains the default and every pre-v0.7 scenario's outputs are byte-identical
+— asserted at the schema level for `examples/01_minimal` and
+`examples/04_frontier`, and **verified by byte comparison** for this
+release: both examples' `summary.json`, `jobs.parquet`,
+`timeseries.parquet` and `stints.parquet` are `cmp`-identical to the same
+scenarios run on the v0.6 tag.
+
+Shipped surfaces: the policy family (§19.2), the config/metric/reclaim
+plumbing (§19.3), the validation outcome (§19.4), plus
+[docs/placement.md](docs/placement.md) (semantics, selection guide,
+interactions and limits) and `examples/07_placement_study/` — a ~10-second
+four-placer study on 256 chips whose README carries the measured
+stranded-node / large-gang-wait / occupancy / goodput deltas and four
+counter-results. Version 0.7.0.
+
+### 19.1 Why: the v0.6 Saturn gap had the wrong explanation
+
+§18.4 blamed Saturn's out-of-band JCT ratio (8.75× vs a published 6.59×) on
+FirstFit fragmenting *large gangs* relative to a "consolidate" placer. That
+cannot be right, and the refutation is structural, not statistical:
+
+- the replay fleet is **single-level** (`topology: {levels: ["node"]}` → one
+  cluster domain + one metro + N node leaves), replay jobs carry
+  `within=None` / `segments=None`, and no `penalties.xover` is configured. So
+  there is no higher domain to consolidate within and no crossing penalty to
+  pay: **which** free nodes a multi-node gang takes provably cannot change
+  the outcome;
+- Saturn's largest gang is 200 GPU (25 nodes), and the single VC carrying
+  **84%** of the FIFO−SJF gap tops out at 56 GPU with 0.7% of its jobs above
+  one node. It is not a large-gang effect.
+
+The real mechanism is **sub-node stranding of whole-node capacity**. §4.1's
+allocation model says a leaf with ANY owner is ineligible for a whole-node
+request — a faithful approximation of the trace rather than an identity:
+`node_num == ceil(gpu_num/8)` holds for **99.66 %** of windowed multi-GPU
+Helios jobs, and every one of the 225 exceptions used *more* nodes than the
+ceiling (Helios sometimes spread a small job across hosts), a direction
+fleetsim's one-leaf sub-node model does not represent either
+(docs/validation.md §4.2). But FirstFit places *sub-node* gangs by
+ascending leaf id with no preference for partially-used nodes, so on a
+70.8%-single-GPU workload it opens fully-free nodes for 1-GPU jobs and
+re-dirties nodes a gang just released. Free chips accumulate as 1–7-GPU
+remainders no ≥ 8-GPU job can use; under the strict scan **100%** of
+measured blocked-idle chip-seconds come from heads needing whole nodes, and
+**87.7%** of free chips during blocks sit on partial nodes. At 94.4% offered
+load that idleness sets the standing backlog, and FIFO's mean JCT *is* that
+backlog. SJF barely notices — its head is almost always a 1-GPU job that
+fits in a remainder.
+
+**Design lesson, recorded deliberately:** the fix direction ("use a
+consolidating placer") was right for the wrong reason, and the wrong reason
+named the wrong axis (hierarchy instead of node packing). A modeling gap is
+only closed when the *mechanism* is measured, not when a plausible label is
+attached to it.
+
+### 19.2 The policy family (`schedulers/placement.py`)
+
+Ordering and placement were already separate axes (§7); v0.7 populates the
+placement axis and makes it configurable:
+
+| name | sub-node request | whole-node request |
+|---|---|---|
+| `first_fit` (default) | lowest leaf id with room | largest-first exact cover, ascending id |
+| `best_fit` | **tightest sufficient** leaf (ties ascending id, early exit on exact fit) | tightest parent domain that fits alone; else parents ascending by capacity |
+| `consolidate` | same as `best_fit` | tightest parent domain that fits alone; else parents **descending** by capacity (fewest *parent* domains — the grouping is flat, so on a 3-level fleet it can span more pods than `first_fit`; measured in docs/placement.md) |
+| `spread` | leaf with the **most** free chips (worst fit) | round-robin across parent domains (the anti-policy / control arm) |
+
+Search domains are likewise ordered tightest-first (emptiest-first for
+`spread`) instead of by id. Segmented (`segments`) specs delegate unchanged
+to §17's segment packer, and the v0.4 relax/penalty pair is
+policy-independent: every policy runs the constrained search, then the
+unconstrained retry after `relax_after_s`, marking the result `relaxed`.
+
+**Named honestly:** `consolidate` and `best_fit` are *bit-for-bit identical
+on a single-level fleet* (one parent domain), including the Helios replay.
+`consolidate` is named for what the reference implementation calls its
+placer; `best_fit` names the mechanism that actually matters. A test asserts
+the equivalence, and `Consolidate`'s docstring states the degeneracy —
+mistaking the name for the mechanism is what produced §18.4's misdiagnosis.
+
+### 19.3 Surfaces
+
+- **Tree primitives**: `FleetTree.search_best_fit` / `search_consolidate` /
+  `search_spread`, plus a `search(spec, tenant, *, mode=...)` dispatcher.
+  Additive and non-mutating, exactly like `search_first_fit` /
+  `search_segmented` — **`search_first_fit` and `_scan_leaves` are
+  untouched**. All modes honor tenant reservation holds (v0.4) and leaf
+  health, and agree on *feasibility* on uniform-leaf fleets (they differ
+  only in choice). On **mixed** leaf sizes — reachable via the template
+  form, not the compact one — the greedy caveat of `_scan_leaves` applies
+  and grouping can hide a cover, so the packed scan retries once in the
+  ungrouped order; their whole-node feasibility is therefore a *superset* of
+  first-fit's, never a subset.
+- **View**: three `ClusterView` pass-throughs, so a policy never reaches
+  into engine internals.
+- **Config**: `scheduler: {name: <any>, params: {placement: <name>}}`.
+  Resolved by `get_scheduler` for every scheduler that **opts in** by
+  annotating `placement: PlacementPolicy` (all four built-ins, and any
+  plugin following the convention); for those, unknown names are a
+  **validation error** listing the available policies — the set is closed,
+  unlike scheduler names. A plugin using `placement` for its own vocabulary
+  gets the string passed through unvalidated, exactly as pre-v0.7: the name
+  is a convention, not a reserved word.
+- **Protocol**: `PlacementPolicy` declares `search_mode` as a member, not a
+  convention — a policy omitting it would place one way and have its
+  evictions planned another. `ClusterView` declares
+  `reclaim_feasible(..., *, mode="first_fit")` for the same reason: a custom
+  view stuck on the two-argument form works under the default policy only.
+- **Reclaim consistency**: `search_after_release(..., mode=...)` closes a
+  latent v0.2 inconsistency where reclaim planning always searched
+  first-fit. `tiered_priority` forwards its policy's `search_mode` — and
+  only when it is non-default, so existing two-argument `reclaim_feasible`
+  callers and custom views are untouched **under the default policy**.
+- **Validation harness**: `per_vc_replay` / `replay_canonical` take
+  `placement=` and default it to the **engine** default (`first_fit`), so no
+  pre-v0.7 caller's numbers move; the shipped rungs pass
+  `VALIDATION_PLACEMENT = "consolidate"` explicitly, next to
+  `pool_snapshot="max"`. `frag_prefix_s=` surfaces the mechanism metric out
+  of the harness, which is what `scripts/helios_stranding_table.py`
+  regenerates §19.4's table from.
+- **Metrics**: `FleetTree.stranded_whole_nodes()` (count of HEALTHY leaves
+  with `0 < free < chips`) and `stranded_whole_node_chips()` — the
+  *mechanism* of §19.1 made directly observable. Sampled at flush into
+  `timeseries.parquet` and aggregated into the summary's `fragmentation`
+  map, with `counts.placement_policy` recording which placer ran. All three
+  are gated on the scenario NAMING a policy, the same
+  feature-enablement pattern as v0.4's trackers — so a scenario that names
+  none keeps the exact pre-v0.7 output schema. Both surface in the human
+  output too — a `stranded whole nodes (mean)` row in `fleetsim run`'s
+  summary table and in `fleetsim compare` — under the same gate, because
+  §19.4's first finding is that the *existing* headline rows (occupancy,
+  goodput) can be bit-identical across placers, so a placement A/B read off
+  them alone looks like a null result.
+
+### 19.4 Result and its limits
+
+Flipping the Helios harness to `placement="consolidate"` (a stated
+validation-model choice, on the same footing as `pool_snapshot="max"`) puts
+**all four** clusters inside the [1.3, 8]× JCT-ratio band with no `xfail`:
+Saturn 6.87 (published 6.59), Venus 3.21 (3.07), Earth 2.95 (2.87), Uranus
+1.51 (1.49). Saturn's absolute FIFO JCT lands at 55,978 s against a
+published 55,984 s; all four absolute FIFO JCTs are within ±14% (was ±35%)
+and all four `#Queuing` counts within ±12% (Earth's −27% deviation became
++7.3%). Six of those eight absolute quantities moved toward published and
+two moved away (Uranus's FIFO JCT overshoots from +5% to −6.4%; Venus's
+`#Queuing` drifts from −9% to −11.2%). Note the eight are **not independent** — they are all
+functions of the same FIFO queue-wait distribution — so the evidence that
+placement was the residual is the mechanism metric plus the cross-cluster
+ordering, not a count of moved numbers (docs/validation.md §4.2, §5).
+
+Re-measured end to end as its own step (all four policies × four clusters ×
+FIFO and SJF on the real trace, 32 replays): every figure above reproduced to
+the digit, `best_fit` came out **bit-identical** to `consolidate` on the real
+trace as §19.2's degeneracy predicts, and the mean absolute error against the
+published ratios is 3.4 % for `consolidate`/`best_fit` against 27.4 % for
+`first_fit` and 29.5 % for `spread`.
+
+Four limits are recorded rather than smoothed over.
+
+1. **The ratio band does not select a placer.** `spread` — the anti-policy —
+   also puts all four clusters inside [1.3, 8]×, also keeps Saturn-highest /
+   Uranus-lowest, also keeps the q-share ordering, while being 45 % off
+   Saturn's absolute FIFO JCT and 99 % off Earth's. What selects the placer
+   is the **four-cluster mean absolute ratio error** (3.4 % vs 27.4 % /
+   29.5 %) plus the mechanism metric; the absolute rung corroborates it and
+   the validation asserts both, so "in band" cannot be read as "reproduces
+   the paper" (docs/validation.md §4.2.3).
+2. **`consolidate` does not dominate `first_fit`.** Of the five Saturn VCs
+   carrying 97% of the gap, three get worse (+18.5% / +5.6% / +4.2% on FIFO
+   mean JCT); the cluster win is carried by the one VC holding 41% of its
+   jobs (−35.6%). The claim is "reproduces the reference placer's aggregate
+   behavior", never "best-fit is a better scheduler".
+3. **The bands are NOT tightened**, despite every point value now agreeing
+   to within 5%, because the analysis window is unpublished and the capacity
+   model is a choice. Separately, the suite is **order-sensitive**: 35.5% of
+   Saturn's jobs share an exact submit second, and flipping FIFO's id
+   tie-break to descending moves its FIFO JCT by 17%. That flip is a
+   sensitivity probe against a knowingly wrong arrival order (ids are
+   uniform-length and monotone in submit time on 3 of 4 clusters, so
+   ascending id is the faithful one) — but it is large enough that Saturn's
+   absolute number *alone* does not select a placer: under it `consolidate`
+   is worse than `first_fit` on both the absolute deviation and the ratio
+   (docs/validation.md §4.5).
+4. **A fungible-pool counterfactual (node granularity removed entirely)
+   overshoots published** (Saturn FIFO 33,181 s vs 55,984 s). The reference
+   simulator fragments too; the target was never zero fragmentation.
+   Node-granularity fragmentation is 56.0% of the `first_fit` FIFO JCT and
+   best-fit recovers 45.9% of it — the rest is loss the real Helios
+   scheduler also took. This row and the blocked-idle chip-second accounting
+   are **ad-hoc one-off measurements** (throwaway instrumentation, not in the
+   tree), unlike the placer rows and the mechanism table, which
+   `scripts/helios_stranding_table.py` and the `trace_full` rungs regenerate.
+
+The **mechanism metric** also separates the three placers on the real trace,
+in the same order as their FIFO JCTs: time-average partially-occupied Saturn
+nodes over the 26-day window (of 265) are 24.99 under `consolidate`, 27.43
+under `first_fit`, 41.13 under `spread`. Honest leverage caveat: −8.9 % on
+that time-average corresponds to −25.7 % on FIFO mean JCT, so it is a
+directional indicator rather than a proportional explanatory variable — what
+costs the FIFO head is stranding *at the moments it needs a whole node*
+(docs/validation.md §4.2.3).
+
+**A second, trace-free line of evidence** (`examples/07_placement_study/`,
+4 racks × 8 nodes × 8 chips, mice + whole-node gangs at ρ ≈ 0.78 offered,
+best-effort FIFO, seed 42, ~1 s per arm). It reproduces the mechanism away
+from Helios and adds three findings the trace work could not show:
+
+- `stranded_whole_nodes` 6.55 → 5.31 of 32 nodes from `first_fit` to
+  `best_fit` (−19 %); 8-node-gang mean queue wait 19,057 s → 16,195 s
+  (−15 %); `spread` strands 25 of 32 nodes, never places 80 of 109 8-node
+  gangs, and delivers 28.4 % fewer chip-hours.
+- **Full-run occupancy, goodput and allocated chip-hours are bit-identical
+  across `first_fit`, `best_fit` and `consolidate`** (0.8140502977503281 /
+  0.9831 / 70,021.35041129222): the same 3,436 jobs complete, so the entire
+  placement effect is *when* work ran, never how much. Occupancy is
+  therefore useless as a placement metric — which is the argument for
+  §19.3's `stranded_whole_nodes` existing at all.
+- **`best_fit` ≠ `consolidate`** on this 2-level fleet (16,195 s vs
+  16,315 s on the 8-node mean), the complement of §19.2's single-level
+  degeneracy.
+
+And two limits the synthetic study surfaced, both recorded in the example's
+README rather than smoothed away: across four seeds the *mechanism* metric
+improves 19–20 % every time while the *outcome* regresses on one seed
+(+15 % gang wait at seed 1234); and adding `within: rack` to the gang class
+**inverts** the ranking (8-node-gang mean wait 39,677 s under `first_fit`
+vs 121,486 s under `best_fit`) — node-level tightest-fit spreads gangs
+across racks, so no rack ever drains. Placement policy interacts with
+topology constraints; it does not dominate them.
+
+### 19.5 Roadmap update
+
+v0.7 as shipped = the `best_fit` / `consolidate` / `spread` policies + the
+tree search primitives and view pass-throughs + the
+`scheduler.params.placement` config surface with closed-set validation +
+placement-mode-consistent reclaim planning + the stranded-whole-node metrics
+and `counts.placement_policy` (with a console-summary row) + the Helios
+harness `placement` knob and the V1p "placement model is load-bearing"
+validation rung + `docs/placement.md` + `examples/07_placement_study/`.
+Version 0.7.0.
+
+**Still deferred, and two of these were pencilled in for v0.7 by §18.6 —
+v0.7 spent its budget on placement instead, so they are restated as open
+rather than quietly re-dated:**
+
+1. **Fractional / sub-chip GPU allocation** — unlocks Alibaba PAI's V5
+   (50 % GPU-sharing saving, median 0.042 GPU/instance). Chips are still
+   shared whole inside a node, and no placement policy substitutes for it.
+2. **Per-job delay-cause attribution** — unlocks Philly Table 2's V4
+   (fair-share vs fragmentation-delay split). `stranded_whole_nodes` is a
+   fleet-level down payment, not a substitute: it says how much capacity is
+   stranded, not which job was delayed by it.
+3. The Gavel throughput matrix / unpinned chip types, and multi-metro
+   two-stage scheduling (unchanged from §11).
+4. **A preempting scheduler under a non-default placement policy.** The
+   plumbing is in place and unit-tested (`search_after_release(...,
+   mode=...)`, forwarded by `tiered_priority`), but no shipped *validation*
+   exercises the combination, so it is plumbing with a test rather than a
+   measured result.
+5. **Automatic placement-policy selection.** Nothing in v0.7 recommends a
+   placer from fleet/workload shape, and the §19.4 counter-results argue
+   against a naive heuristic: measure, don't guess.

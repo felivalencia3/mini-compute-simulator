@@ -9,6 +9,11 @@ Two flavors behind one flag (Kueue's naming):
 - **best-effort** (BestEffortFIFO): unplaceable jobs are skipped and the
   scan continues — small jobs flow around a stuck giant.
 
+PLACEMENT: pluggable and deterministic; ``FirstFit`` by default.  Select
+another from YAML with ``scheduler: {name: fifo, params: {placement:
+best_fit}}`` — see :mod:`fleetsim.schedulers.placement` for the policies
+and why sub-node packing matters under a strict scan.
+
 INVARIANTS: emits only ``Place`` actions; deterministic — ordering is
 ``(submit_time, id)`` (requeued jobs keep their original submit time) and
 placement is the deterministic policy passed in (FirstFit by default).

@@ -136,6 +136,26 @@ def test_run_scenario_resolves_trace_source_relative_to_scenario_file():
     assert summary["full"]["counts"]["jobs_finished"] == 30
 
 
+def _example_dirs():
+    return sorted(p for p in EXAMPLES.iterdir() if (p / "scenario.yaml").is_file())
+
+
+def test_every_shipped_example_validates_and_is_documented():
+    """Every ``examples/*/scenario.yaml`` must load and validate clean, and
+    ship a README beside it.  Cheap guard (no simulation) that a new
+    example — or an edit to an old one — cannot land broken; the heavy
+    "does it run" check is per-example (see e.g. test_placement.py for the
+    01/04 byte-compat rungs and each example's own README for measured
+    output)."""
+    dirs = _example_dirs()
+    assert len(dirs) >= 7, [p.name for p in dirs]
+    for path in dirs:
+        # Same path the CLI takes (`fleetsim validate <file>`), including
+        # the feasibility pass that resolves relative trace sources.
+        assert main(["validate", str(path / "scenario.yaml")]) == 0, path.name
+        assert (path / "README.md").is_file(), f"{path.name}: no README.md"
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -209,6 +229,31 @@ def test_cli_plot_and_compare(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "occupancy (window)" in printed
     assert "a" in printed and "b" in printed
+    # No placement policy named -> no v0.7 rows (pre-v0.7 output dirs and
+    # feature-off runs compare exactly as they always did).
+    assert "stranded whole nodes" not in printed
+    assert "placement policy" not in printed
+
+
+def test_cli_compare_shows_placement_rows_when_a_policy_is_named(tmp_path, capsys):
+    """v0.7: the rows that actually SEPARATE placers appear once any run
+    names a policy — occupancy/goodput can be identical across placers, so
+    without these a placement A/B reads as a null result."""
+    doc = tiny_doc()
+    outs = []
+    for policy in ("first_fit", "spread"):
+        doc["scheduler"] = {"name": "fifo", "params": {"placement": policy}}
+        scn = tmp_path / f"{policy}.yaml"
+        scn.write_text(yaml.safe_dump(doc), encoding="utf-8")
+        out = tmp_path / policy
+        assert main(["run", str(scn), "-o", str(out)]) == 0
+        outs.append(str(out))
+    capsys.readouterr()
+    assert main(["compare", *outs]) == 0
+    printed = capsys.readouterr().out
+    assert "stranded whole nodes (full mean)" in printed
+    assert "placement policy" in printed
+    assert "first_fit" in printed and "spread" in printed
 
 
 def test_cli_compare_error_paths(tmp_path, capsys):
@@ -420,12 +465,14 @@ def test_cli_validation_cite_unknown_exits_2(capsys):
 
 def test_cli_validation_run_vendored_slices(capsys):
     """`fleetsim validation run` replays the vendored slices and reports
-    PASS for both the Helios direction and Philly status checks."""
+    PASS for the Helios direction check, the v0.7 placement-wiring check,
+    and the Philly status check."""
     assert main(["validation", "run"]) == 0
     out = capsys.readouterr().out
-    assert out.count("[PASS]") == 2
+    assert out.count("[PASS]") == 3
     assert "[FAIL]" not in out
     assert "Helios" in out and "Philly" in out
+    assert "placement selection reaches the engine" in out
     assert "all passed" in out
 
 
@@ -435,7 +482,7 @@ def test_cli_validation_run_vendored_slices(capsys):
 
 
 def test_public_api_exports():
-    assert fleetsim.__version__ == "0.6.0"
+    assert fleetsim.__version__ == "0.7.0"
     for name in fleetsim.__all__:
         assert getattr(fleetsim, name, None) is not None, name
     # The documented plugin surface is importable from the package root.

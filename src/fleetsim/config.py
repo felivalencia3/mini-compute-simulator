@@ -100,10 +100,19 @@ __all__ = [
     "parse_dist",
     "load_scenario",
     "validate",
+    "scheduler_placement_name",
 ]
 
 _NOT_V01 = "not implemented in v0.1"
 _NOT_V04 = "not implemented in v0.4"
+
+#: Level names the metrics layer reserves for its own keys (v0.7): the
+#: summary's ``fragmentation`` map is keyed by level name and carries these
+#: placement diagnostics alongside, so a cluster may not declare them.
+#: Mirrors :data:`fleetsim.metrics.collector.FRAG_NON_LEVEL_KEYS` — spelled
+#: literally here to keep ``config`` free of a metrics import; a test pins
+#: the two together.
+_RESERVED_LEVEL_NAMES: frozenset[str] = frozenset({"stranded_whole_nodes"})
 
 
 class ScenarioError(Exception):
@@ -500,7 +509,27 @@ class WorkloadConfig:
 @dataclass
 class SchedulerConfig:
     """Scheduler selection.  ``name`` is looked up in the scheduler
-    registry at run time — unknown names are NOT a validation error here."""
+    registry at run time — unknown names are NOT a validation error here.
+
+    ``params`` are passed to the scheduler's ``__init__`` as keyword
+    arguments.  One param is special: ``placement`` (v0.7) names a
+    :mod:`fleetsim.schedulers.placement` policy
+    (``first_fit`` | ``best_fit`` | ``consolidate`` | ``spread``) and is
+    resolved into a policy instance by
+    :func:`fleetsim.schedulers.base.get_scheduler`, so every scheduler that
+    OPTS IN by annotating ``placement: PlacementPolicy`` — all four
+    built-ins do — can select one from YAML:
+
+    .. code-block:: yaml
+
+        scheduler: {name: fifo, params: {placement: best_fit}}
+
+    For those schedulers, unknown policy names ARE a validation error (the
+    set is closed; :func:`validate`).  A scheduler using ``placement`` for
+    its OWN vocabulary is not held to the closed set and its string is
+    passed through untouched.  Omit the key to keep each scheduler's own
+    default (``FirstFit``) — the pre-v0.7 behavior, byte for byte.
+    """
 
     name: str = "fifo"
     params: dict[str, Any] = field(default_factory=dict)
@@ -2460,6 +2489,20 @@ def _validate_splice_params(spec: DistSpec, ctx: str, errors: list[str]) -> None
         )
 
 
+def scheduler_placement_name(scenario: Scenario) -> str | None:
+    """The placement-policy NAME the scenario selected, or ``None``.
+
+    ``None`` means "not configured" — every scheduler then keeps its own
+    default (``FirstFit``), which is the pre-v0.7 behavior and the reason
+    a scenario without this key produces byte-identical outputs.  A
+    non-string ``placement`` (a policy OBJECT passed programmatically,
+    which YAML cannot express) also reads as ``None``: there is no name to
+    report or validate.
+    """
+    value = scenario.scheduler.params.get("placement")
+    return value if isinstance(value, str) else None
+
+
 def validate(scenario: Scenario) -> list[str]:
     """Validate a scenario, returning every problem as a human-readable
     error string (empty list = valid).  Includes ``scenario.load_errors``.
@@ -2503,6 +2546,12 @@ def validate(scenario: Scenario) -> list[str]:
         level_vocab.update(cl.levels)
         if len(set(cl.levels)) != len(cl.levels):
             errors.append(f"{ctx}: duplicate level names in {cl.levels}")
+        for lvl in cl.levels:
+            if lvl in _RESERVED_LEVEL_NAMES:
+                errors.append(
+                    f"{ctx}: level name {lvl!r} is reserved by the metrics"
+                    f" layer (summary 'fragmentation' keys); rename it"
+                )
         if cl.attrs.get("ocs_pool"):
             errors.append(f"{ctx}: attr 'ocs_pool' (TPU OCS predicates) is {_NOT_V01}")
         if not cl.children:
@@ -2857,8 +2906,49 @@ def validate(scenario: Scenario) -> list[str]:
                     f" {res.level or 'cluster'} domain ({cap} chips)"
                 )
 
-    # scheduler.name deliberately unchecked (registry is a run-time concern)
+    # --- scheduler.params.placement (v0.7) ---
+    # scheduler.NAME is deliberately unchecked (the registry is a run-time
+    # concern, and out-of-tree plugins register on import).  The PLACEMENT
+    # policy name is checked here, because it is a closed built-in set and
+    # a typo is otherwise only discovered after the fleet is built.
+    #
+    # ...but ONLY for a scheduler that opted into the registry by annotating
+    # ``placement: PlacementPolicy`` (all four built-ins do).  ``placement``
+    # is a convention, not a reserved word: an out-of-tree scheduler may use
+    # the param for its own vocabulary, and v0.6 passed such a string
+    # through untouched.  A name we cannot resolve to a class yet (an
+    # entry-point plugin not imported in this process) is likewise left
+    # alone — same reasoning as not checking scheduler.name.
+    placement = scheduler_placement_name(scenario)
+    if placement is not None:
+        from .schedulers.placement import PLACEMENT_POLICIES, takes_placement_policy
+
+        cls = _scheduler_class_or_none(scenario.scheduler.name)
+        if (
+            placement not in PLACEMENT_POLICIES
+            and cls is not None
+            and takes_placement_policy(cls)
+        ):
+            errors.append(
+                f"scheduler.params.placement: unknown placement policy"
+                f" {placement!r} (available:"
+                f" {', '.join(PLACEMENT_POLICIES)})"
+            )
     return errors
+
+
+def _scheduler_class_or_none(name: str) -> type | None:
+    """The registered Scheduler class for ``name``, or ``None`` if it is not
+    resolvable in this process.
+
+    Deliberately does NOT touch entry points: :func:`validate` must stay
+    cheap and must never import third-party code, and an unresolvable
+    scheduler name is not a validation error in the first place.
+    """
+    from .schedulers.base import _REGISTRY, _load_builtins
+
+    _load_builtins()
+    return _REGISTRY.get(str(name))
 
 
 # ---------------------------------------------------------------------------

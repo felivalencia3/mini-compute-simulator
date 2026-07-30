@@ -154,7 +154,23 @@ class ReservationView:
 
 @runtime_checkable
 class PlacementPolicy(Protocol):
-    """The *where* axis: find a concrete placement for one job, or None."""
+    """The *where* axis: find a concrete placement for one job, or None.
+
+    ``search_mode`` (v0.7) names the
+    :data:`fleetsim.fleet.tree.FleetTree.PACK_MODES` primitive ``place``
+    actually calls.  It is a PROTOCOL MEMBER, not a convention, because a
+    preempting scheduler plans reclaims with it
+    (``getattr(policy, "search_mode", "first_fit")`` in
+    :mod:`fleetsim.schedulers.tiered_priority`): a policy that places with
+    ``search_best_fit`` but omits the attribute would silently have its
+    evictions planned under first-fit semantics, so eviction and placement
+    could disagree.  Declare it, and keep it consistent with ``place``.
+    """
+
+    #: Tree packing mode ``place`` searches with.  ``"first_fit"`` is the
+    #: default policy's value and the fallback a scheduler assumes when a
+    #: third-party policy omits the attribute entirely.
+    search_mode: str
 
     def place(self, job: JobView, view: "ClusterView") -> Placement | None: ...
 
@@ -211,6 +227,56 @@ class ClusterView(Protocol):
         """Raw segmented (Slurm-block) search for a spec with
         ``segments`` set (no reservation side effect; v0.2).  See
         :meth:`fleetsim.fleet.tree.FleetTree.search_segmented`."""
+        ...
+
+    def search_best_fit(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw TIGHTEST-FIT capacity search (v0.7, no reservation side
+        effect) — same feasibility as :meth:`search_first_fit` on uniform
+        leaf sizes (a superset of it on mixed ones), packing sub-node gangs
+        into the fullest node that still fits.  See
+        :meth:`fleetsim.fleet.tree.FleetTree.search_best_fit`."""
+        ...
+
+    def search_consolidate(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw FEWEST-*PARENT*-DOMAINS-TOUCHED capacity search (v0.7).  See
+        :meth:`fleetsim.fleet.tree.FleetTree.search_consolidate` — note it
+        degenerates to :meth:`search_best_fit` on a single-level fleet, and
+        that it minimizes parent domains only, not crossings at coarser
+        levels."""
+        ...
+
+    def search_spread(
+        self, spec: GangSpec, tenant: str | None = None
+    ) -> Placement | None:
+        """Raw MAXIMUM-SPREAD capacity search (v0.7, the control /
+        anti-policy).  See
+        :meth:`fleetsim.fleet.tree.FleetTree.search_spread`."""
+        ...
+
+    def reclaim_feasible(
+        self,
+        job: JobView,
+        victim_ids: Sequence[str],
+        *,
+        mode: str = "first_fit",
+    ) -> bool:
+        """Dry-run: would releasing ``victim_ids``' allocations let ``job``
+        place right now?  Never mutates the fleet (v0.2 reclaim planning).
+
+        OPTIONAL IN PRACTICE: preempting schedulers probe for it with
+        ``getattr`` and fall back to trusting their chip-count plan, so a
+        view may omit it entirely.  What is NOT optional is the signature:
+        ``mode`` (v0.7, keyword-only) is the caller's
+        :attr:`PlacementPolicy.search_mode`, and a view that implements
+        ``reclaim_feasible`` WITHOUT accepting it raises ``TypeError`` the
+        moment a non-default placement policy is configured.  It defaults
+        to ``"first_fit"`` and built-in schedulers pass it only when their
+        policy is not FirstFit, so pre-v0.7 two-argument implementations
+        keep working under the default policy — and only under it."""
         ...
 
     def throughput(self, job: JobView, chip_type: str) -> float:
@@ -336,6 +402,22 @@ def get_scheduler(name: str, params: Mapping[str, object] | None = None) -> Sche
     raise ``ValueError`` (naming the scheduler and the params), so
     ``--override scheduler.name=...`` failures surface as clean config
     errors, not tracebacks.
+
+    PLACEMENT NAMES (v0.7): a ``placement`` param given as a STRING is
+    resolved here into the matching
+    :class:`~fleetsim.schedulers.base.PlacementPolicy` instance
+    (:func:`fleetsim.schedulers.placement.get_placement`), so
+    ``scheduler: {name: fifo, params: {placement: best_fit}}`` works for
+    ANY scheduler that OPTS IN by annotating the parameter
+    ``placement: PlacementPolicy`` — the four built-ins do, and so does any
+    out-of-tree plugin following the same convention.  An unknown name then
+    raises ``ValueError`` listing the available policies.  A scheduler that
+    takes ``placement`` with its OWN vocabulary (no ``PlacementPolicy``
+    annotation) gets the string passed through untouched, exactly as v0.6
+    did — the name is a convention, not a reserved word
+    (:func:`fleetsim.schedulers.placement.takes_placement_policy`).
+    Omitting the param leaves each scheduler's own default (``FirstFit``)
+    in place, so pre-v0.7 scenarios are unchanged.
     """
     _load_builtins()
     cls = _REGISTRY.get(name)
@@ -365,6 +447,11 @@ def get_scheduler(name: str, params: Mapping[str, object] | None = None) -> Sche
             f" (registered: {', '.join(sorted(_REGISTRY)) or 'none'}{extra})"
         )
     kwargs = dict(params or {})
+    if "placement" in kwargs:
+        from .placement import resolve_placement, takes_placement_policy
+
+        if takes_placement_policy(cls):
+            kwargs["placement"] = resolve_placement(kwargs["placement"])
     try:
         return cls(**kwargs)
     except TypeError as exc:

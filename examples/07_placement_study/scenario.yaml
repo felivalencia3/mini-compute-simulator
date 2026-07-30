@@ -1,0 +1,99 @@
+# fleetsim example 07 — the placement study: where you put the mice
+# decides how long the gangs wait (the v0.7 placement policy family).
+#
+# THE QUESTION THIS EXAMPLE ANSWERS: two schedulers can pick the SAME job
+# next and still get very different fleets, because ORDERING (which job)
+# and PLACEMENT (which chips) are separate axes.  This scenario holds the
+# ordering axis fixed (one best-effort FIFO, one seed, one workload) and
+# varies ONLY `scheduler.params.placement`.
+#
+# THE MECHANISM (docs/placement.md; measured on the real Helios trace in
+# docs/validation.md §4.2): fleetsim's allocation rule is that a node
+# with ANY owner is invisible to a request for whole nodes.  So every
+# sub-node job that lands on a fully-free node converts 8 whole-node
+# chips into a 1-7-chip remainder that no gang can ever use.  Which node
+# a 1-chip job lands on is a PLACEMENT decision, and it is the gangs —
+# not the mice — that pay for it.
+#
+# FLEET: 4 racks x 8 nodes x 8 chips = 256 H100s.  Deliberately TWO
+# levels (rack, node), so `best_fit` and `consolidate` are distinguishable
+# here — on a single-level fleet they are bit-identical (docs/placement.md
+# "the single-level degeneracy").  Failures OFF and `abort_prob: 0`
+# everywhere: every difference between the runs is then a placement
+# difference, not noise.
+#
+# WORKLOAD: a deliberate mice+gangs mix at ~0.78 offered load (0.81
+# realized at seed 42 — the lognormal duration tail lands above the mean).
+#   - `mice`: 1/2/4-chip jobs, hours long (mean 1.85 chips x 5.78 h).
+#     Sub-node by construction, ~40% of offered load.  These are the
+#     stranders.
+#   - `gangs`: 16/32/64-chip jobs = 2/4/8 WHOLE nodes (mean 40 chips x
+#     2.89 h, ~38% of offered load).  Every one of them needs nodes no
+#     mouse has touched, and the 64-chip draws need EIGHT of them.
+# Sizes are chosen so the summary's chip-count buckets separate the two
+# populations exactly: mice are the whole `1-8` bucket, gangs the whole
+# `9-64` bucket.
+#
+# WHY ~0.78 AND NOT ~0.95: near saturation the queue-wait numbers are
+# dominated by how close each arm happens to be to instability, which is
+# seed noise, not placement.  At 0.78 the queues are short and the
+# placement effect is what is left (the README reports the four seeds
+# this was checked on, including the one where it does not help).
+#
+# NAMING first_fit EXPLICITLY (rather than omitting the key) is what
+# switches on the v0.7 placement diagnostics — the `stranded_whole_nodes`
+# / `stranded_whole_node_chips` timeseries columns, the
+# `fragmentation.stranded_whole_nodes` summary entry, and
+# `counts.placement_policy`.  The POLICY is the pre-v0.7 default either
+# way, so this run's scheduling is byte-identical to omitting the key;
+# only the extra observability columns appear.  (Examples 01 and 04 name
+# no policy, which is why their outputs stay byte-identical to v0.6.)
+
+sim: {horizon: 14d, round: 60s, seed: 42}
+
+fleet:
+  metro: us-central
+  clusters:
+    - name: h100-pack
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [rack, node], counts: [4, 8]}  # 256 chips
+      failures: {mtbf_node_days: 0}
+
+failure_model: {node_mtbf_days: 0, maintenance_rate_per_node_month: 0}
+
+workload:
+  kind: synthetic
+  classes:
+    # THE STRANDERS: sub-node, long-lived.  Under `first_fit` these take
+    # the lowest-id node with room — which is a FULLY FREE node whenever
+    # the low-id nodes happen to be busy, and is the node a gang just
+    # released whenever one just finished.  Under `best_fit` they take the
+    # TIGHTEST sufficient node, so they fill existing remainders instead
+    # of manufacturing new ones.
+    mice:
+      class: eval
+      rate_per_hour: 9.5
+      chips: {pmf: {1: 0.55, 2: 0.25, 4: 0.20}}
+      duration: lognormal[median=4h, p90=12h]
+      tier: batch
+      abort_prob: 0
+    # THE PAYERS: whole-node gangs (2, 4 and 8 nodes).  A 64-chip gang
+    # needs EIGHT nodes no mouse has touched; it is the most placement-
+    # sensitive job in the mix and the one whose queue wait moves most.
+    gangs:
+      class: finetune
+      rate_per_hour: 0.85
+      chips: {pmf: {16: 0.30, 32: 0.30, 64: 0.40}}
+      duration: lognormal[median=2h, p90=6h]
+      tier: batch
+      abort_prob: 0
+
+# Best-effort (non-blocking) FIFO: a gang that cannot place does NOT hold
+# up the mice behind it.  That is the conservative choice for a placement
+# study — head-of-line blocking would amplify the effect (it is what
+# makes the Helios replay's 26% JCT swing, docs/validation.md §4.3), so
+# whatever shows up here is a floor, not a best case.
+scheduler: {name: fifo, params: {strict: false, placement: first_fit}}
+# stints at NODE level: `fleetsim viz` then paints the packing directly —
+# `spread`'s fleet map is visibly speckled where `best_fit`'s is dense.
+outputs: {events: parquet, stints: node}

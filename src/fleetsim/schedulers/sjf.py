@@ -21,8 +21,9 @@ Helios QSSF can achieve.  ``SJFScheduler`` is therefore the reproducible
 reference used by the v0.6 validation suite (V1/V2) to replay the
 FIFO-vs-SJF JCT and queuing ratios.
 
-PLACEMENT + SCAN.  Placement is FirstFit by default (the same
-consolidating first-fit the FIFO baseline uses).  ``strict`` defaults to
+PLACEMENT + SCAN.  Placement is FirstFit by default (the same first-fit
+the FIFO baseline uses); ``params: {placement: best_fit}`` selects another
+policy from YAML (:mod:`fleetsim.schedulers.placement`).  ``strict`` defaults to
 **False** (best-effort): an unplaceable job is skipped and the scan
 continues down the ordered queue, so a short job flows around a stuck
 gang.  With ``strict=True`` the head of the (shortest-first) line blocks,

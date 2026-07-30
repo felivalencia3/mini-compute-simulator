@@ -20,6 +20,37 @@ SCAN MODE.  Both rungs run **strict** (head-of-line blocking) — the load-
 bearing fidelity choice.  The published FIFO queuing is head-of-line
 blocking of large gangs; a best-effort scan collapses it and the ratio
 (see :mod:`fleetsim.validation.harness`).
+
+PLACEMENT MODEL (v0.7).  Both rungs run ``placement="consolidate"`` — a
+stated validation-model choice on the same footing as
+``pool_snapshot="max"``, and passed EXPLICITLY at each call site for the
+same reason.  fleetsim's engine default is ``first_fit``, which strands
+whole-node capacity behind sub-node remainders; that is what put Saturn's
+JCT ratio out of band in v0.6.  The ``first_fit`` baseline stays reachable
+(``placement="first_fit"``) and one rung below asserts the placers really
+differ, so the choice is testable rather than assumed.
+
+WHY ``consolidate`` AND NOT ANOTHER PLACER — measured, all four policies x
+all four clusters x FIFO and SJF on the real trace (v0.7a).  Mean absolute
+relative error against the published JCT ratios: ``consolidate`` /
+``best_fit`` **3.4 %**, ``first_fit`` 27.4 %, ``spread`` 29.5 %.
+``best_fit`` and ``consolidate`` came out BIT-IDENTICAL on every cluster
+metric — the single-level degeneracy documented on
+:class:`fleetsim.schedulers.placement.Consolidate`, confirmed on the trace
+and not only in a unit test.
+
+HONEST LIMIT OF THE BAND RUNG.  The ratio bands and both rank invariants
+below are satisfied by ``spread`` too (Saturn 7.48x, Venus 4.36x, Earth
+3.06x, Uranus 2.32x; Saturn highest, Uranus lowest, q-share order intact),
+even though ``spread`` is 45 % off Saturn's absolute FIFO JCT and 99 % off
+Earth's.  So V1's bands alone do NOT single out a placer.  What does, in
+descending weight: the FOUR-CLUSTER mean absolute ratio error above, then
+the ``stranded_whole_nodes`` mechanism metric, then Saturn's ABSOLUTE FIFO
+JCT.  The third is corroboration only — under the descending-id tie-break of
+docs/validation.md §4.5 it inverts (``first_fit`` +11.7 % vs ``consolidate``
++13.2 %), so a placer choice resting on Saturn's absolute number alone would
+flip on a knob unrelated to placement.  Stated here rather than left for a
+reader to discover.
 """
 
 from __future__ import annotations
@@ -46,6 +77,12 @@ _SLICE_POOLS = {"vcvGl": 20, "vcvlY": 2}
 #: times SJF's on the slice (measured ~2.75x strict; ~1.47x best-effort).
 _SMOKE_MIN_RATIO = 1.15
 
+#: The validation model's placement policy, passed explicitly at every call
+#: site in this file exactly like ``pool_snapshot="max"`` rather than
+#: inherited from the harness default (which is the ENGINE default,
+#: ``first_fit``).  Selected by measurement — see the module docstring.
+_PLACEMENT = "consolidate"
+
 
 # ---------------------------------------------------------------------------
 # CI smoke — vendored slice, direction only (always runs, no network)
@@ -66,8 +103,13 @@ def test_helios_slice_smoke_fifo_worse_than_sjf() -> None:
     df = _load_slice()
     assert set(df["tenant"].unique()) == set(_SLICE_POOLS)
 
-    fifo = replay_canonical(df, _SLICE_POOLS, "fifo", cluster="Venus-slice")
-    sjf = replay_canonical(df, _SLICE_POOLS, "sjf", cluster="Venus-slice")
+    fifo = replay_canonical(
+        df, _SLICE_POOLS, "fifo", cluster="Venus-slice", placement=_PLACEMENT
+    )
+    sjf = replay_canonical(
+        df, _SLICE_POOLS, "sjf", cluster="Venus-slice", placement=_PLACEMENT
+    )
+    assert fifo["placement"] == sjf["placement"] == _PLACEMENT
 
     # Every windowed job was replayed (no VC dropped) and reached a
     # terminal status (no horizon truncation) — the long-waiting FIFO jobs
@@ -87,13 +129,77 @@ def test_helios_slice_smoke_fifo_worse_than_sjf() -> None:
     assert fifo["n_queuing"] >= sjf["n_queuing"] > 0
 
 
+def test_helios_slice_smoke_placement_selection_reaches_the_engine() -> None:
+    """CI smoke for the v0.7 placement model, no network — **WIRING ONLY**.
+
+    Asserts the harness's own default is the ENGINE default, that the
+    validation-model placer is the one the shipped rungs pass, that the run
+    echoes which placer ran, and that the selection genuinely reaches the
+    engine.
+
+    The last assertion is specifically ``first_fit != consolidate``, not
+    "the placers are not all equal".  ``spread`` alone satisfies the weaker
+    form, so a refactor that silently degraded ``consolidate`` (the policy
+    carrying the entire v0.7 result) back to first-fit would have left it
+    green — a hole confirmed by sabotage, and the reason this rung and the
+    ``fleetsim validation run`` rung both assert the tighter form.  On this
+    slice the two differ by only ~0.4 s on ~28,557 s, which is enough for
+    an exact-inequality wiring check and not enough for a claim about size.
+
+    It deliberately asserts **no direction and no magnitude**: this 2-VC
+    Venus slice does not exhibit the Saturn stranding pathology at any
+    meaningful size, so a directional claim here would be noise dressed as
+    evidence.  The magnitude claim lives in
+    ``test_helios_saturn_placement_model_is_load_bearing`` (full trace,
+    ~26 % on Saturn's FIFO JCT); the *mechanism* is proved at unit scale in
+    ``tests/test_placement.py::TestStrandingMechanism``.
+    """
+    from fleetsim.validation.harness import DEFAULT_PLACEMENT, VALIDATION_PLACEMENT
+
+    # The harness default is the ENGINE default: an unqualified call must
+    # not silently carry the validation model's placer (v0.7 API note).
+    assert DEFAULT_PLACEMENT == "first_fit"
+    assert VALIDATION_PLACEMENT == _PLACEMENT == "consolidate"
+    df = _load_slice()
+    jct = {}
+    for placement in ("first_fit", "consolidate", "spread"):
+        out = replay_canonical(
+            df, _SLICE_POOLS, "fifo", cluster="Venus-slice", placement=placement
+        )
+        assert out["placement"] == placement
+        assert out["n_dropped"] == 0 and out["n_terminal"] == out["n_jobs"]
+        assert math.isfinite(out["avg_jct"])
+        jct[placement] = out["avg_jct"]
+    # The load-bearing pair really differs — not merely "some placer does".
+    assert jct["first_fit"] != jct["consolidate"], jct
+    assert jct["first_fit"] != jct["spread"], jct
+    # And the harness default really is what an unspecified call produces.
+    default = replay_canonical(df, _SLICE_POOLS, "fifo", cluster="Venus-slice")
+    assert default["placement"] == DEFAULT_PLACEMENT
+    assert default["avg_jct"] == jct["first_fit"]
+
+
 def test_helios_slice_smoke_best_effort_direction() -> None:
     """CI smoke: the direction survives even a best-effort scan (the
     weaker mode) — FIFO still beats-worse than SJF on the slice, so the
     smoke bar is not an artifact of the blocking scan alone."""
     df = _load_slice()
-    fifo = replay_canonical(df, _SLICE_POOLS, "fifo", cluster="Venus-slice", strict=False)
-    sjf = replay_canonical(df, _SLICE_POOLS, "sjf", cluster="Venus-slice", strict=False)
+    fifo = replay_canonical(
+        df,
+        _SLICE_POOLS,
+        "fifo",
+        cluster="Venus-slice",
+        strict=False,
+        placement=_PLACEMENT,
+    )
+    sjf = replay_canonical(
+        df,
+        _SLICE_POOLS,
+        "sjf",
+        cluster="Venus-slice",
+        strict=False,
+        placement=_PLACEMENT,
+    )
     ratio = fifo["avg_jct"] / sjf["avg_jct"]
     assert math.isfinite(ratio)
     assert ratio > _SMOKE_MIN_RATIO, ratio
@@ -103,10 +209,17 @@ def test_helios_slice_smoke_best_effort_direction() -> None:
 # Full trace — opt-in (downloads real data.zip; asserts §2 V1(f))
 # ---------------------------------------------------------------------------
 
-#: plan §2 V1(f) assertion bands (deliberately wider than the point values
-#: — FirstFit != consolidate fragmentation, the inclusive window edge, and
-#: tie-break differences move the third significant figure; the direction
-#: and rank are the load-bearing claim).
+#: plan §2 V1(f) assertion bands.  These stay BANDS, deliberately much
+#: wider than the point values, and v0.7 does NOT tighten them despite all
+#: four clusters now landing inside.  The width comes from two things this
+#: suite cannot pin down: the paper's ANALYSIS WINDOW is unpublished (§1) and
+#: the per-VC CAPACITY MODEL is a choice with its own bias (§4.4).  A third,
+#: separate fact bounds how much any single point value can be leaned on:
+#: 35.5 % of Saturn's jobs share an exact submit second, and reordering
+#: within those seconds moves Saturn's FIFO JCT by 17 % (docs/validation.md
+#: §4.5) — that is a scheduler-order SENSITIVITY, not an uncertainty band
+#: (ascending id is the faithful order), but it is why the placer choice
+#: rests on the four-cluster aggregate rather than on Saturn alone.
 _JCT_RATIO_BAND = (1.3, 8.0)
 _Q_RATIO_BAND = (3.0, 25.0)
 
@@ -118,6 +231,12 @@ _PUB = {
     "Uranus": {"jct": 1.49, "q": 4.51, "share": 0.425},
 }
 
+#: Published Table 3 Saturn FIFO average JCT (s) — the V2 absolute rung's
+#: reference point.  It CORROBORATES the placer choice; it does not decide it
+#: (the four-cluster mean ratio error does, and the band does not either —
+#: see the module docstring).
+_PUB_SATURN_FIFO_JCT = 55_984.0
+
 
 @pytest.mark.trace_full
 @pytest.mark.skipif(
@@ -126,21 +245,40 @@ _PUB = {
 )
 def test_helios_four_cluster_ratio_bands_and_ranks() -> None:
     """Opt-in full replay: all four clusters, FIFO and SJF, Sept window,
-    strict scan, **September-max** per-VC capacity sizing (``pool_snapshot="max"``).
+    strict scan, **September-max** per-VC capacity sizing
+    (``pool_snapshot="max"``), **``consolidate`` placement** — the placer
+    that best reproduces the paper, selected by measuring all four policies
+    end to end on the real trace (module docstring: mean absolute relative
+    error 3.4 % vs 27.4 % for ``first_fit`` and 29.5 % for ``spread``).
 
     Asserts (plan §2 V1(f)): every cluster's FIFO/SJF queuing ratio in
-    [3, 25]x; every JCT ratio >= 1.3 (the SJF advantage is present);
-    Venus/Earth/Uranus JCT ratio also <= 8; Saturn has the highest JCT
-    ratio and Uranus the lowest; and the queuing-share-of-FIFO-JCT ordering
-    is Saturn > Venus > Earth > Uranus.  These all hold on the real trace.
+    [3, 25]x; every JCT ratio in [1.3, 8]x — **all four**, no ``xfail``;
+    Saturn has the highest JCT ratio and Uranus the lowest; and the
+    queuing-share-of-FIFO-JCT ordering is Saturn > Venus > Earth > Uranus.
+    These all hold on the real trace.
 
-    KNOWN GAP (honest ``xfail``, not a widened band): Saturn's JCT ratio
-    lands ~8.75 — just past the plan's 8.0 ceiling — because fleetsim's
-    FirstFit placement fragments Saturn's large gangs more than the
-    reference "consolidate" placer, inflating the most gang-heavy cluster's
-    ratio ~1.33x above the published 6.59.  A consolidate placer (fix-phase
-    work) is expected to bring it into band; until then this is xfailed
-    rather than fudged.
+    Measured (v0.7a, re-run on the real trace for this rung): JCT ratios
+    Saturn 6.87 / Venus 3.21 / Earth 2.95 / Uranus 1.51 against published
+    6.59 / 3.07 / 2.87 / 1.49; q ratios 19.55 / 7.78 / 10.67 / 5.08 against
+    18.5 / 5.68 / 16.4 / 4.51; q-shares 0.901 / 0.791 / 0.730 / 0.422
+    against 0.897 / 0.818 / 0.693 / 0.425.
+
+    v0.6 -> v0.7: Saturn used to land at 8.75 and was honestly ``xfail``ed
+    against the 8.0 ceiling.  The cause was NOT "FirstFit fragments large
+    gangs" (Saturn's biggest gang is 200 GPU / 25 nodes, and the VC
+    carrying 84 % of the gap tops out at 56 GPU) — it was sub-node
+    stranding of whole-node capacity: 97 % of that VC's jobs are 1-GPU, and
+    first-fit-by-id placement leaves free chips as 1..7-GPU remainders no
+    >=8-GPU job can use.  With ``consolidate`` placement Saturn lands at
+    6.87 against a published 6.59, and its absolute FIFO JCT at 55,978 s
+    against a published 55,984 s.  Every other cluster moved toward
+    published too.  The BAND IS UNCHANGED — see ``_JCT_RATIO_BAND`` for why
+    it must not be tightened.
+
+    WHAT THIS RUNG DOES NOT PROVE: the bands and both rank invariants are
+    also satisfied by the ``spread`` control arm, whose absolute FIFO JCTs
+    are 27-99 % off published.  Selecting a placer needs the absolute rung
+    in ``test_helios_saturn_placement_model_is_load_bearing``.
 
     SIZING: uses ``pool_snapshot="max"``.  The plan's Sept-1 snapshot
     mis-sizes Uranus (whose per-VC quota drifts within September) and
@@ -151,8 +289,13 @@ def test_helios_four_cluster_ratio_bands_and_ranks() -> None:
     q_ratio: dict[str, float] = {}
     q_share: dict[str, float] = {}
     for cl in clusters:
-        fifo = per_vc_replay(cl, "2020-09", "fifo", pool_snapshot="max")
-        sjf = per_vc_replay(cl, "2020-09", "sjf", pool_snapshot="max")
+        fifo = per_vc_replay(
+            cl, "2020-09", "fifo", pool_snapshot="max", placement=_PLACEMENT
+        )
+        sjf = per_vc_replay(
+            cl, "2020-09", "sjf", pool_snapshot="max", placement=_PLACEMENT
+        )
+        assert fifo["placement"] == sjf["placement"] == _PLACEMENT
         # No windowed job may be DROPPED (every VC with jobs must be sized;
         # a VC absent from the pool sizing loses its jobs silently under a
         # snapshot — "max" must lose none) and none may be TRUNCATED (all
@@ -174,10 +317,11 @@ def test_helios_four_cluster_ratio_bands_and_ranks() -> None:
             f"{cl} queuing ratio {q_ratio[cl]:.2f} outside {_Q_RATIO_BAND} "
             f"(published {_PUB[cl]['q']}); all={q_ratio}"
         )
-    # JCT ratio lower bound (SJF advantage present) for every cluster.
+    # JCT ratio in band for EVERY cluster (v0.7: no xfail — Saturn's
+    # v0.6 overshoot was a placement-model gap, now closed).
     for cl in clusters:
-        assert jct_ratio[cl] >= lo, (
-            f"{cl} JCT ratio {jct_ratio[cl]:.2f} below {lo} "
+        assert lo <= jct_ratio[cl] <= hi, (
+            f"{cl} JCT ratio {jct_ratio[cl]:.2f} outside {_JCT_RATIO_BAND} "
             f"(published {_PUB[cl]['jct']}); all={jct_ratio}"
         )
 
@@ -190,18 +334,97 @@ def test_helios_four_cluster_ratio_bands_and_ranks() -> None:
         q_share["Saturn"] > q_share["Venus"] > q_share["Earth"] > q_share["Uranus"]
     ), q_share
 
-    # JCT ratio upper bound.  Venus/Earth/Uranus land in band; Saturn
-    # overshoots due to FirstFit fragmentation (documented known gap).
-    for cl in ("Venus", "Earth", "Uranus"):
-        assert jct_ratio[cl] <= hi, (
-            f"{cl} JCT ratio {jct_ratio[cl]:.2f} above {hi} "
-            f"(published {_PUB[cl]['jct']}); all={jct_ratio}"
+    # The AGGREGATE quantity that actually selects the placement model (the
+    # module docstring): mean absolute relative error of the four JCT ratios
+    # against published.  Measured 3.4 % for the shipped `consolidate`
+    # against 27.4 % for `first_fit` and 29.5 % for `spread`, so a 10 % bar
+    # separates them by ~2.7x while staying far looser than the measurement.
+    # Asserted here because it costs nothing extra (the ratios are already
+    # computed) and because it is the claim a reader is asked to trust.
+    mean_abs_err = sum(
+        abs(jct_ratio[cl] - _PUB[cl]["jct"]) / _PUB[cl]["jct"] for cl in clusters
+    ) / len(clusters)
+    assert mean_abs_err < 0.10, (mean_abs_err, jct_ratio)
+
+
+@pytest.mark.trace_full
+@pytest.mark.skipif(
+    not os.environ.get("FLEETSIM_HELIOS_FULL"),
+    reason="set FLEETSIM_HELIOS_FULL=1 to download and replay the full Helios trace",
+)
+def test_helios_saturn_placement_model_is_load_bearing() -> None:
+    """The placement-model choice is TESTED, not assumed: replay Saturn
+    under all three distinguishable placers — ``first_fit`` (the v0.6
+    baseline / engine default), the shipped ``consolidate``, and the
+    ``spread`` control arm — and assert what each one does.
+
+    Three claims:
+
+    1. ``first_fit``'s JCT ratio really is OUT of band (8.75 > 8.0) and
+       ``consolidate``'s is in it (6.87) — the v0.6 gap and its closure.
+    2. Under the SHIPPED configuration, ``consolidate``'s absolute FIFO JCT
+       lands within +/-20 % of the published 55,984 s (measured 55,978 s)
+       while ``first_fit``'s (75,329 s, +35 %) and ``spread``'s (81,096 s,
+       +45 %) do not.
+    3. The ratio band alone is NOT a discriminator: ``spread``'s ratio
+       (7.48) sits *inside* [1.3, 8] while being the worst placer on every
+       absolute quantity.  Asserted here so nobody later mistakes "in band"
+       for "reproduces the paper".
+
+    WHAT (2) IS AND IS NOT.  It is *corroboration* under the shipped
+    configuration, not the discriminator: measured on the real trace, under
+    the descending-id FIFO tie-break of docs/validation.md §4.5 — one knob,
+    nothing to do with placement — the same comparison INVERTS (``first_fit``
+    62,549 s = +11.7 %, ratio 7.26; ``consolidate`` 63,347 s = +13.2 %, ratio
+    7.78, both in band and both inside +/-20 %).  So these asserts pin the
+    shipped result, and the quantity that actually selects the placer is the
+    four-cluster mean absolute ratio error in the module docstring (3.4 % vs
+    27.4 % vs 29.5 %), which survives that perturbation, plus the mechanism
+    metric.  Do not read a passing (2) as "Saturn's absolute JCT proves the
+    placer".
+
+    ``best_fit`` is deliberately not replayed: it is bit-identical to
+    ``consolidate`` on this single-level fleet (asserted at unit scale in
+    ``tests/test_placement.py``, and confirmed on the full trace in the
+    v0.7a sweep).  Saturn only — it carries the effect; each FIFO replay of
+    it costs ~3 minutes, so this rung runs ~10 minutes.
+    """
+    lo, hi = _JCT_RATIO_BAND
+    ratios: dict[str, float] = {}
+    fifo_jct: dict[str, float] = {}
+    for placement in ("first_fit", "consolidate", "spread"):
+        fifo = per_vc_replay(
+            "Saturn", "2020-09", "fifo", pool_snapshot="max", placement=placement
         )
-    if jct_ratio["Saturn"] > hi:
-        pytest.xfail(
-            f"Saturn JCT ratio {jct_ratio['Saturn']:.2f} > {hi} band ceiling: "
-            f"FirstFit vs consolidate fragmentation over-inflates the most "
-            f"gang-heavy cluster (published 6.59). Fix-phase consolidate "
-            f"placer is expected to bring it into band."
+        sjf = per_vc_replay(
+            "Saturn", "2020-09", "sjf", pool_snapshot="max", placement=placement
         )
-    assert jct_ratio["Saturn"] <= hi, jct_ratio
+        assert fifo["n_dropped"] == sjf["n_dropped"] == 0
+        assert fifo["n_terminal"] == fifo["n_jobs"]
+        assert sjf["n_terminal"] == sjf["n_jobs"]
+        ratios[placement] = fifo["avg_jct"] / sjf["avg_jct"]
+        fifo_jct[placement] = fifo["avg_jct"]
+
+    # (1) the v0.6 out-of-band baseline, and its closure.
+    assert ratios["first_fit"] > hi, ratios
+    assert lo <= ratios["consolidate"] <= hi, ratios
+    assert ratios["consolidate"] < ratios["first_fit"], ratios
+
+    # (2) the ABSOLUTE rung, under the SHIPPED configuration.  Asserted
+    # loosely (+/-20%) because the paper's analysis window is unpublished and
+    # the capacity model is a choice (§1, §4.4); a tighter bar would assert
+    # luck.  See the docstring for why this rung corroborates rather than
+    # selects — it inverts under the §4.5 tie-break perturbation.
+    def _err(placement: str) -> float:
+        return abs(fifo_jct[placement] - _PUB_SATURN_FIFO_JCT) / _PUB_SATURN_FIFO_JCT
+
+    assert _err("consolidate") < 0.20, fifo_jct
+    assert _err("first_fit") > 0.20, fifo_jct
+    assert _err("spread") > 0.20, fifo_jct
+    assert _err("consolidate") < _err("first_fit"), fifo_jct
+    assert _err("consolidate") < _err("spread"), fifo_jct
+
+    # (3) "in band" is NOT "reproduces the paper": the control arm passes
+    # the band while being the worst placer on the absolute quantity.
+    assert lo <= ratios["spread"] <= hi, ratios
+    assert fifo_jct["spread"] > fifo_jct["first_fit"] > fifo_jct["consolidate"], fifo_jct

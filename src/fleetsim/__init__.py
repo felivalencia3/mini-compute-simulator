@@ -9,6 +9,11 @@ Public API (stable within v0.1):
   :func:`get_scheduler` — the pluggable-policy surface (out-of-tree
   schedulers may also register via the ``fleetsim.schedulers``
   entry-point group).
+- :func:`get_placement` / :func:`placement_names` — the *where*-axis
+  surface (v0.7).  Policies are also selectable by name from YAML with
+  ``scheduler: {params: {placement: best_fit}}``; the default stays
+  ``first_fit``.  The policy classes themselves live in
+  ``fleetsim.schedulers.placement``.
 - :class:`Job` / :class:`JobView` — the job model and its
   scheduler-visible snapshot.
 - Actions: :class:`Place`, :class:`Preempt` (with :class:`PreemptMode`),
@@ -32,8 +37,9 @@ from .schedulers.base import (
     get_scheduler,
     register,
 )
+from .schedulers.placement import get_placement, placement_names
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "__version__",
@@ -45,6 +51,8 @@ __all__ = [
     "PlacementPolicy",
     "register",
     "get_scheduler",
+    "get_placement",
+    "placement_names",
     "Job",
     "JobView",
     "Place",
