@@ -1920,11 +1920,27 @@ class RunManager:
     def _drop_broken_pool(self) -> None:
         """Forget the current pool so the next :meth:`_ensure_pool` builds
         a fresh one.  Safe at any time: runs that were in flight on it are
-        finalized by their own done-callbacks."""
+        finalized by their own done-callbacks.
+
+        The corpse is shut down on a SEPARATE thread, and that is load
+        bearing: this method is reachable from a future's done-callback
+        (``_finalize``), and CPython invokes those callbacks from
+        ``_terminate_broken`` **while holding the executor's shutdown
+        lock**.  Calling ``pool.shutdown()`` there — even with
+        ``wait=False``, which still takes that lock — self-deadlocks the
+        callback thread.  Observed on Linux CI as a SIGKILLed worker whose
+        run never left ``running`` and a suite that hung until the job
+        timeout; the faulthandler dump named this exact frame.
+        """
         with self._lock:
             pool, self._pool = self._pool, None
         if pool is not None:
-            self._discard_pool(pool)
+            threading.Thread(
+                target=self._discard_pool,
+                args=(pool,),
+                name="fleetsim-pool-reaper",
+                daemon=True,
+            ).start()
 
     def _submit_run(self, slug: str) -> Future:
         """Hand one run to the pool, rebuilding it if it is dead.
