@@ -153,6 +153,12 @@ select, input[type="text"] {
 .editorpanel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .editrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 #titleInput { flex: 1; min-width: 140px; max-width: 340px; }
+/* A <select> is sized by its LONGEST option, and a flex item's default
+   min-width is min-content — so one long starter name pushed this
+   control ~70 px past the panel edge between the 760 px rail breakpoint
+   and ~940 px, clipped with no scrollbar to reveal it. */
+#tplSelect { flex: 1 1 220px; min-width: 0; max-width: 320px; }
+#tplNote { flex-basis: 100%; margin: 0; }
 #editorWrap {
   flex: 1; min-height: 220px; display: flex; overflow: hidden;
   border: 1px solid var(--grid); border-radius: 8px; background: rgba(0,0,0,.25);
@@ -207,6 +213,20 @@ select, input[type="text"] {
 .f3dkey { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
 .f3dkey i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
 .f3dhint { margin-top: 6px; font-family: var(--mono); font-size: 10px; }
+/* same warning, 2D live map (a panel, so it can be wider) */
+.livewarn {
+  margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: #ffd8a8;
+  background: rgba(247,103,7,.10); border: 1px solid rgba(247,103,7,.42);
+  border-radius: 6px; padding: 6px 9px; max-width: 90ch;
+}
+/* live-degradation badge: the fleet on screen is PARTIAL.  Warn color,
+   not an error color — the data shown is true, there is just less of it
+   than the run produced. */
+.f3dwarn {
+  margin-top: 6px; font-size: 11px; line-height: 1.35; color: #ffd8a8;
+  background: rgba(247,103,7,.10); border: 1px solid rgba(247,103,7,.42);
+  border-radius: 6px; padding: 5px 7px;
+}
 
 .f3dcard {
   position: absolute; top: 10px; right: 12px; z-index: 5; width: 240px; max-height: 60%;
@@ -254,9 +274,401 @@ select, input[type="text"] {
 .trw .tv { font-weight: 650; }
 .trw .tn { color: var(--muted); }
 
-/* narrow screens: stack the rail on top */
+/* ==================================================================== *
+ * v0.8 — the experiment surface: rail multi-select, compare, sweeps
+ * ==================================================================== */
+
+/* ---- rail: actions, select mode, sweep badge -------------------------- */
+#railActions { display: flex; gap: 6px; }
+#railActions .btn { flex: 1; padding: 6px 10px; }
+.minibtn {
+  margin-left: auto; background: rgba(255,255,255,.05); color: var(--muted);
+  border: 1px solid var(--grid); border-radius: 6px; padding: 1px 7px;
+  font: 600 10.5px var(--mono); cursor: pointer; text-transform: uppercase; letter-spacing: .5px;
+}
+.minibtn:hover { color: var(--text); background: rgba(255,255,255,.1); }
+.minibtn[aria-pressed="true"] { color: var(--text); background: rgba(77,171,247,.15); border-color: rgba(77,171,247,.5); }
+
+/* the checkbox always occupies its slot (no layout shift on hover) and is
+   only recessive, never hidden — a hidden control is not discoverable */
+.rsel {
+  flex: none; width: 13px; height: 13px; margin: 0; cursor: pointer;
+  accent-color: var(--accent); opacity: .2; transition: opacity .12s linear;
+}
+.runrow:hover .rsel, .rsel:hover, .rsel:focus-visible, .rsel:checked,
+#rail.selecting .rsel { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .rsel { transition: none; } }
+
+.railselect { border-top: 1px solid var(--grid); padding-top: 8px; }
+.railselect .btn { padding: 3px 9px; }
+#selCount { min-width: 78px; }
+/* the selector has to out-specify `.runrow > a` (which makes the ROW
+   link flex:1) or the badge stretches across the rail */
+.runrow > a.sweepbadge {
+  flex: none; width: 20px; height: 20px; padding: 0; border-radius: 6px;
+  display: grid; place-items: center;
+  color: var(--muted); font: 700 9.5px var(--mono); text-decoration: none;
+  border: 1px solid var(--grid); background: rgba(255,255,255,.03);
+}
+.runrow > a.sweepbadge:hover { color: var(--text); background: rgba(77,171,247,.15); border-color: rgba(77,171,247,.5); }
+
+.sweeplist { list-style: none; margin: 6px 0 0; padding: 0; }
+.sweeplist li { margin: 3px 0; font-size: 12.5px; }
+#homeSweeps { margin-top: 18px; border-top: 1px solid var(--grid); padding-top: 12px; }
+
+/* ---- shared view bar (compare / sweep toolbars) ---------------------- */
+#view-compare, #view-sweep { padding: 0; overflow: hidden; }
+.vbar {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--grid); background: var(--panel);
+}
+.vbarmain { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.vbarctl { display: flex; align-items: center; gap: 8px; }
+#compareBody, #sweepBody {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+/* a flex item floors at its min-content in the cross axis too: without
+   this a wide matrix widens its panel past the viewport instead of
+   scrolling inside .tablewrap, and the PAGE scrolls sideways */
+#compareBody > *, #sweepBody > * { min-width: 0; max-width: 100%; }
+
+/* ---- run legend / chips --------------------------------------------- */
+.runchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.runchip {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  background: rgba(255,255,255,.025); border: 1px solid var(--grid);
+  border-radius: 8px; padding: 5px 9px;
+}
+.runkey {
+  flex: none; display: inline-grid; place-items: center; width: 17px; height: 17px;
+  border-radius: 5px; font: 700 11px var(--mono);
+}
+.runchipmain { display: flex; flex-direction: column; min-width: 0; }
+.runchiptitle {
+  font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;
+}
+.runchiptitle:hover { color: var(--accent); }
+.runchiplinks { display: flex; gap: 5px; margin-left: 4px; }
+.minilink {
+  font: 600 10px var(--mono); text-decoration: none; color: var(--muted);
+  border: 1px solid var(--grid); border-radius: 5px; padding: 1px 5px; background: rgba(255,255,255,.03);
+}
+.minilink:hover { color: var(--text); background: rgba(255,255,255,.09); }
+
+/* ---- tables (metric matrix, config diff, sweep cells) ---------------- */
+/* wide tables scroll INSIDE their panel; the page never scrolls sideways.
+   Containment alone is not enough: macOS overlay scrollbars draw nothing
+   until you happen to scroll over the region, so a clipped column
+   ("ENDED" rendering as "ENDEI") reads as the end of the table.  A thin
+   ALWAYS-VISIBLE scrollbar plus a right-edge fade says "there is more",
+   and tabindex makes the region keyboard-scrollable. */
+.tablewrap {
+  overflow-x: auto; max-width: 100%;
+  /* `overflow` alone does NOT stop this box's overflow from reaching the
+     document: its STICKY header/key cells extend the scrollable overflow
+     of every ancestor (Chrome), so a wide matrix let the whole app scroll
+     sideways into empty space — measured 1,665 px of document scroll
+     width in an 850 px viewport, and the app really did scroll off.
+     `contain: paint` says "compute and paint overflow inside my own
+     box", which is what a scroll container already promises. */
+  contain: paint;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent;
+}
+.tablewrap::-webkit-scrollbar { height: 8px; }
+.tablewrap::-webkit-scrollbar-track { background: rgba(255,255,255,.03); border-radius: 4px; }
+.tablewrap::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.22); border-radius: 4px;
+}
+.tablewrap::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); }
+.tablewrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+table.matrix { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+table.matrix th, table.matrix td {
+  padding: 5px 9px; text-align: left; border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+table.matrix thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--panel);
+  color: var(--muted); font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: .4px;
+  border-bottom: 1px solid rgba(255,255,255,.14);
+}
+table.matrix tbody tr:hover { background: rgba(255,255,255,.03); }
+table.matrix td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.matrix th.runcol, table.matrix th.keycol { text-transform: none; letter-spacing: 0; }
+table.matrix tbody th.runcol { font-weight: 600; }
+/* flex lives on a SPAN inside the cell: display:flex on a th/td would
+   pull it out of the table's column model and misalign the row */
+.runcell { display: inline-flex; align-items: center; gap: 7px; }
+table.matrix tbody th.keycol { font: 11.5px var(--mono); color: var(--text); }
+.grouprow th { border-bottom: 0; padding-bottom: 1px; }
+.groupth { color: var(--muted); font: 600 10px var(--mono) !important; opacity: .85; }
+.dirmark { margin-left: 4px; opacity: .5; font-size: 8px; }
+td.best { background: rgba(18,184,134,.12); box-shadow: inset 2px 0 0 rgba(18,184,134,.75); }
+td.nosummary { color: var(--muted); font-style: italic; }
+.sronly {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.valcell { color: var(--text); }
+.valcell.changed { color: #a5d8ff; }
+/* the diff hugs its content instead of stretching values to the far
+   right of the panel (the metric matrix does want the full width) */
+.difftable { min-width: 0; }
+.difftable td { font-size: 11.5px; padding-right: 18px; }
+.toggle { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; cursor: pointer; }
+.toggle input { accent-color: var(--accent); }
+
+/* ---- charts (overlaid timelines, sweep bars) ------------------------- */
+/* ---- timeline series toggles (compare) ------------------------------- */
+.serieskeys { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.serieskey {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 260px;
+  font: 600 11px var(--sans); color: var(--text); cursor: pointer;
+  background: rgba(255,255,255,.04); border: 1px solid var(--grid);
+  border-radius: 999px; padding: 2px 10px 2px 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.serieskey i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.serieskey:hover { background: rgba(255,255,255,.09); }
+.serieskey.off { color: var(--muted); text-decoration: line-through; opacity: .62; }
+.serieskey.showall { color: var(--muted); font-family: var(--mono); }
+.serieskey:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chartdens { flex-basis: 100%; color: var(--muted); font-size: 10.5px; }
+
+.chart { margin-top: 10px; }
+.chartcap { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.charttitle { font-size: 12px; font-weight: 650; }
+.chartreadout { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+.chartsvg {
+  display: block; width: 100%; height: auto; margin-top: 2px;
+  background: rgba(255,255,255,.015); border: 1px solid var(--grid); border-radius: 8px;
+}
+.chartsvg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- explore panel (scenario editor, #sweep) ------------------------- */
+.modeswitch { display: flex; gap: 6px; margin-left: auto; }
+.modeswitch .tab { padding: 3px 9px; font-size: 11px; }
+.explorepanel {
+  border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px;
+  background: rgba(255,255,255,.02); margin: 10px 0 4px;
+}
+.presetrow { margin-bottom: 8px; }
+.presetrow .btn { padding: 2px 8px; font-size: 11px; }
+.axisrow { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+.axpath { flex: 1 1 240px; min-width: 160px; }
+.axvals { flex: 2 1 320px; min-width: 180px; }
+.axisrow.bad .axpath { border-color: rgba(224,49,49,.6); }
+.axn { min-width: 84px; color: var(--muted); font-size: 10.5px; }
+.axdel {
+  flex: none; width: 22px; height: 22px; border-radius: 6px; padding: 0;
+  background: none; border: 1px solid transparent; color: var(--muted);
+  font: 600 13px/1 var(--mono); cursor: pointer;
+}
+.axdel:hover { color: #ffa8a8; border-color: rgba(224,49,49,.5); background: rgba(224,49,49,.08); }
+.sizenote { color: var(--text); font-size: 11.5px; }
+.sizenote.over { color: #ffa8a8; }
+
+/* ---- sweep board ----------------------------------------------------- */
+.selbar { margin-bottom: 8px; }
+.selbar .btn { padding: 3px 9px; }
+.tinycol { width: 26px; }
+.cellsel { width: 13px; height: 13px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.cellsel:disabled { cursor: default; opacity: .35; }
+.statuswrap { display: inline-flex; align-items: center; gap: 6px; }
+.dot.missing { background: var(--draining); }
+
+.heatwrap { overflow-x: auto; margin-top: 8px; }
+table.heat { border-collapse: separate; border-spacing: 2px; } /* 2px surface gap */
+table.heat th, table.heat td { border-bottom: 0; }
+.heatcell {
+  text-align: center; font: 600 11.5px var(--mono); border-radius: 4px;
+  min-width: 74px; padding: 8px 10px !important;
+}
+.heatcell.empty { color: var(--muted); background: rgba(255,255,255,.03); }
+.heatlink { text-decoration: none; }
+.heatlink:hover { text-decoration: underline; }
+.heatlegend { display: flex; align-items: center; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.heatswatch { width: 22px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* ==================================================================== *
+ * v0.8 — the analysis tab (insight.js): drill-down, correlation, dips
+ * ==================================================================== */
+#insight { flex: 1; min-height: 0; overflow-y: auto; }
+.insroot { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.insroot > * { min-width: 0; max-width: 100%; }
+.insnote { margin: 8px 0 0; max-width: 82ch; }
+/* the model's own reconstruction notes: collapsed, but present */
+.insnotes { margin: 8px 0 0; max-width: 82ch; font-size: 11.5px; }
+.insnotes > summary {
+  cursor: pointer; color: var(--muted); font: 600 11px var(--mono);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.insnotes > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.insnotelist { margin: 6px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.5; }
+.insnotelist li { margin-bottom: 3px; }
+
+/* event drill-down: the round list beside the round's story */
+.insplit { display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.evlistwrap { min-width: 0; border: 1px solid var(--grid); border-radius: 8px; padding: 8px; background: rgba(255,255,255,.02); }
+.evlist { list-style: none; margin: 6px 0 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.evbtn {
+  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); padding: 4px 6px; cursor: pointer; font: inherit;
+}
+.evbtn:hover { background: rgba(255,255,255,.05); }
+.evbtn[aria-current="true"] { background: rgba(77,171,247,.12); border-color: rgba(77,171,247,.45); }
+.evdot { flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--muted); }
+.evdot.k-failure { background: var(--failed); }
+.evdot.k-preemption_wave { background: var(--draining); }
+.evmain { min-width: 0; display: flex; flex-direction: column; }
+.evt { font-size: 10.5px; color: var(--muted); }
+.evlabel { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evdetail { min-width: 0; }
+.evdetail .statrow { margin-top: 4px; }
+
+/* the one inference on the screen is always tagged as one */
+.inftag {
+  font: 600 9px var(--mono); text-transform: uppercase; letter-spacing: .6px;
+  color: var(--muted); border: 1px solid var(--grid); border-radius: 4px;
+  padding: 0 4px; margin-right: 5px; background: rgba(255,255,255,.04);
+}
+.inferred { display: inline-flex; align-items: baseline; gap: 2px; }
+
+/* correlation */
+.insstats { margin: 8px 0 0; font-size: 12px; color: var(--text); }
+.insrange { accent-color: var(--accent); width: 190px; height: 18px; }
+
+/* dip bars: legend swatches, residual hatch, table emphasis */
+.insleg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.inskey { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.inskey i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+.inskey i.hatch {
+  background: repeating-linear-gradient(45deg, var(--muted) 0 2px, rgba(139,147,161,.22) 2px 5px);
+}
+td.residualcell { color: #a5d8ff; }
+td.warncell { color: #ffc078; }
+
+@media (max-width: 900px) {
+  .insplit { grid-template-columns: minmax(0, 1fr); }
+  .evlist { max-height: 200px; }
+}
+
+/* ==================================================================
+   v0.8 phase 3: live replay, node drill-down, deep links + export,
+   the validation tab and the editor's fleet-shape preview.
+   Same tokens as everything above — no new colors are introduced here,
+   only the semantic good/warn/bad trio the validation table needs.
+   ================================================================== */
+
+/* ---- brand row: the validation link -------------------------------- */
+#brand { display: flex; align-items: center; gap: 8px; }
+#brand a#brandLink { flex: 1; min-width: 0; }
+#validationLink { flex: none; }
+
+/* ---- shared: a small tool cluster in a panel header ----------------- */
+.livetools { margin-left: auto; display: inline-flex; gap: 6px; }
+.pngbtn { flex: none; }
+
+/* ---- the 2D fleet block diagram (live map + editor preview) --------- */
+.fmapsvg { display: block; width: 100%; height: auto; max-width: 100%; }
+.fmapleg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
+.fmapnote { margin: 6px 0 0; }
+.livemap, .previewpanel { margin: 14px; }
+.livemap #liveMapMount, .previewpanel #previewMount { overflow-x: auto; }
+.previewpanel { margin: 10px 0 0; }
+#previewNote { margin: 6px 0 0; }
+
+/* ---- 3D: live badge, breadcrumb, legend filters, share cluster ------ */
+.f3dtline { display: flex; align-items: baseline; gap: 8px; }
+.f3dlive {
+  font: 650 9.5px var(--mono); letter-spacing: .7px; color: var(--bg);
+  background: var(--done); border-radius: 4px; padding: 1px 5px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .f3dlive { animation: none; } }
+/* the HUD is pointer-events: none so it never eats an orbit drag; the
+   legend is the one part of it that IS interactive, so it opts back in */
+.f3dlegend { pointer-events: auto; }
+/* legend keys are buttons now (class filters); they must not inherit
+   the .btn look — they are a legend first and a control second */
+.f3dkey {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+  background: none; border: 0; padding: 0; color: var(--text);
+  font-family: inherit; cursor: pointer; text-align: left;
+}
+button.f3dkey:hover { color: var(--accent); }
+.f3dkey.off { opacity: .38; text-decoration: line-through; }
+.f3dshare { display: inline-flex; gap: 4px; margin-left: 4px; }
+/* the breadcrumb sits BETWEEN the HUD (left, max-width 300) and the
+   pinned-pod card (right, width 240) rather than centred on the canvas —
+   centred, it slid under the HUD on a narrow window */
+.f3dcrumb {
+  position: absolute; top: 10px; left: 324px; right: 266px;
+  background: rgba(17,21,29,.94); border: 1px solid var(--grid);
+  border-radius: 8px; padding: 7px 11px;
+  pointer-events: auto; z-index: 6;
+}
+@media (max-width: 1100px) {
+  /* no room for three columns: the crumb takes the full width under the
+     HUD instead of overlapping it */
+  .f3dcrumb { left: 12px; right: 12px; top: auto; bottom: 78px; }
+}
+.f3dtrail { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.f3dcrumbup {
+  background: none; border: 0; padding: 0; color: var(--accent);
+  font: 600 11.5px var(--mono); cursor: pointer;
+}
+.f3dcrumbup:hover { text-decoration: underline; }
+.f3dsep { color: var(--muted); }
+.f3dcrumbcur { font-size: 12px; font-weight: 650; }
+.f3dcrumbleaf { color: var(--muted); font-size: 11.5px; }
+.f3dcrumbsub { color: var(--text); font-size: 11px; margin-top: 3px; }
+.f3dcrumbnote { margin-top: 3px; line-height: 1.35; }
+
+/* ---- validation tab ------------------------------------------------- */
+#view-validation { padding: 0; overflow: hidden; }
+#validationBody {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+#validationBody > * { min-width: 0; max-width: 100%; }
+.vheadline { margin: 0 0 10px; font-size: 13px; line-height: 1.5; max-width: 90ch; }
+.vsrc { margin: 10px 0 0; line-height: 1.5; max-width: 90ch; }
+/* a group's own caveat, under its table — not a footnote */
+.vcaption {
+  margin: 8px 0 0; line-height: 1.5; max-width: 90ch;
+  border-left: 2px solid rgba(250,176,5,.5); padding-left: 9px;
+}
+.antipanel { border-color: rgba(250,176,5,.35); }
+.antipanel h2 { color: var(--eval); }
+/* the anti-goal reasons are sentences: they WRAP rather than pushing the
+   disposition column off the panel (this is the one table on the page
+   whose content is prose, not numbers) */
+.antipanel table.matrix td { white-space: normal; }
+.antiq { font-weight: 650; min-width: 200px; }
+.antidisp { color: var(--muted); font-size: 11px; }
+.vtable td { vertical-align: baseline; }
+.vverdict { white-space: nowrap; }
+.vmark { margin-right: 5px; font-weight: 700; }
+.vgood { color: var(--done); }
+.vbad { color: var(--failed); }
+.vmuted { color: var(--muted); }
+.vprev { color: var(--muted); font-size: 10.5px; margin-left: 5px; }
+.vbound { color: var(--muted); font-size: 11px; }
+.vpath { font-size: 11px; }
+.vcite { margin-top: 8px; font-size: 12px; line-height: 1.5; max-width: 100ch; }
+.vcitename { color: var(--accent); font-weight: 650; }
+
+/* narrow screens: stack the rail on top.  minmax(0, 1fr) + min-width: 0
+   let the stacked rail shrink to the viewport (a 1fr grid item floors at
+   its MIN-CONTENT, which the nowrap run titles inflate — the page would
+   scroll sideways instead of the titles ellipsing) */
 @media (max-width: 760px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
-  #rail { border-right: 0; border-bottom: 1px solid var(--grid); max-height: 42vh; }
+  #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
+  #rail { border-right: 0; border-bottom: 1px solid var(--grid); max-height: 42vh; min-width: 0; }
   #runTitle { max-width: none; }
+  .runchiptitle { max-width: 180px; }
+  .modeswitch { margin-left: 0; }
 }

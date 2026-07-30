@@ -10,14 +10,22 @@ PINNED MODEL SCHEMA (the app phase codes against THIS)
 ::
 
     { meta: {title, out_dir, horizon_us, round_us, seed, scenario_name,
-             fleetsim_version, generated_unix_ms: null, notes: [str]},
+             fleetsim_version, generated_unix_ms: null, notes: [str],
+             # v0.8: TRUE per-kind event round counts BEFORE sampling, so
+             # a UI never presents the event cap as the population
+             event_totals: {kind: int}},
       capabilities: {map: bool, compare: bool},
       palette: {class_name -> color, state -> color},
       fleet: {map_level: str|null,
               clusters: [{id, chips, domains: [{id, short, chips}]}]},
       frames: {t_us: int[], occupancy: f[], allocation: f[],
                goodput_to_date: f[], pending_by_class: {cls: int[]},
-               preemptions_delta: int[], failures_delta: int[]},
+               preemptions_delta: int[], failures_delta: int[],
+               # v0.8 analysis series (additive; appended after the
+               # v0.3 keys, which keep their pinned order and meaning)
+               allocated_chips: f[], healthy_chips: f[],
+               pending_jobs: int[], running_jobs: int[],
+               failure_kills_delta: int[], frag_index: {level: f[]}},
       stints: {job_id: str[], class_name: str[], tier: str[],
                domain_idx: int[], chips: int[], t0_us: int[],
                t1_us: int[], end_reason: str[]},
@@ -116,6 +124,38 @@ frames
       against 0), bucket-sum.  Failure kills of jobs are part of
       neither (they are in ``cum_failure_kills``).
 
+    v0.8 ANALYSIS SERIES.  Additive: the seven keys above keep their
+    order and meaning, these follow.  Every one is a straight read of a
+    ``timeseries.parquet`` column under the same bucket rule as its
+    neighbours — value series bucket-MEAN, delta series bucket-SUM — so
+    nothing here is modelled, smoothed or invented.  A column an older
+    run does not carry degrades to all-null (never to zero) and says so
+    in ``meta.notes``.
+    - ``allocated_chips`` / ``healthy_chips``: the raw columns,
+      bucket-mean (float — a bucket of samples has a fractional mean).
+      These are what turn an occupancy dip into CHIPS.
+    - ``pending_jobs`` / ``running_jobs``: the collector's own totals,
+      bucket-mean rounded to int (null for an empty bucket).  Unlike
+      ``pending_by_class`` this one DOES re-count a job re-queued after
+      a preemption — it is the queue-pressure proxy, not a per-class
+      first-wait reconstruction.
+    - ``failure_kills_delta``: per-sample diffs of ``cum_failure_kills``
+      (jobs killed by a node failure), bucket-sum — the job-side
+      counterpart of ``failures_delta``' node-side count.  All-``null``
+      (never all-zero) for a run without the column, like its neighbours.
+    - ``frag_index``: one series per fleet LEVEL, from the
+      ``frag_index_<level>`` columns, bucket-mean.  Keys sorted; ``{}``
+      when the run recorded no level.
+
+    NOT ADDED, deliberately: a per-round goodput.  It is algebraically
+    recoverable from the cumulative columns (the fleet size cancels), but
+    the collector credits productive chip-time in a LUMP when a stint
+    settles, so the reconstructed per-round ratio is a settlement
+    artefact — zero for rounds where nothing ended, far above 1 for the
+    round a long job completes in.  ``goodput_to_date`` is the only
+    honest goodput series a round carries, and the app labels it as the
+    to-date ratio it is rather than plotting a fabricated rate.
+
 stints
     Columnar copy of stints.parquet rows sorted by (t0_us, job_id,
     domain, t1_us) — primary order t0_us as pinned.  ``class_name`` and
@@ -148,8 +188,12 @@ events
       preemption delta >= max(10, p99 of all raw deltas) (p99 by
       numpy's linear interpolation).
     - ``failure``: raw samples with a node-failure delta > 0; if more
-      than 300, the 300 largest (magnitude desc, then time asc) are
-      kept and a note is added.
+      than 300, the run is split into 300 equal time WINDOWS and the
+      largest round in each is kept (ties inside a window -> earliest),
+      so the retained ticks span the horizon.  A note states the rule
+      and the true round count.  Ranking by magnitude alone was wrong
+      whenever magnitudes tie — which is the normal case — because it
+      silently degenerates into "the earliest rounds".
     - ``frontier_submit`` / ``frontier_start``: submit / first-start
       times of jobs with >= 32768 chips.
 
@@ -613,6 +657,42 @@ def _bucket_sum_int(arr: np.ndarray, edges: list[tuple[int, int]]) -> list[int]:
     return [int(arr[a:b].sum()) for a, b in edges]
 
 
+def _bucket_sum_round(
+    arr: np.ndarray, edges: list[tuple[int, int]]
+) -> list[int | None]:
+    """Bucket SUM as int, ``None`` for an empty/all-NaN bucket.
+
+    The delta-series counterpart of :func:`_bucket_mean_round`, for a
+    column an older run may not carry: summing NaN to 0 would publish
+    "nothing happened" where the honest answer is "not recorded".
+    """
+    out: list[int | None] = []
+    for a, b in edges:
+        seg = arr[a:b]
+        seg = seg[~np.isnan(seg)]
+        out.append(int(seg.sum()) if seg.size else None)
+    return out
+
+
+def _bucket_mean_round(
+    arr: np.ndarray, edges: list[tuple[int, int]]
+) -> list[int | None]:
+    """Bucket mean rounded to int, ``None`` for an empty/all-NaN bucket.
+
+    Unlike :func:`_bucket_mean_int` (whose inputs can never be NaN) this
+    one is used for columns an older run may not carry: a missing column
+    has to read as "unknown", never as zero.
+    """
+    out: list[int | None] = []
+    for a, b in edges:
+        seg = arr[a:b]
+        seg = seg[~np.isnan(seg)]
+        out.append(int(round(float(seg.mean()))) if seg.size else None)
+    return out
+
+
+
+
 def _pending_counts(
     jobs: pd.DataFrame, t_us: np.ndarray
 ) -> dict[str, np.ndarray]:
@@ -679,6 +759,52 @@ def _build_frames(run: _Run, max_frames: int, notes: list[str]) -> dict[str, Any
         " total)"
     )
 
+    # -- v0.8 analysis series (see the module docstring) ------------------
+    def column(name: str) -> np.ndarray:
+        """A raw float column, all-NaN when this run never recorded it."""
+        if n and name in ts.columns:
+            return ts[name].to_numpy(dtype="float64")
+        return np.full(n, np.nan)
+
+    # NaN, not zeros, when the column is absent: a flat run of real zeros
+    # draws a confident "no job was ever killed by a node failure" for a
+    # run whose answer is UNKNOWN — and contradicts the note this build
+    # emits on the same page.  _bucket_sum_nan yields None per bucket.
+    kills_delta = (
+        np.diff(ts["cum_failure_kills"].to_numpy(dtype="int64"), prepend=0).astype(
+            "float64"
+        )
+        if n and "cum_failure_kills" in ts.columns
+        else np.full(n, np.nan)
+    )
+    frag_levels = sorted(
+        str(c)[len("frag_index_") :]
+        for c in (ts.columns if n else [])
+        if str(c).startswith("frag_index_")
+    )
+    # allocated_chips / healthy_chips are already loaded above (the
+    # occupancy series needs them), so only the optional columns can be
+    # absent here.
+    missing = sorted(
+        name
+        for name in ("pending_jobs", "running_jobs", "cum_failure_kills")
+        if n and name not in ts.columns
+    )
+    if n:
+        notes.append(
+            "analysis series (allocated_chips, healthy_chips,"
+            " pending_jobs, running_jobs, failure_kills_delta,"
+            " frag_index): straight reads of timeseries.parquet columns"
+            " under the same bucket rule as their neighbours — value"
+            " series bucket-mean, delta series bucket-sum"
+        )
+    if missing:
+        notes.append(
+            "analysis series: this run's timeseries has no "
+            + ", ".join(missing)
+            + " column; the series that need it are null, not zero"
+        )
+
     return {
         "t_us": [int(t_raw[b - 1]) for _, b in edges],
         "occupancy": _bucket_mean(occ_raw, edges),
@@ -690,6 +816,15 @@ def _build_frames(run: _Run, max_frames: int, notes: list[str]) -> dict[str, Any
         },
         "preemptions_delta": _bucket_sum_int(preempt_delta, edges),
         "failures_delta": _bucket_sum_int(fail_delta, edges),
+        "allocated_chips": _bucket_mean(alloc, edges),
+        "healthy_chips": _bucket_mean(healthy, edges),
+        "pending_jobs": _bucket_mean_round(column("pending_jobs"), edges),
+        "running_jobs": _bucket_mean_round(column("running_jobs"), edges),
+        "failure_kills_delta": _bucket_sum_round(kills_delta, edges),
+        "frag_index": {
+            lvl: _bucket_mean(column(f"frag_index_{lvl}"), edges)
+            for lvl in frag_levels
+        },
     }
 
 
@@ -824,7 +959,47 @@ def _build_cdfs(run: _Run) -> dict[str, dict[str, list[list[float]]]]:
 # ---------------------------------------------------------------------------
 
 
-def _build_events(run: _Run, notes: list[str]) -> list[dict[str, Any]]:
+def _sample_events_over_time(
+    events: list[dict[str, Any]], cap: int, t0: int, t1: int
+) -> list[dict[str, Any]]:
+    """At most ``cap`` events, SPREAD OVER THE RUN, largest-per-window.
+
+    Ranking by magnitude alone is not a sample of the run: on a fleet
+    whose failure magnitudes tie — the normal case, where almost every
+    round loses exactly one node — ``(-magnitude, t_us)`` degenerates to
+    "the earliest rounds", and the scrubber's event track shows a solid
+    block at t=0 and an empty rest-of-run for a fleet failing at a
+    perfectly flat rate.
+
+    So: split ``[t0, t1]`` into ``cap`` equal windows and keep the
+    largest round in each (ties inside a window break to the earliest,
+    which is deterministic).  Empty windows contribute nothing, so the
+    result can be shorter than ``cap``; the returned events keep the
+    caller's sort responsibility (the caller sorts everything at the end).
+    """
+    span = max(1, int(t1) - int(t0))
+    best: dict[int, dict[str, Any]] = {}
+    for event in events:
+        idx = min(cap - 1, ((int(event["t_us"]) - int(t0)) * cap) // span)
+        current = best.get(idx)
+        if (
+            current is None
+            or event["magnitude"] > current["magnitude"]
+            or (
+                event["magnitude"] == current["magnitude"]
+                and event["t_us"] < current["t_us"]
+            )
+        ):
+            best[idx] = event
+    return [best[i] for i in sorted(best)]
+
+
+def _build_events(
+    run: _Run, notes: list[str], totals: dict[str, int] | None = None
+) -> list[dict[str, Any]]:
+    """The event list, plus (into ``totals``) the TRUE per-kind round
+    counts before any sampling — so a UI can print "300 of 4,544" instead
+    of presenting the cap as the population."""
     events: list[dict[str, Any]] = []
     ts = run.ts
     n = len(ts)
@@ -852,12 +1027,22 @@ def _build_events(run: _Run, notes: list[str]) -> list[dict[str, Any]]:
             }
             for i in np.nonzero(fails > 0)[0]
         ]
-        if len(fail_events) > _MAX_FAILURE_EVENTS:
-            fail_events.sort(key=lambda e: (-e["magnitude"], e["t_us"]))
-            fail_events = fail_events[:_MAX_FAILURE_EVENTS]
+        n_fail_rounds = len(fail_events)
+        if totals is not None:
+            totals["failure"] = n_fail_rounds
+            totals["preemption_wave"] = int(np.count_nonzero(preempt >= threshold))
+        if n_fail_rounds > _MAX_FAILURE_EVENTS:
+            fail_events = _sample_events_over_time(
+                fail_events, _MAX_FAILURE_EVENTS, int(t_raw[0]), int(t_raw[-1])
+            )
             notes.append(
-                f"failure events truncated to the {_MAX_FAILURE_EVENTS}"
-                f" largest rounds"
+                f"failure events sampled to {len(fail_events)} of"
+                f" {n_fail_rounds} rounds: the run was split into"
+                f" {_MAX_FAILURE_EVENTS} equal time windows and the LARGEST"
+                f" round in each was kept, so the ticks span the horizon"
+                f" (keeping the 300 largest rounds outright put 87% of them"
+                f" in the first 7% of a flat-failure-rate run, which reads"
+                f" as an early failure storm that never happened)"
             )
         events.extend(fail_events)
 
@@ -1061,6 +1246,7 @@ def build_viz_model(
         }
         notes.extend(f"compare run: {n}" for n in notes_b)
 
+    event_totals: dict[str, int] = {}
     model: dict[str, Any] = {
         "meta": None,  # placed first; filled after notes are complete
         "capabilities": {
@@ -1073,11 +1259,12 @@ def build_viz_model(
         "stints": stints,
         "gantt": _build_gantt(run, max_gantt_jobs),
         "cdfs": _build_cdfs(run),
-        "events": _build_events(run, notes),
+        "events": _build_events(run, notes, event_totals),
         "summary_cards": _build_summary_cards(run.summary),
         "compare": compare,
     }
     model["meta"] = _build_meta(run, out_dir, title, notes)
+    model["meta"]["event_totals"] = event_totals
     return model
 
 

@@ -8,7 +8,8 @@ Subcommands::
     fleetsim compare out_a/ out_b/ [...]
     fleetsim viz out/ [out_b/] [-o report.html] [--title T]
                      [--map-level L] [--open]
-    fleetsim serve [-p 8500] [--workspace DIR] [--host H] [--open]
+    fleetsim serve [-p 8500] [--workspace DIR] [--host H] [--workers N]
+                   [--open]
     fleetsim validation cite [trace]
     fleetsim validation run
 
@@ -138,6 +139,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="127.0.0.1",
         help="bind address; NON-LOOPBACK VALUES EXPOSE THE APP TO YOUR"
         " NETWORK and print a warning (default 127.0.0.1)",
+    )
+    p_srv.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        metavar="N",
+        help="simultaneous simulation worker PROCESSES; runs beyond N queue"
+        " FIFO (default min(4, cpu_count-1))",
     )
     p_srv.add_argument(
         "--open",
@@ -552,11 +561,15 @@ def _cmd_viz(args: argparse.Namespace) -> int:
 def _cmd_serve(args: argparse.Namespace) -> int:
     from .serve.server import serve
 
+    if args.workers is not None and args.workers < 1:
+        print("error: --workers must be at least 1")
+        return 2
     return serve(
         port=args.port,
         workspace=args.workspace,
         host=args.host,
         open_browser=args.open_browser,
+        workers=args.workers,
     )
 
 

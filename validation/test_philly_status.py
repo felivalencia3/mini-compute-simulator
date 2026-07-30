@@ -42,6 +42,12 @@ from fleetsim.validation.philly_status import (
     status_split_by_count,
     status_split_by_gpu_time,
 )
+from fleetsim.validation.results import (
+    PHILLY_BY_COUNT_TOL,
+    PHILLY_BY_GPU_TOL,
+    PHILLY_PUBLISHED_BY_COUNT,
+    PHILLY_PUBLISHED_BY_GPU,
+)
 from fleetsim.workload.philly import convert_philly
 
 # Repo layout: this file is <root>/validation/test_philly_status.py.
@@ -140,15 +146,18 @@ def test_philly_slice_status_split_smoke() -> None:
 # Full trace — opt-in (1 GB Git-LFS; asserts §2 V3 Table-6 shares)
 # ---------------------------------------------------------------------------
 
-#: Published Table 6 shares (Jeon et al., ATC '19, 96,260-job paper window).
-_PUB_BY_COUNT = {"Passed": 0.693, "Killed": 0.135, "Unsuccessful": 0.172}
-_PUB_BY_GPU = {"Passed": 0.4453, "Killed": 0.3769, "Unsuccessful": 0.1776}
-
-#: plan §2 V3(f) tolerances: the released 117,325-job / 137-day trace is not
-#: the paper's 96,260-job / ~75-day window (which is not precisely
-#: published), so the bands are loose enough to absorb the window residual.
-_BY_COUNT_TOL = 0.05  # +/- 5 percentage points
-_BY_GPU_TOL = 0.08  # +/- 8 percentage points
+#: Published Table 6 shares (Jeon et al., ATC '19, 96,260-job paper window)
+#: and the plan §2 V3(f) tolerances, both imported from
+#: :mod:`fleetsim.validation.results` — the single source of truth for every
+#: published-vs-fleetsim number since v0.8, shared with
+#: ``GET /api/validation``.  The tolerances are loose because the released
+#: 117,325-job / 137-day trace is not the paper's 96,260-job / ~75-day
+#: window (which is not precisely published), so they must absorb the
+#: window residual.
+_PUB_BY_COUNT = PHILLY_PUBLISHED_BY_COUNT
+_PUB_BY_GPU = PHILLY_PUBLISHED_BY_GPU
+_BY_COUNT_TOL = PHILLY_BY_COUNT_TOL  # +/- 5 percentage points
+_BY_GPU_TOL = PHILLY_BY_GPU_TOL  # +/- 8 percentage points
 
 
 def _resolve_philly_log() -> Path:

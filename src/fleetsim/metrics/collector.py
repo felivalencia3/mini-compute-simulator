@@ -36,6 +36,15 @@ domain carrying that domain's chip share; shares sum to the job's
 chips.  When ``stints`` is None (default) nothing is recorded and every
 other output is byte-identical to a collector without the feature.
 
+LIVE STINT READS (v0.8, read-side only — recording is untouched)
+``stints_since(cursor) -> (rows, new_cursor)`` streams SETTLED rows off
+the append-only settlement log (cursor = rows already consumed; each row
+is returned exactly once, ever), ``open_stint_rows(t1_us)`` is the
+replace-wholesale overlay of stints still open, and ``stint_fleet()``
+reports the stint level's exact domain geometry.  Together they let a
+consumer rebuild, incrementally and while the run is still going, the
+same interval index the finished-run viz model carries.
+
 PRODUCTIVE CHIP-TIME (goodput numerator)
 ----------------------------------------
 ``job_progress`` calls report each stint's surviving-work delta together
@@ -105,6 +114,7 @@ INVARIANTS
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -139,6 +149,21 @@ _STINT_END_REASON = {
     "TIMEOUT": "timeout",
     "NODE_FAIL": "failed",
 }
+
+
+def _stint_domain_key(domain_id: str) -> tuple[str, int, str]:
+    """Natural sort key for stint domain ids (``pod2`` before ``pod10``).
+
+    Byte-for-byte the rule :func:`fleetsim.viz.data._natural_key` uses, so
+    the live ``stint_fleet()`` domain order matches the finished-run viz
+    model's ``fleet.clusters[*].domains`` order exactly (the frontend
+    indexes both with one ``domain_idx``).
+    """
+    last = domain_id.rsplit("/", 1)[-1]
+    match = re.match(r"^(.*?)(\d+)$", last)
+    if match:
+        return (match.group(1), int(match.group(2)), domain_id)
+    return (last, -1, domain_id)
 
 
 def _build_stint_leaf_map(
@@ -417,6 +442,11 @@ class MetricsCollector:
         self._stint_leaf: dict[str, tuple[str, int]] = {}
         self._stints_open: dict[str, _OpenStint] = {}
         self._stint_rows: list[dict[str, Any]] = []
+        #: Stint-level fleet geometry, captured at construction (read-side
+        #: only, v0.8 live streaming): domain id -> total chips, and the
+        #: modal level name of those domains.  Empty / None with stints off.
+        self._stint_domain_chips: dict[str, int] = {}
+        self._stint_map_level: str | None = None
         if self._stint_level is not None:
             if fleet is None:
                 raise ValueError(
@@ -424,6 +454,21 @@ class MetricsCollector:
                     " construction (jobs can start before the first flush)"
                 )
             self._stint_leaf = _build_stint_leaf_map(fleet, self._stint_level)
+            chips: dict[str, int] = {}
+            for dom, leaf_chips in self._stint_leaf.values():
+                chips[dom] = chips.get(dom, 0) + int(leaf_chips)
+            self._stint_domain_chips = {d: chips[d] for d in sorted(chips)}
+            if isinstance(self._stint_level, str):
+                self._stint_map_level = self._stint_level
+            else:  # stints: true -> the modal level of the mapped domains
+                seen: dict[str, int] = {}
+                for dom in self._stint_domain_chips:
+                    lv = fleet.domain(dom).level
+                    seen[lv] = seen.get(lv, 0) + 1
+                if seen:
+                    self._stint_map_level = min(
+                        seen, key=lambda lv: (-seen[lv], lv)
+                    )
 
         # Fleet statics (filled at construction or first flush).
         self._statics_ready = False
@@ -941,6 +986,106 @@ class MetricsCollector:
                 )
         rows.sort(key=lambda r: (r["t0_us"], r["job_id"], r["domain"], r["t1_us"]))
         return rows
+
+    # -- live stint streaming (v0.8; read-side cursor, never mutating) ----
+
+    def stints_since(self, cursor: int = 0) -> tuple[list[dict[str, Any]], int]:
+        """SETTLED stint rows recorded since ``cursor``, plus the new cursor.
+
+        The cursor is a COUNT of settled rows already consumed — an index
+        into the collector's append-only settlement log.  ``_stint_rows``
+        only ever grows by appending (``_settle_stint``) and a settled row
+        is never revised, so ``stints_since(c)`` returns each row exactly
+        once across a run and ``new_cursor`` is monotonically
+        non-decreasing.  Rows come in SETTLEMENT order (not the sorted
+        order :meth:`stint_rows` emits) and carry the same columns.
+
+        A negative cursor is clamped to 0; a cursor beyond the log (only
+        possible from a stale caller) returns no rows and the true count.
+        Reads are non-mutating: still-open stints are NOT settled here —
+        use :meth:`open_stint_rows` for the live overlay.
+        """
+        start = max(0, int(cursor))
+        end = len(self._stint_rows)
+        if start >= end:
+            return [], end
+        return [dict(r) for r in self._stint_rows[start:end]], end
+
+    def open_stint_rows(self, t1_us: int) -> list[dict[str, Any]]:
+        """The currently-open stints as rows truncated at ``t1_us``, with
+        ``end_reason == "open"``, sorted like :meth:`stint_rows`.
+
+        A REPLACE-WHOLESALE overlay (not part of the ``stints_since``
+        cursor stream): the same stint appears in successive overlays with
+        a growing ``t1_us`` until it settles, at which point it leaves the
+        overlay and appears exactly once in the cursor stream with its
+        real ``end_reason``.  At the horizon flush these rows correspond
+        1:1 to the ``running_at_horizon`` rows :meth:`stint_rows` (and so
+        ``stints.parquet``) emits.
+        """
+        rows: list[dict[str, Any]] = []
+        for jid in sorted(self._stints_open):
+            st = self._stints_open[jid]
+            for dom, chips in st.domains:
+                rows.append(
+                    {
+                        "job_id": st.job_id,
+                        "class_name": st.class_name,
+                        "job_class": st.job_class,
+                        "tier": st.tier,
+                        "domain": dom,
+                        "chips": chips,
+                        "t0_us": st.t0,
+                        "t1_us": int(t1_us),
+                        "end_reason": "open",
+                    }
+                )
+        rows.sort(key=lambda r: (r["t0_us"], r["job_id"], r["domain"], r["t1_us"]))
+        return rows
+
+    def stint_fleet(self) -> dict[str, Any] | None:
+        """The stint level's fleet geometry, or ``None`` with stints off.
+
+        ``{map_level, clusters: [{id, chips, domains: [{id, short,
+        chips}]}], domains: [id, ...]}`` — the SAME shape (and the same
+        ``domains`` flat order, so index == ``domain_idx``) that
+        :func:`fleetsim.viz.build_viz_model` reconstructs for a finished
+        run, but complete and exact: every configured domain at the stint
+        level with its real chip capacity, known at construction rather
+        than inferred from observed stints.
+        """
+        if self._stint_level is None:
+            return None
+        by_cluster: dict[str, list[str]] = {}
+        for dom in self._stint_domain_chips:
+            parts = dom.split("/")
+            cid = "/".join(parts[:2]) if len(parts) >= 2 else parts[0]
+            by_cluster.setdefault(cid, []).append(dom)
+        clusters: list[dict[str, Any]] = []
+        order: list[str] = []
+        for cid in sorted(by_cluster):
+            entries = []
+            for dom in sorted(by_cluster[cid], key=_stint_domain_key):
+                order.append(dom)
+                entries.append(
+                    {
+                        "id": dom,
+                        "short": dom.rsplit("/", 1)[-1],
+                        "chips": int(self._stint_domain_chips[dom]),
+                    }
+                )
+            clusters.append(
+                {
+                    "id": cid,
+                    "chips": int(sum(e["chips"] for e in entries)),
+                    "domains": entries,
+                }
+            )
+        return {
+            "map_level": self._stint_map_level,
+            "clusters": clusters,
+            "domains": order,
+        }
 
     def preempt_triggers(self) -> tuple[str, ...]:
         """All preemption trigger strings observed, sorted."""

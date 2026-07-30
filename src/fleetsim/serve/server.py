@@ -1,21 +1,49 @@
-"""The ``fleetsim serve`` HTTP server (v0.5) — pure stdlib, local-first.
+"""The ``fleetsim serve`` HTTP server (v0.5, extended v0.8) — pure stdlib.
 
 ROUTES (pinned contract; the app-shell phases code against THIS):
 
 - ``GET  /api/runs``                -> ``[{id, title, status, created,
-  headline: {occupancy, goodput, jobs_finished} | null, error?}]``
-  (newest first; ``status`` one of ``queued|running|done|failed``)
+  headline: {occupancy, goodput, jobs_finished} | null,
+  queue_position: int | null, error?, sweep_id?, sweep_cell?}]``
+  (newest first; ``status`` one of ``queued|running|done|failed``;
+  ``queue_position`` is 1-based and non-null only while ``queued``)
 - ``GET  /api/runs/{id}``           -> the row's meta plus
   ``summary: <full summary.json> | null`` (filled when done)
-- ``GET  /api/runs/{id}/progress``  -> ``{status, progress: {t_us,
-  horizon_us, jobs_finished, jobs_running, pending, occupancy_to_date,
-  allocated_chips, healthy_chips} | null}``
+- ``GET  /api/runs/{id}/progress``  -> ``{status, queue_position,
+  progress: {t_us, horizon_us, jobs_finished, jobs_running, pending,
+  occupancy_to_date, allocated_chips, healthy_chips} | null}``
+- ``GET  /api/runs/{id}/live?cursor=N`` -> the LIVE replay stream
+  ``{status, cursor, more, progress, stints: [...], open_stints: [...] |
+  null, open_truncated, fleet: {...} | null}`` — settled stint rows after
+  ``cursor`` (each row exactly once, ever), the open-stint overlay, and
+  the stint level's domain geometry on the ``cursor=0`` request.  See
+  :meth:`fleetsim.serve.runs.RunManager.live_payload` for the cursor
+  contract; the client loops while ``more`` is true.
+- ``GET  /api/runs/{id}/scenario``  -> ``{id, name, yaml, flat:
+  {dotted.path: value} | null, truncated, parse_error?}`` — the run's own
+  scenario file, verbatim, plus the flattened document the compare view
+  diffs (a browser has no YAML parser and the app ships no new
+  dependency).  Available at any status; 404 when the run has no scenario
+  file.  Read only from inside the run directory (same containment gate
+  as every other run route).
 - ``GET  /api/runs/{id}/model``     -> the viz JSON model
   (``build_viz_model``; disk-cached; 409 until the run is done)
 - ``GET  /api/runs/{id}/report``    -> the self-contained 2D report HTML
   (``render_html``; disk-cached; 409 until done)
-- ``POST /api/validate``  body ``{yaml: str}`` -> ``{ok, errors: [str]}``
-  (always 200 for well-formed requests; bad request envelope -> 400)
+- ``POST /api/validate``  body ``{yaml: str}`` -> ``{ok, errors: [str],
+  fleet?: {...}}`` (always 200 for well-formed requests; bad request
+  envelope -> 400).  THE FULL GATE — parse, schema and feasibility, the
+  same one ``POST /api/runs`` applies.  ``fleet`` is present only when the
+  scenario is valid: the fleet it DESCRIBES as counts
+  (:func:`fleetsim.serve.runs.scenario_fleet_shape`).
+- ``POST /api/preview``   body ``{yaml: str}`` -> ``{ok, errors: [str],
+  fleet?: {...}}`` — the SAME shape, PARSE + SCHEMA ONLY.  The editor's
+  fleet-shape preview fires on every 700 ms typing pause, and the
+  feasibility half of validation BUILDS the fleet: measured 1.9 s at the
+  262,144-node ceiling and 89 s for a 100,000-rack tree, on a
+  ``ThreadingHTTPServer`` with no thread cap.  Nothing that can reach
+  execution is validated any less: ``/api/runs`` and ``/api/validate``
+  are unchanged, and this route creates nothing.
 - ``POST /api/runs``      body ``{yaml: str, title?: str}`` ->
   ``{id}`` (200), or 400 ``{ok: false, errors: [str]}`` when invalid
 - ``DELETE /api/runs/{id}``         -> 200 ``{ok: true}`` for queued runs
@@ -26,10 +54,25 @@ ROUTES (pinned contract; the app-shell phases code against THIS):
   runs: cooperative cancel at the next metrics flush (the run is marked
   ``failed`` with ``cancelled by request``); 409 for any other status,
   404 unknown.
-- ``GET /api/examples``             -> ``[{name, yaml}]`` — the bundled
-  ``examples/*/scenario.yaml`` starter scenarios, read-only, sorted by
-  name (``[]`` when the examples directory is not present, e.g. an
-  installed wheel without the repo checkout).
+- ``POST /api/sweeps``  body ``{yaml, title?, grid: {dotted.path:
+  [values]}, seeds?: [int]}`` -> ``{sweep_id, run_ids, n_runs}``; 400
+  ``{ok: false, errors}`` for a malformed grid or ANY invalid expansion
+  (all-or-nothing — nothing is created), 413 beyond the 64-run cap.
+- ``GET  /api/sweeps``              -> ``[{sweep_id, title, created,
+  n_runs, n_done, n_failed, grid, seeds}]`` newest first
+- ``GET  /api/sweeps/{id}``         -> the sweep plus one row per cell
+  (``runs: [{id, title, status, created, queue_position, cell, headline,
+  error?}]``); 404 unknown
+- ``DELETE /api/sweeps/{id}``       -> 200 ``{ok, dequeued, kept,
+  removed_record}`` — dequeues only cells still ``queued``
+- ``GET /api/validation``           -> the validation suite's measured
+  published-vs-fleetsim table as data
+  (:func:`fleetsim.validation.results.payload`) — one source of truth
+  shared with the tests that assert those numbers.
+- ``GET /api/examples``             -> ``[{name, yaml, runnable, note?}]``
+  — the bundled ``examples/*/scenario.yaml`` starter scenarios, read-only,
+  sorted by name (``[]`` when the examples directory is not present, e.g.
+  an installed wheel without the repo checkout).
 - ``GET /`` and ``GET /static/*``   -> the app shell from the packaged
   ``static/`` directory.
 
@@ -45,8 +88,12 @@ SECURITY MODEL (local-first, DESIGN v0.5):
   root, regardless of encoding tricks.
 - request bodies are JSON with a hard size cap; scenario text is parsed
   with ``yaml.safe_load`` only (inside the config layer), and runs
-  execute IN-PROCESS in a worker thread — no subprocess, no shell, no
-  string ever reaches an interpreter.
+  execute in POOL WORKER PROCESSES (v0.8) started by
+  ``multiprocessing`` — an already-running interpreter given a
+  module-level function and a path string.  Still no subprocess of a
+  shell, no ``exec`` of submitted content, no string ever reaching an
+  interpreter; the scenario travels as a file the worker reads, and
+  ``out_dir`` is forced to the run directory as before.
 - errors are always JSON (``{"error": ...}``) — including framework
   errors (bad request line, unsupported method), which override the
   stdlib's HTML pages; tracebacks and exception MESSAGES never leave
@@ -81,11 +128,18 @@ from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import yaml
 
-from .runs import RunManager, WorkspaceLockError
+from .runs import (
+    RunManager,
+    UnguardedMainError,
+    WorkspaceLockError,
+    scenario_fleet_shape,
+    scenario_shape_errors,
+)
+from .sweeps import SweepManager
 
 __all__ = ["FleetsimHTTPServer", "list_examples", "serve"]
 
@@ -203,6 +257,7 @@ class FleetsimHTTPServer(ThreadingHTTPServer):
         examples_dir: Path | None = None,
     ):
         self.runs = runs
+        self.sweeps = SweepManager(runs)
         self.static_dir = (static_dir or _STATIC_DIR).resolve()
         self.examples_dir = examples_dir  # None -> repo default
         super().__init__(address, _Handler)
@@ -399,6 +454,20 @@ class _Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         return [unquote(seg) for seg in path.split("/") if seg]
 
+    def _int_param(self, name: str, default: int) -> int:
+        """One non-negative integer query parameter.  Anything unparseable
+        (missing, empty, a list, ``abc``, ``-5``, a 400-digit number) falls
+        back to ``default`` and is clamped — a query string never becomes a
+        400, and never becomes a huge allocation either."""
+        values = parse_qs(urlsplit(self.path).query).get(name)
+        if not values:
+            return default
+        try:
+            parsed = int(values[0])
+        except (TypeError, ValueError):
+            return default
+        return max(0, min(parsed, 1 << 62))
+
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         self._dispatch(self._route_get)
 
@@ -520,6 +589,23 @@ class _Handler(BaseHTTPRequestHandler):
         if seg == ["api", "examples"]:
             self._send_json(list_examples(self.server.examples_dir))
             return
+        if seg == ["api", "validation"]:
+            from ..validation.results import payload
+
+            self._send_json(payload())
+            return
+        if seg[0] == "api" and len(seg) >= 2 and seg[1] == "sweeps":
+            sweeps = self.server.sweeps
+            if len(seg) == 2:
+                self._send_json(sweeps.list_sweeps())
+                return
+            if len(seg) == 3:
+                doc = sweeps.get_sweep(seg[2])
+                if doc is None:
+                    self._send_error_json(404, "no such sweep")
+                else:
+                    self._send_json(doc)
+                return
         if seg[0] == "api" and len(seg) >= 2 and seg[1] == "runs":
             runs = self.server.runs
             if len(seg) == 2:
@@ -541,6 +627,22 @@ class _Handler(BaseHTTPRequestHandler):
                         self._send_error_json(404, "no such run")
                     else:
                         self._send_json(prog)
+                    return
+                if sub == "live":
+                    code, payload = runs.live_payload(
+                        run_id, cursor=self._int_param("cursor", 0)
+                    )
+                    if code == 200:
+                        self._send_json(payload)
+                    else:
+                        self._send_error_json(code, payload)
+                    return
+                if sub == "scenario":
+                    code, doc = runs.scenario_doc(run_id)
+                    if code == 200:
+                        self._send_json(doc)
+                    else:
+                        self._send_error_json(code, str(doc))
                     return
                 if sub == "model":
                     code, payload = runs.model_json(run_id)
@@ -596,7 +698,7 @@ class _Handler(BaseHTTPRequestHandler):
         if self._cross_origin_rejected():
             return
         seg = self._segments()
-        if seg == ["api", "validate"]:
+        if seg in (["api", "validate"], ["api", "preview"]):
             doc = self._read_json_body()
             if doc is None:
                 return
@@ -604,8 +706,21 @@ class _Handler(BaseHTTPRequestHandler):
             if not isinstance(text, str):
                 self._send_error_json(400, "'yaml' must be a string")
                 return
-            errors = self.server.runs.validate_text(text)
-            self._send_json({"ok": not errors, "errors": errors})
+            # /api/preview stops at the schema; /api/validate runs the
+            # full gate (see the module docstring for why they differ).
+            errors = (
+                scenario_shape_errors(text)
+                if seg[1] == "preview"
+                else self.server.runs.validate_text(text)
+            )
+            out: dict[str, Any] = {"ok": not errors, "errors": errors}
+            if not errors:
+                # additive: the fleet the scenario DESCRIBES, as counts,
+                # so the editor can draw its shape before it runs
+                shape = scenario_fleet_shape(text)
+                if shape is not None:
+                    out["fleet"] = shape
+            self._send_json(out)
             return
         if seg == ["api", "runs"]:
             doc = self._read_json_body()
@@ -626,6 +741,9 @@ class _Handler(BaseHTTPRequestHandler):
             run_id = self.server.runs.submit(text, title)
             self._send_json({"id": run_id})
             return
+        if seg == ["api", "sweeps"]:
+            self._route_post_sweep()
+            return
         if (
             len(seg) == 4
             and seg[0] == "api"
@@ -640,6 +758,37 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._send_error_json(404, "not found")
 
+    def _route_post_sweep(self) -> None:
+        """``POST /api/sweeps`` — envelope checks here, expansion +
+        all-or-nothing validation in :mod:`fleetsim.serve.sweeps`."""
+        doc = self._read_json_body()
+        if doc is None:
+            return
+        text = doc.get("yaml")
+        if not isinstance(text, str):
+            self._send_error_json(400, "'yaml' must be a string")
+            return
+        title = doc.get("title")
+        if title is not None and not isinstance(title, str):
+            self._send_error_json(400, "'title' must be a string")
+            return
+        grid = doc.get("grid")
+        if not isinstance(grid, dict):
+            self._send_error_json(
+                400, "'grid' must be an object of {dotted.path: [values]}"
+            )
+            return
+        seeds = doc.get("seeds")
+        if seeds is not None and not isinstance(seeds, list):
+            self._send_error_json(400, "'seeds' must be a list of integers")
+            return
+        try:
+            code, payload = self.server.sweeps.create(text, grid, seeds, title)
+        except RuntimeError:  # shutting down
+            self._send_error_json(503, "server is shutting down")
+            return
+        self._send_json(payload, status=code)
+
     # -- DELETE ----------------------------------------------------------------
 
     def _route_delete(self) -> None:
@@ -652,6 +801,13 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True})
             else:
                 self._send_error_json(code, msg)
+            return
+        if len(seg) == 3 and seg[0] == "api" and seg[1] == "sweeps":
+            code, out = self.server.sweeps.delete_sweep(seg[2])
+            if code == 200:
+                self._send_json(out)
+            else:
+                self._send_error_json(code, str(out))
             return
         self._send_error_json(404, "not found")
 
@@ -671,19 +827,28 @@ def serve(
     workspace: str | Path = "./fleetsim-runs",
     host: str = "127.0.0.1",
     open_browser: bool = False,
+    workers: int | None = None,
 ) -> int:
     """Run the fleetsim web app until Ctrl-C; returns an exit code.
 
     Binds ``host`` (loopback by default; anything else prints a loud
     warning — the app exposes the operator's runs and accepts scenario
-    submissions).  Ctrl-C stops accepting requests, cancels queued runs,
-    and cooperatively aborts the active run at its next metrics flush
-    (marked ``failed`` with a clear error) — the process never hangs on
-    a long simulation.
+    submissions).  ``workers`` caps simultaneous runs (default
+    :func:`fleetsim.serve.runs.default_max_workers`); runs beyond it queue
+    FIFO.  Ctrl-C stops accepting requests, cancels queued runs, and stops
+    in-flight ones (marked ``failed`` with a clear error) within a bounded
+    grace — the process never hangs on a long simulation.
+
+    CALLING THIS FROM YOUR OWN SCRIPT: put it behind
+    ``if __name__ == "__main__":``.  Simulations run in worker processes,
+    which re-execute the main module, so an unguarded script would start a
+    second server inside every worker — refused with
+    :class:`~fleetsim.serve.runs.UnguardedMainError`.  The ``fleetsim
+    serve`` command line is already guarded.
     """
     try:
-        manager = RunManager(workspace)
-    except WorkspaceLockError as exc:
+        manager = RunManager(workspace, max_workers=workers)
+    except (WorkspaceLockError, UnguardedMainError) as exc:
         print(f"error: {exc}")
         return 2
     try:
@@ -703,7 +868,11 @@ def serve(
     display_host = "127.0.0.1" if bound_host in ("0.0.0.0", "::") else bound_host
     url = f"http://{display_host}:{bound_port}/"
     print(f"fleetsim serve on {url}  (workspace: {manager.workspace})")
-    print("Ctrl-C to stop.")
+    noun = "process" if manager.max_workers == 1 else "processes"
+    print(
+        f"{manager.max_workers} worker {noun} for simulations"
+        f" (--workers to change); Ctrl-C to stop."
+    )
     if open_browser:
         import webbrowser
 
@@ -711,7 +880,7 @@ def serve(
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:
-        print("\nshutting down: cancelling queued runs, aborting any active run…")
+        print("\nshutting down: cancelling queued runs, stopping in-flight runs…")
     finally:
         httpd.server_close()
         manager.shutdown()

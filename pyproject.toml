@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fleetsim"
-version = "0.7.0"
+version = "0.8.0"
 description = "Discrete-event simulator for ML accelerator fleets: topology-aware gang scheduling, stochastic training/inference traffic, failures, pluggable schedulers, and a published-trace validation suite"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,4 +39,6 @@ where = ["src"]
 testpaths = ["tests", "validation"]
 markers = [
     "trace_full: opt-in validation tests that download and replay a full published trace (Helios/Philly/PAI); gated behind FLEETSIM_*_FULL env vars and excluded from the default CI run for speed",
+    "slow: tests that execute a large shipped example end to end (~80 s each). Run them with `pytest -m slow`; the default CI path deselects them with `-m 'not slow'`",
 ]
+addopts = "-m 'not slow'"

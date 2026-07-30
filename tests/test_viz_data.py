@@ -121,9 +121,13 @@ def test_top_level_schema_keys_exact(model):
         "fleetsim_version",
         "generated_unix_ms",
         "notes",
+        # v0.8: true per-kind event round counts, before the event cap
+        "event_totals",
     ]
     assert list(model["capabilities"]) == ["map", "compare"]
     assert list(model["fleet"]) == ["map_level", "clusters"]
+    # The v0.3 keys keep their pinned order; the v0.8 analysis series are
+    # APPENDED (see tests/test_viz_insight.py for their rules).
     assert list(model["frames"]) == [
         "t_us",
         "occupancy",
@@ -132,6 +136,12 @@ def test_top_level_schema_keys_exact(model):
         "pending_by_class",
         "preemptions_delta",
         "failures_delta",
+        "allocated_chips",
+        "healthy_chips",
+        "pending_jobs",
+        "running_jobs",
+        "failure_kills_delta",
+        "frag_index",
     ]
     assert list(model["stints"]) == [
         "job_id",

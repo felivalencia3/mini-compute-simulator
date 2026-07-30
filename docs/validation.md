@@ -113,6 +113,23 @@ Note the two "deferred" rows: v0.6 wrote them down as *v0.7 targets*, and
 v0.7 spent its budget on placement instead. They are recorded here as
 still-open rather than quietly re-dated.
 
+### Where the numbers live (v0.8)
+
+Every published-vs-fleetsim **figure** in this document is also carried as
+data in `src/fleetsim/validation/results.py` — published value, fleetsim's
+measurement, the v0.6 measurement where one was recorded, the assertion
+band or tolerance, and the citation. That module is the single source of
+truth: `validation/test_helios_ratio.py` and
+`validation/test_philly_status.py` import their assertion constants from it,
+and `fleetsim serve`'s `GET /api/validation` serves it verbatim. So a number
+on screen, a number asserted in CI, and a number in this table cannot
+disagree — and re-typing one into a test fails
+`tests/test_serve_sweeps.py::test_validation_tests_import_the_shared_constants`.
+
+This document keeps what data cannot: *why* each band is wide, what each
+rung does and does not prove, and what was measured and rejected. Each row
+in `results.py` points back here through its `doc_ref`.
+
 ## 3. The validation ladder
 
 | # | Validation | Kind | Shipped as | CI (vendored) | Full run |

@@ -1,4 +1,4 @@
-"""Structural tests for the `fleetsim serve` app shell (v0.5).
+"""Structural tests for the `fleetsim serve` app shell (v0.5, v0.8).
 
 The shell is plain static files (no build step), so these tests pin the
 properties the strict CSP and the local-first posture depend on:
@@ -10,6 +10,12 @@ properties the strict CSP and the local-first posture depend on:
 - every ``/static/...`` asset the shell references actually exists;
 - the ``GET /api/examples`` endpoint serves the bundled starter
   scenarios read-only, sorted, with the standard security headers.
+
+v0.8 adds the experiment surface (compare view, sweep launcher and
+board), which brings two more pinned properties: the compare view's RUN
+palette stays disjoint from the workload-CLASS palette and no larger
+than the rail's selection cap, and ``GET /api/runs/{id}/scenario`` — the
+endpoint the config diff reads — stays inside the run directory.
 """
 
 from __future__ import annotations
@@ -223,22 +229,138 @@ def test_app_js_routes_match_the_shell():
 
 
 # ---------------------------------------------------------------------------
+# v0.8: the experiment surface (compare view, sweep launcher + board)
+# ---------------------------------------------------------------------------
+
+
+def test_index_has_the_experiment_anatomy():
+    parser = parse_shell(STATIC_DIR / "index.html")
+    required = {
+        # rail multi-select
+        "selectToggle", "railSelect", "selCount", "compareBtn", "clearSelBtn",
+        "selNote", "newSweepBtn",
+        # compare view
+        "view-compare", "compareToolbar", "compareTitle", "compareMeta",
+        "compareBody", "scopeSelect", "compareRefresh",
+        # sweep board
+        "view-sweep", "sweepTitle", "sweepMeta", "sweepBody", "sweepMetric",
+        # explore mode inside the editor
+        "explorePanel", "axisList", "addAxisBtn", "launchSweepBtn", "sweepSize",
+        "modeSingle", "modeExplore",
+        # sweep list on the home view
+        "homeSweeps", "homeSweepList",
+    }
+    missing = required - parser.ids
+    assert not missing, f"index.html is missing ids: {sorted(missing)}"
+
+
+def test_app_js_lazy_loads_the_experiment_modules():
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    # heavy views stay off the boot path, same as fleet3d.js
+    assert 'import("./compare.js")' in js
+    assert 'import("./experiment.js")' in js
+    for needle in ("#compare/", "#sweep/", "/api/sweeps"):
+        assert needle in js, needle
+
+
+def test_experiment_modules_keep_the_markup_hygiene_rules():
+    for name in ("compare.js", "experiment.js"):
+        js = (STATIC_DIR / name).read_text(encoding="utf-8")
+        for banned in (".innerHTML", "document.write", "eval("):
+            assert banned not in js, f"{name}: {banned}"
+        # SVG is built through the DOM, never interpolated as markup
+        assert "createElementNS" in js, name
+
+
+def _css_vars() -> dict[str, str]:
+    css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+    return {
+        m.group(1): m.group(2).lower()
+        for m in re.finditer(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;", css)
+    }
+
+
+def test_compare_run_palette_is_disjoint_from_the_class_palette():
+    """A run line must never be readable as a workload class.
+
+    The compare view colors by RUN; the report/3D views color by CLASS.
+    Sharing a hex between the two palettes would make an overlaid
+    timeline lie about what it shows, so the two sets stay disjoint (and
+    identity is additionally carried by the run letter, not by hue
+    alone).  The palette is also exactly the rail's selection cap: a
+    ninth run would have to reuse a color.
+    """
+    js = (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+    block = re.search(r"const RUN_COLORS = \[(.*?)\];", js, re.S)
+    assert block, "compare.js must define RUN_COLORS"
+    run_colors = [h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}", block.group(1))]
+    assert len(run_colors) == 8, run_colors
+    assert len(set(run_colors)) == 8, "run palette has a duplicate slot"
+
+    css_vars = _css_vars()
+    named = (
+        "pretrain", "finetune", "eval", "best-effort", "inference",
+        "failed", "draining", "queued", "running", "done", "accent",
+    )
+    missing = [n for n in named if n not in css_vars]
+    assert not missing, f"app.css lost palette vars: {missing}"
+    reserved = {css_vars[n] for n in named}
+    # the report/3D palette (classes, their shade variants, states) is the
+    # other half of what a run line must not be confused with
+    from fleetsim.viz.data import _BUCKET_VARIANTS, _CLASS_COLORS, _STATE_COLORS
+
+    reserved.update(v.lower() for v in _CLASS_COLORS.values())
+    reserved.update(v.lower() for v in _STATE_COLORS.values())
+    for variants in _BUCKET_VARIANTS.values():
+        reserved.update(v.lower() for v in variants)
+    clash = sorted(set(run_colors) & reserved)
+    assert not clash, f"run palette reuses class/state colors: {clash}"
+
+    app_js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    cap = re.search(r"const MAX_COMPARE = (\d+);", app_js)
+    assert cap, "app.js must cap the rail selection"
+    assert int(cap.group(1)) == len(run_colors), (
+        "the rail's selection cap and the run palette have to agree —"
+        " otherwise a selected run gets a recycled line color"
+    )
+
+
+def test_experiment_module_caps_match_the_server():
+    """The launcher's cell cap and path shape mirror the server's."""
+    from fleetsim.serve.sweeps import MAX_SWEEP_RUNS, _PATH_RE
+
+    js = (STATIC_DIR / "experiment.js").read_text(encoding="utf-8")
+    cap = re.search(r"const MAX_CELLS = (\d+);", js)
+    assert cap and int(cap.group(1)) == MAX_SWEEP_RUNS
+    path_re = re.search(r"const PATH_RE = /(.+?)/;", js)
+    assert path_re, "experiment.js must validate dotted paths client-side"
+    assert path_re.group(1) == _PATH_RE.pattern
+
+
+# ---------------------------------------------------------------------------
 # GET /api/examples
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def served(tmp_path):
+def served_manager(tmp_path):
+    """(port, manager) with the dispatcher off — submitted runs stay
+    ``queued``, so these tests never execute a simulation."""
     manager = RunManager(tmp_path / "ws", start_worker=False)
     httpd = FleetsimHTTPServer(("127.0.0.1", 0), manager)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     try:
-        yield httpd.server_address[1]
+        yield httpd.server_address[1], manager
     finally:
         httpd.shutdown()
         httpd.server_close()
         manager.shutdown(timeout=10.0)
+
+
+@pytest.fixture()
+def served(served_manager):
+    return served_manager[0]
 
 
 def get(port: int, path: str):
@@ -274,6 +396,103 @@ def test_api_examples_serves_bundled_scenarios(served):
         if name != "02_trace_replay":
             assert ex["runnable"] is True, name
             assert "note" not in ex, name
+
+
+# ---------------------------------------------------------------------------
+# GET /api/runs/{id}/scenario — what the config diff reads
+# ---------------------------------------------------------------------------
+
+SCENARIO = """\
+sim: {horizon: 2h, round: 60s, seed: 42}
+fleet:
+  metro: demo
+  clusters:
+    - name: h100-demo
+      chip: {type: h100, per_node: 8}
+      topology: {levels: [rack, node], counts: [2, 8]}
+tags: {}
+stamp: 2026-07-30
+"""
+
+
+def get_maybe_error(port: int, path: str):
+    """(status, doc) — an HTTP error is data here, not an exception."""
+    import urllib.error
+
+    try:
+        status, _, body = get(port, path)
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read())
+    return status, json.loads(body)
+
+
+def test_api_run_scenario_serves_the_run_file_and_its_flat_form(served_manager):
+    port, manager = served_manager
+    run_id = manager.submit(SCENARIO, "diff me")  # queued: no simulation runs
+
+    status, doc = get_maybe_error(port, f"/api/runs/{run_id}/scenario")
+    assert status == 200
+    assert doc["id"] == run_id
+    assert doc["name"] == "scenario.yaml"
+    assert doc["yaml"] == SCENARIO  # verbatim, never re-serialized
+    assert doc["truncated"] is False
+    assert "parse_error" not in doc
+    flat = doc["flat"]
+    # mappings recurse; a list is ONE comparable leaf, not counts.0/counts.1
+    assert flat["sim.seed"] == 42
+    assert flat["sim.horizon"] == "2h"
+    assert flat["fleet.metro"] == "demo"
+    assert flat["fleet.clusters"][0]["name"] == "h100-demo"
+    assert flat["tags"] == {}  # an emptied subtree stays visible in a diff
+    assert flat["stamp"] == "2026-07-30"  # yaml date -> JSON-safe string
+    assert not any(k.startswith("fleet.clusters.") for k in flat)
+
+
+def test_api_run_scenario_404s_outside_a_run_directory(served_manager):
+    port, manager = served_manager
+    for path in (
+        "/api/runs/nope/scenario",
+        "/api/runs/..%2F..%2Fetc/scenario",
+        "/api/runs/.hidden/scenario",
+    ):
+        status, doc = get_maybe_error(port, path)
+        assert status == 404, path
+        assert doc == {"error": "no such run"}, path
+
+    # a directory that IS a run but holds no scenario file (a CLI drop)
+    external = manager.workspace / "external-run"
+    external.mkdir()
+    (external / "summary.json").write_text("{}", encoding="utf-8")
+    status, doc = get_maybe_error(port, "/api/runs/external-run/scenario")
+    assert status == 404
+    assert "no scenario file" in doc["error"]
+
+
+def test_api_run_scenario_reports_an_unparseable_scenario_honestly(served_manager):
+    port, manager = served_manager
+    run_id = manager.submit("just a string, not a mapping\n", "odd one")
+    status, doc = get_maybe_error(port, f"/api/runs/{run_id}/scenario")
+    assert status == 200
+    assert doc["flat"] is None  # never a fake empty diff
+    assert "not a YAML mapping" in doc["parse_error"]
+
+    bad = manager.submit("a: [1, 2\n", "broken")
+    status, doc = get_maybe_error(port, f"/api/runs/{bad}/scenario")
+    assert status == 200
+    assert doc["flat"] is None
+    assert doc["parse_error"].startswith("invalid YAML:")
+    assert str(manager.workspace) not in doc["parse_error"]
+
+
+def test_flatten_scenario_is_a_pure_dotted_view():
+    from fleetsim.serve.runs import flatten_scenario
+
+    assert flatten_scenario({"a": {"b": {"c": 1}}}) == {"a.b.c": 1}
+    assert flatten_scenario({"a": []}) == {"a": []}
+    assert flatten_scenario({"a": {}}) == {"a": {}}
+    assert flatten_scenario({}) == {}
+    assert flatten_scenario("scalar") == {}  # no prefix: nothing to name
+    assert flatten_scenario({1: {True: None}}) == {"1.True": None}
 
 
 def test_list_examples_is_defensive(tmp_path):

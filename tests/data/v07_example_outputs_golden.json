@@ -1,0 +1,4751 @@
+{
+ "captured_from": "git 4c73782 (fleetsim v0.7.0), macOS/CPython 3.11",
+ "examples": {
+  "01_minimal": {
+   "files": {
+    "jobs.parquet": {
+     "bytes": 1152087,
+     "col_stats": {
+      "chip_type": {
+       "n_unique": 1,
+       "sha256": "b905f013baedead7487ac5a8cfeea102de388a0e4e8ffde10baa253397818988"
+      },
+      "chips": {
+       "max": 256.0,
+       "min": 1.0,
+       "n_finite": 14552,
+       "sum": 89359.0
+      },
+      "end_t_us": {
+       "max": 1209544786049.0,
+       "min": 378436188.0,
+       "n_finite": 14464,
+       "sum": 8773290493536113.0
+      },
+      "ettr": {
+       "max": 1.1031509759407805,
+       "min": 0.18290582225236937,
+       "n_finite": 14463,
+       "sum": 14420.03310254253
+      },
+      "first_start_t_us": {
+       "max": 1209600000000.0,
+       "min": 120000000.0,
+       "n_finite": 14517,
+       "sum": 8787792000000000.0
+      },
+      "jct_s": {
+       "max": 606853.401741,
+       "min": 0.142982,
+       "n_finite": 14464,
+       "sum": 46597143.840824
+      },
+      "job_class": {
+       "n_unique": 3,
+       "sha256": "326ff5cd15f90a717674fa95e91c2ac207ec6987c4274bf0da7ab6fd30906099"
+      },
+      "job_id": {
+       "n_unique": 14552,
+       "sha256": "4615c41544fb2c9893513ce3efba15f143d8fbe39321b59b6bd4b3b03ad2b759"
+      },
+      "lost_chip_s": {
+       "max": 3708953.2237219308,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 10409914.463225476
+      },
+      "n_domains_spanned": {
+       "max": 1.0,
+       "min": 1.0,
+       "n_finite": 14517,
+       "sum": 14517.0
+      },
+      "n_node_failures": {
+       "max": 8.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 57.0
+      },
+      "n_preempt_failure_second_order": {
+       "max": 1.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 5.0
+      },
+      "n_preempt_maintenance": {
+       "max": 13.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 84.0
+      },
+      "n_preempt_scheduler": {
+       "max": 4.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 85.0
+      },
+      "n_preemptions": {
+       "max": 13.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 174.0
+      },
+      "n_restarts": {
+       "max": 21.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 231.0
+      },
+      "n_starts": {
+       "max": 22.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 14748.0
+      },
+      "productive_chip_s": {
+       "max": 223948800.0,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 1473421040.4241877
+      },
+      "queue_wait_s": {
+       "max": 25892.257512,
+       "min": 0.006133,
+       "n_finite": 14517,
+       "sum": 2094787.3718879998
+      },
+      "running_elapsed_s": {
+       "max": 925895.841965,
+       "min": 0.0,
+       "n_finite": 14552,
+       "sum": 49527263.450187996
+      },
+      "source_class": {
+       "n_unique": 3,
+       "sha256": "05c5b0cb444cb2a228ca1b0e6f9987d5db228844025ac8f9c0fb269950f69421"
+      },
+      "status": {
+       "n_unique": 5,
+       "sha256": "7c943456198e9de92112e0999f8ad023c7180a0709a988e57c9e48e504d3a30a"
+      },
+      "submit_t_us": {
+       "max": 1209548205499.0,
+       "min": 119693429.0,
+       "n_finite": 14552,
+       "sum": 8827880863337598.0
+      },
+      "tenant": {
+       "n_unique": 8,
+       "sha256": "0b1821553ef3bac64e0badd5bc4582285eb4d3268ca4c616b65911765ba76402"
+      },
+      "tier": {
+       "n_unique": 2,
+       "sha256": "bae5b4ae600d7eb7a1c8bb60aef70f6856b0c6bf3419ed6f20eeee70a31fb999"
+      }
+     },
+     "columns": [
+      "job_id",
+      "tenant",
+      "job_class",
+      "tier",
+      "source_class",
+      "chips",
+      "chip_type",
+      "submit_t_us",
+      "first_start_t_us",
+      "end_t_us",
+      "status",
+      "n_starts",
+      "n_restarts",
+      "n_domains_spanned",
+      "n_preemptions",
+      "n_preempt_failure_second_order",
+      "n_preempt_maintenance",
+      "n_preempt_scheduler",
+      "n_node_failures",
+      "productive_chip_s",
+      "lost_chip_s",
+      "running_elapsed_s",
+      "queue_wait_s",
+      "jct_s",
+      "ettr"
+     ],
+     "n_rows": 14552,
+     "sha256": "5c82dfd4d595d037e9509e63d104444dbc3a44cc7f7637be625904ae23007c4e"
+    },
+    "stints.parquet": {
+     "bytes": 334216,
+     "col_stats": {
+      "chips": {
+       "max": 256.0,
+       "min": 1.0,
+       "n_finite": 14894,
+       "sum": 103034.0
+      },
+      "class_name": {
+       "n_unique": 3,
+       "sha256": "85304702f18686b23fdde7f92f848aa8bb5a9ecd6ff48f8ea9c45088a8b0f549"
+      },
+      "domain": {
+       "n_unique": 2,
+       "sha256": "3def9952bc6bc1cda94f0357586fc10b7865cedf9b2f215298a4eff69dc14106"
+      },
+      "end_reason": {
+       "n_unique": 6,
+       "sha256": "c6c7f74173ae96d8832590f7a13a1e87860db567fab5f020b3d50161d0f6089f"
+      },
+      "job_class": {
+       "n_unique": 3,
+       "sha256": "1b9ece72e15958cd7b8fbf94cd6fd1889ef5f9dbf0dbcf9011d68bad510ad433"
+      },
+      "job_id": {
+       "n_unique": 14517,
+       "sha256": "1053d4743679192d0d796bec6653b46d5beaff1d1466380516ae7c9c86561ee9"
+      },
+      "t0_us": {
+       "max": 1209600000000.0,
+       "min": 120000000.0,
+       "n_finite": 14894,
+       "sum": 9091811520000000.0
+      },
+      "t1_us": {
+       "max": 1209600000000.0,
+       "min": 378436188.0,
+       "n_finite": 14894,
+       "sum": 9144702358997728.0
+      },
+      "tier": {
+       "n_unique": 2,
+       "sha256": "37eba32ececa3e1fe580e71fe852869bb9cdeeae82c46f9d114e4e1adb879ed0"
+      }
+     },
+     "columns": [
+      "job_id",
+      "class_name",
+      "job_class",
+      "tier",
+      "domain",
+      "chips",
+      "t0_us",
+      "t1_us",
+      "end_reason"
+     ],
+     "n_rows": 14894,
+     "sha256": "296aecc738bcb9b4852f6c3a5f5762fbf731c5f05a1243a095daea60b1d74321"
+    },
+    "summary.json": {
+     "bytes": 17482,
+     "doc": {
+      "full": {
+       "allocated_chip_hours": {
+        "by_chip_type": {
+         "h100": 423615.44074615336
+        },
+        "by_class": {
+         "EVAL": 12131.475031113332,
+         "FINETUNE": 296427.0224203911,
+         "PRETRAIN": 115056.9432946489
+        },
+        "total": 423615.44074615336
+       },
+       "allocation_rate": 0.615605586091764,
+       "counts": {
+        "drains_started": 143,
+        "failure_kills": 57,
+        "jobs_by_status": {
+         "CANCELED": 880,
+         "COMPLETED": 10075,
+         "FAILED": 3509
+        },
+        "jobs_finished": 14464,
+        "jobs_started": 14517,
+        "node_failures": 84,
+        "node_failures_by_cause": {
+         "gpu_hbm": 54,
+         "network": 9,
+         "other": 16,
+         "software": 5
+        },
+        "node_repairs": 225,
+        "preemptions": 174
+       },
+       "duration_s": 1209600.0,
+       "ettr": {
+        "chip_hour_weighted": {
+         "mean": 0.97574854406473,
+         "n": 14463,
+         "p10": 0.9631821481474101,
+         "p50": 0.9836065573708477,
+         "p90": 0.9836065573868247
+        },
+        "job_weighted": {
+         "mean": 0.9970291849922208,
+         "n": 14463,
+         "p10": 0.9836065574705379,
+         "p50": 0.9999999998353395,
+         "p90": 1.0000000194696446
+        }
+       },
+       "fragmentation": {
+        "cluster": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 20160
+        },
+        "metro": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 20160
+        },
+        "node": {
+         "max": 0.99609375,
+         "mean": 0.9238487577932337,
+         "n_samples": 20160
+        },
+        "pod": {
+         "max": 0.5,
+         "mean": 0.1650758094433177,
+         "n_samples": 20160
+        },
+        "rack": {
+         "max": 0.96875,
+         "mean": 0.8409553321395413,
+         "n_samples": 20160
+        }
+       },
+       "goodput": 0.9661678564387167,
+       "jct_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 34508.35147311474,
+          "n": 9235,
+          "p50": 9272.246726,
+          "p90": 90165.562932,
+          "p99": 348596.222898
+         },
+         "job_weighted": {
+          "mean": 1227.8193894652957,
+          "n": 9235,
+          "p50": 161.727155,
+          "p90": 2144.900084,
+          "p99": 15644.71835
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 139316.82023723997,
+          "n": 840,
+          "p50": 76943.410939,
+          "p90": 503966.931238,
+          "p99": 606853.401741
+         },
+         "job_weighted": {
+          "mean": 33781.30545231787,
+          "n": 840,
+          "p50": 15670.464929,
+          "p90": 78748.160714,
+          "p99": 272393.951909
+         }
+        }
+       },
+       "jct_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 34508.35147311474,
+          "n": 9235,
+          "p50": 9272.246726,
+          "p90": 90165.562932,
+          "p99": 348596.222898
+         },
+         "job_weighted": {
+          "mean": 1227.8193894652957,
+          "n": 9235,
+          "p50": 161.727155,
+          "p90": 2144.900084,
+          "p99": 15644.71835
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 139316.82023723997,
+          "n": 840,
+          "p50": 76943.410939,
+          "p90": 503966.931238,
+          "p99": 606853.401741
+         },
+         "job_weighted": {
+          "mean": 33781.30545231787,
+          "n": 840,
+          "p50": 15670.464929,
+          "p90": 78748.160714,
+          "p99": 272393.951909
+         }
+        }
+       },
+       "mean_pending_by_class": {
+        "EVAL": 1.2679145560267857,
+        "FINETUNE": 0.6544503126049934,
+        "PRETRAIN": 0.0015494405009920636
+       },
+       "occupancy": 0.6239739189672283,
+       "per_tenant": {
+        "t0": {
+         "chip_hours": 161320.37596204196,
+         "median_queue_wait_s": 31.461982,
+         "n_jobs_submitted": 6172
+        },
+        "t1": {
+         "chip_hours": 63228.35004528,
+         "median_queue_wait_s": 31.431841,
+         "n_jobs_submitted": 2699
+        },
+        "t2": {
+         "chip_hours": 57289.047118849165,
+         "median_queue_wait_s": 32.026196,
+         "n_jobs_submitted": 1728
+        },
+        "t3": {
+         "chip_hours": 18104.34273997361,
+         "median_queue_wait_s": 32.26504,
+         "n_jobs_submitted": 1165
+        },
+        "t4": {
+         "chip_hours": 14970.22896826889,
+         "median_queue_wait_s": 33.71963,
+         "n_jobs_submitted": 908
+        },
+        "t5": {
+         "chip_hours": 16535.594966350556,
+         "median_queue_wait_s": 32.02743,
+         "n_jobs_submitted": 763
+        },
+        "t6": {
+         "chip_hours": 12999.721154956113,
+         "median_queue_wait_s": 30.090941,
+         "n_jobs_submitted": 608
+        },
+        "t7": {
+         "chip_hours": 79167.77979043305,
+         "median_queue_wait_s": 30.918816,
+         "n_jobs_submitted": 509
+        }
+       },
+       "preemptions_per_min": {
+        "failure_second_order": 0.000248015873015873,
+        "maintenance": 0.004166666666666667,
+        "node_failure": 0.0028273809523809523,
+        "scheduler": 0.004216269841269841,
+        "total": 0.011458333333333333
+       },
+       "queue_wait_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 113.89430020416587,
+          "n": 13255,
+          "p50": 30.265539,
+          "p90": 55.167211,
+          "p99": 1642.623537
+         },
+         "job_weighted": {
+          "mean": 108.16893115757709,
+          "n": 13257,
+          "p50": 31.614773,
+          "p90": 56.335313,
+          "p99": 1883.172757
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 529.992753156821,
+          "n": 1255,
+          "p50": 31.513508,
+          "p90": 55.558336,
+          "p99": 13793.034076
+         },
+         "job_weighted": {
+          "mean": 526.3070093601593,
+          "n": 1255,
+          "p50": 32.576679,
+          "p90": 58.364581,
+          "p99": 13793.034076
+         }
+        },
+        "PRETRAIN": {
+         "chip_hour_weighted": {
+          "mean": 46.70270345613884,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 84.744313
+         },
+         "job_weighted": {
+          "mean": 55.31095700000001,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 84.744313,
+          "p99": 84.744313
+         }
+        }
+       },
+       "queue_wait_s_by_chips": {
+        "1-8": {
+         "chip_hour_weighted": {
+          "mean": 83.89102931923394,
+          "n": 13556,
+          "p50": 32.116239,
+          "p90": 53.107977,
+          "p99": 901.347597
+         },
+         "job_weighted": {
+          "mean": 110.60422275859266,
+          "n": 13558,
+          "p50": 31.626195,
+          "p90": 56.359675,
+          "p99": 1898.485893
+         }
+        },
+        "65-512": {
+         "chip_hour_weighted": {
+          "mean": 46.70270345613884,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 84.744313
+         },
+         "job_weighted": {
+          "mean": 55.31095700000001,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 84.744313,
+          "p99": 84.744313
+         }
+        },
+        "9-64": {
+         "chip_hour_weighted": {
+          "mean": 556.9189133773995,
+          "n": 954,
+          "p50": 31.493893,
+          "p90": 55.710296,
+          "p99": 13793.034076
+         },
+         "job_weighted": {
+          "mean": 623.6255397714885,
+          "n": 954,
+          "p50": 32.58779,
+          "p90": 58.568594,
+          "p99": 14254.676081
+         }
+        }
+       },
+       "queue_wait_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 113.89430020416587,
+          "n": 13255,
+          "p50": 30.265539,
+          "p90": 55.167211,
+          "p99": 1642.623537
+         },
+         "job_weighted": {
+          "mean": 108.16893115757709,
+          "n": 13257,
+          "p50": 31.614773,
+          "p90": 56.335313,
+          "p99": 1883.172757
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 529.992753156821,
+          "n": 1255,
+          "p50": 31.513508,
+          "p90": 55.558336,
+          "p99": 13793.034076
+         },
+         "job_weighted": {
+          "mean": 526.3070093601593,
+          "n": 1255,
+          "p50": 32.576679,
+          "p90": 58.364581,
+          "p99": 13793.034076
+         }
+        },
+        "pretrain": {
+         "chip_hour_weighted": {
+          "mean": 46.70270345613884,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 84.744313
+         },
+         "job_weighted": {
+          "mean": 55.31095700000001,
+          "n": 5,
+          "p50": 48.9731,
+          "p90": 84.744313,
+          "p99": 84.744313
+         }
+        }
+       },
+       "replica_availability": null
+      },
+      "horizon_us": 1209600000000,
+      "steady_state_window": {
+       "drain_frac": 0.1,
+       "end_us": 1088640000000,
+       "start_us": 120960000000,
+       "warmup_frac": 0.1
+      },
+      "window": {
+       "allocated_chip_hours": {
+        "by_chip_type": {
+         "h100": 335940.3707850925
+        },
+        "by_class": {
+         "EVAL": 9759.842724354723,
+         "FINETUNE": 237840.06878642665,
+         "PRETRAIN": 88340.45927431111
+        },
+        "total": 335940.3707850925
+       },
+       "allocation_rate": 0.6102432446890196,
+       "counts": {
+        "drains_started": 115,
+        "failure_kills": 48,
+        "jobs_by_status": {
+         "CANCELED": 700,
+         "COMPLETED": 8139,
+         "FAILED": 2791
+        },
+        "jobs_finished": 11630,
+        "jobs_started": 11636,
+        "node_failures": 72,
+        "node_failures_by_cause": {
+         "gpu_hbm": 45,
+         "network": 9,
+         "other": 14,
+         "software": 4
+        },
+        "node_repairs": 189,
+        "preemptions": 68
+       },
+       "duration_s": 967680.0,
+       "ettr": {
+        "chip_hour_weighted": {
+         "mean": 0.977314989741777,
+         "n": 11629,
+         "p10": 0.9636506921911053,
+         "p50": 0.9836065573726721,
+         "p90": 0.9836065573876757
+        },
+        "job_weighted": {
+         "mean": 0.9980134747752745,
+         "n": 11629,
+         "p10": 0.9836065574529903,
+         "p50": 0.9999999998353404,
+         "p90": 1.0000000192497134
+        }
+       },
+       "fragmentation": {
+        "cluster": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 16129
+        },
+        "metro": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 16129
+        },
+        "node": {
+         "max": 0.9949622166246851,
+         "mean": 0.9862838224476488,
+         "n_samples": 16129
+        },
+        "pod": {
+         "max": 0.5,
+         "mean": 0.15981409891584525,
+         "n_samples": 16129
+        },
+        "rack": {
+         "max": 0.9596977329974811,
+         "mean": 0.8928345826925415,
+         "n_samples": 16129
+        }
+       },
+       "goodput": 0.9697458008210001,
+       "jct_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 36331.45500390595,
+          "n": 7448,
+          "p50": 9769.884944,
+          "p90": 90165.562932,
+          "p99": 348596.222898
+         },
+         "job_weighted": {
+          "mean": 1203.5925986040559,
+          "n": 7448,
+          "p50": 149.11544,
+          "p90": 1867.989268,
+          "p99": 16734.783222
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 125792.48099309472,
+          "n": 691,
+          "p50": 72136.746983,
+          "p90": 373542.834033,
+          "p99": 606853.401741
+         },
+         "job_weighted": {
+          "mean": 34088.37924502894,
+          "n": 691,
+          "p50": 15008.431737,
+          "p90": 79905.219073,
+          "p99": 272393.951909
+         }
+        }
+       },
+       "jct_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 36331.45500390595,
+          "n": 7448,
+          "p50": 9769.884944,
+          "p90": 90165.562932,
+          "p99": 348596.222898
+         },
+         "job_weighted": {
+          "mean": 1203.5925986040559,
+          "n": 7448,
+          "p50": 149.11544,
+          "p90": 1867.989268,
+          "p99": 16734.783222
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 125792.48099309472,
+          "n": 691,
+          "p50": 72136.746983,
+          "p90": 373542.834033,
+          "p99": 606853.401741
+         },
+         "job_weighted": {
+          "mean": 34088.37924502894,
+          "n": 691,
+          "p50": 15008.431737,
+          "p90": 79905.219073,
+          "p99": 272393.951909
+         }
+        }
+       },
+       "mean_pending_by_class": {
+        "EVAL": 0.33011531070808536,
+        "FINETUNE": 0.034595908152488426,
+        "PRETRAIN": 0.0010681864759011243
+       },
+       "occupancy": 0.6197070585981551,
+       "per_tenant": {
+        "t0": {
+         "chip_hours": 118105.89591604723,
+         "median_queue_wait_s": 30.335081,
+         "n_jobs_submitted": 4925
+        },
+        "t1": {
+         "chip_hours": 55816.74724805333,
+         "median_queue_wait_s": 29.65461,
+         "n_jobs_submitted": 2163
+        },
+        "t2": {
+         "chip_hours": 46794.742730562226,
+         "median_queue_wait_s": 30.407238,
+         "n_jobs_submitted": 1392
+        },
+        "t3": {
+         "chip_hours": 15752.48553107,
+         "median_queue_wait_s": 30.969168,
+         "n_jobs_submitted": 924
+        },
+        "t4": {
+         "chip_hours": 10760.114183004167,
+         "median_queue_wait_s": 31.663565,
+         "n_jobs_submitted": 725
+        },
+        "t5": {
+         "chip_hours": 12161.8374692475,
+         "median_queue_wait_s": 30.666807,
+         "n_jobs_submitted": 604
+        },
+        "t6": {
+         "chip_hours": 10120.577576194722,
+         "median_queue_wait_s": 28.362618,
+         "n_jobs_submitted": 487
+        },
+        "t7": {
+         "chip_hours": 66427.97013091334,
+         "median_queue_wait_s": 27.716916,
+         "n_jobs_submitted": 413
+        }
+       },
+       "preemptions_per_min": {
+        "maintenance": 0.004216269841269841,
+        "node_failure": 0.002976190476190476,
+        "total": 0.007192460317460317
+       },
+       "queue_wait_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 29.676969490572944,
+          "n": 10621,
+          "p50": 27.617457,
+          "p90": 52.030431,
+          "p99": 59.246132
+         },
+         "job_weighted": {
+          "mean": 30.077391918094524,
+          "n": 10622,
+          "p50": 30.105238,
+          "p90": 54.044245,
+          "p99": 59.473387
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 30.376817724558876,
+          "n": 1011,
+          "p50": 31.089354,
+          "p90": 52.475047,
+          "p99": 58.216067
+         },
+         "job_weighted": {
+          "mean": 30.472829060336277,
+          "n": 1011,
+          "p50": 30.614898,
+          "p90": 54.52896,
+          "p99": 59.205544
+         }
+        },
+        "PRETRAIN": {
+         "chip_hour_weighted": {
+          "mean": 43.38208550442609,
+          "n": 3,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 48.9731
+         },
+         "job_weighted": {
+          "mean": 38.48590266666667,
+          "n": 3,
+          "p50": 36.085736,
+          "p90": 48.9731,
+          "p99": 48.9731
+         }
+        }
+       },
+       "queue_wait_s_by_chips": {
+        "1-8": {
+         "chip_hour_weighted": {
+          "mean": 29.81945838386243,
+          "n": 10862,
+          "p50": 31.824724,
+          "p90": 51.947366,
+          "p99": 58.863279
+         },
+         "job_weighted": {
+          "mean": 30.104412734511644,
+          "n": 10863,
+          "p50": 30.183751,
+          "p90": 54.065632,
+          "p99": 59.4538
+         }
+        },
+        "65-512": {
+         "chip_hour_weighted": {
+          "mean": 43.38208550442609,
+          "n": 3,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 48.9731
+         },
+         "job_weighted": {
+          "mean": 38.48590266666667,
+          "n": 3,
+          "p50": 36.085736,
+          "p90": 48.9731,
+          "p99": 48.9731
+         }
+        },
+        "9-64": {
+         "chip_hour_weighted": {
+          "mean": 30.404223824331194,
+          "n": 770,
+          "p50": 31.089354,
+          "p90": 52.475047,
+          "p99": 58.216067
+         },
+         "job_weighted": {
+          "mean": 30.215391687012975,
+          "n": 770,
+          "p50": 29.944298,
+          "p90": 54.483128,
+          "p99": 59.72089
+         }
+        }
+       },
+       "queue_wait_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 29.676969490572944,
+          "n": 10621,
+          "p50": 27.617457,
+          "p90": 52.030431,
+          "p99": 59.246132
+         },
+         "job_weighted": {
+          "mean": 30.077391918094524,
+          "n": 10622,
+          "p50": 30.105238,
+          "p90": 54.044245,
+          "p99": 59.473387
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 30.376817724558876,
+          "n": 1011,
+          "p50": 31.089354,
+          "p90": 52.475047,
+          "p99": 58.216067
+         },
+         "job_weighted": {
+          "mean": 30.472829060336277,
+          "n": 1011,
+          "p50": 30.614898,
+          "p90": 54.52896,
+          "p99": 59.205544
+         }
+        },
+        "pretrain": {
+         "chip_hour_weighted": {
+          "mean": 43.38208550442609,
+          "n": 3,
+          "p50": 48.9731,
+          "p90": 48.9731,
+          "p99": 48.9731
+         },
+         "job_weighted": {
+          "mean": 38.48590266666667,
+          "n": 3,
+          "p50": 36.085736,
+          "p90": 48.9731,
+          "p99": 48.9731
+         }
+        }
+       },
+       "replica_availability": null
+      }
+     },
+     "sha256": "a22d4bb27f4c16f57a512bcdd251096e53c9941d140cbc5cefe3dc883739300e"
+    },
+    "timeseries.parquet": {
+     "bytes": 1075217,
+     "col_stats": {
+      "allocated_chips": {
+       "max": 2048.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 25475047.0
+      },
+      "allocation_rate_to_date": {
+       "max": 0.615605586091764,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 9019.66459301867
+      },
+      "cum_failure_kills": {
+       "max": 57.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 518095.0
+      },
+      "cum_node_failures": {
+       "max": 84.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 876918.0
+      },
+      "cum_preemptions": {
+       "max": 174.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 869486.0
+      },
+      "frag_index_cluster": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 0.0
+      },
+      "frag_index_metro": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 0.0
+      },
+      "frag_index_node": {
+       "max": 0.99609375,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 18624.790957111356
+      },
+      "frag_index_pod": {
+       "max": 0.5,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 3327.928318377267
+      },
+      "frag_index_rack": {
+       "max": 0.96875,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 16953.659495933203
+      },
+      "goodput_to_date": {
+       "max": 0.9661678564387167,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 16780.361934989094
+      },
+      "healthy_chips": {
+       "max": 2048.0,
+       "min": 1968.0,
+       "n_finite": 20160,
+       "sum": 40733912.0
+      },
+      "largest_placeable_cluster": {
+       "max": 2048.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 15300809.0
+      },
+      "largest_placeable_metro": {
+       "max": 2048.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 15300809.0
+      },
+      "largest_placeable_node": {
+       "max": 8.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 153404.0
+      },
+      "largest_placeable_pod": {
+       "max": 1024.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 12328577.0
+      },
+      "largest_placeable_rack": {
+       "max": 64.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 1171170.0
+      },
+      "occupancy_to_date": {
+       "max": 0.6239739189672283,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 9140.743426940127
+      },
+      "pending_jobs": {
+       "max": 65.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 31437.0
+      },
+      "running_jobs": {
+       "max": 62.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 834066.0
+      },
+      "stranded_chips": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 20160,
+       "sum": 0.0
+      },
+      "t_us": {
+       "max": 1209600000000.0,
+       "min": 60000000.0,
+       "n_finite": 20160,
+       "sum": 1.21933728e+16
+      }
+     },
+     "columns": [
+      "t_us",
+      "allocated_chips",
+      "healthy_chips",
+      "pending_jobs",
+      "running_jobs",
+      "occupancy_to_date",
+      "allocation_rate_to_date",
+      "goodput_to_date",
+      "cum_preemptions",
+      "cum_failure_kills",
+      "cum_node_failures",
+      "stranded_chips",
+      "largest_placeable_cluster",
+      "frag_index_cluster",
+      "largest_placeable_metro",
+      "frag_index_metro",
+      "largest_placeable_node",
+      "frag_index_node",
+      "largest_placeable_pod",
+      "frag_index_pod",
+      "largest_placeable_rack",
+      "frag_index_rack"
+     ],
+     "n_rows": 20160,
+     "sha256": "dcdd727112ebaa2b2080092d87cec13270527c7fa1dbcf8863f8f8e297ff3eba"
+    }
+   }
+  },
+  "04_frontier": {
+   "files": {
+    "jobs.parquet": {
+     "bytes": 2468074,
+     "col_stats": {
+      "chip_type": {
+       "n_unique": 1,
+       "sha256": "0f51971ad23ccfadeec35e40a1c349bb20049ad40b694f8d6451fe7ff46abc30"
+      },
+      "chips": {
+       "max": 131072.0,
+       "min": 1.0,
+       "n_finite": 36119,
+       "sum": 6217046.0
+      },
+      "end_t_us": {
+       "max": 172791732259.0,
+       "min": 13677783.0,
+       "n_finite": 34422,
+       "sum": 2754395299243003.0
+      },
+      "ettr": {
+       "max": 1.0654431921077179,
+       "min": 0.10289678014958747,
+       "n_finite": 34421,
+       "sum": 34126.23243814857
+      },
+      "first_start_t_us": {
+       "max": 172800000000.0,
+       "min": 0.0,
+       "n_finite": 35923,
+       "sum": 2783888760000000.0
+      },
+      "jct_s": {
+       "max": 145875.266001,
+       "min": 0.00075,
+       "n_finite": 34422,
+       "sum": 185331839.69477302
+      },
+      "job_class": {
+       "n_unique": 3,
+       "sha256": "ad0ff78afb54cec4c6d4fd4a6025df7880431201760b586e8a8c25de27870deb"
+      },
+      "job_id": {
+       "n_unique": 36119,
+       "sha256": "245976033b4fb6ea254f68027528f36d328c106e3cd2f7dca8cd43390d1db87e"
+      },
+      "lost_chip_s": {
+       "max": 76247040.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 7410116703.862134
+      },
+      "n_domains_spanned": {
+       "max": 32.0,
+       "min": 1.0,
+       "n_finite": 35923,
+       "sum": 36213.0
+      },
+      "n_node_failures": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 0.0
+      },
+      "n_preempt_scheduler": {
+       "max": 14.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 1626.0
+      },
+      "n_preemptions": {
+       "max": 14.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 1626.0
+      },
+      "n_restarts": {
+       "max": 14.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 1412.0
+      },
+      "n_starts": {
+       "max": 15.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 37335.0
+      },
+      "productive_chip_s": {
+       "max": 12268339200.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 80172616639.36722
+      },
+      "queue_wait_s": {
+       "max": 12960.0,
+       "min": 0.0,
+       "n_finite": 35923,
+       "sum": 18044736.367921002
+      },
+      "running_elapsed_s": {
+       "max": 166920.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 220984579.24300298
+      },
+      "source_class": {
+       "n_unique": 5,
+       "sha256": "7fb5a01c50f6fb2369e1fbbba6233cb1115db10237d2c643994f49f013b2dc5b"
+      },
+      "status": {
+       "n_unique": 6,
+       "sha256": "effb87333c7ab3a26db8fba97fea35c54dfd728a5fb0aa94cd55a5fb61e85456"
+      },
+      "submit_t_us": {
+       "max": 172797254896.0,
+       "min": 0.0,
+       "n_finite": 36119,
+       "sum": 2792022899266157.0
+      },
+      "tenant": {
+       "n_unique": 256,
+       "sha256": "640dca7e93d235a201f68465dc64608b531625317333b0b60e3066acc3196e84"
+      },
+      "tier": {
+       "n_unique": 3,
+       "sha256": "b8adfd71f115cbe7c24f28f81b7ed63f88a877f7d0effadf37bd367925ebb825"
+      }
+     },
+     "columns": [
+      "job_id",
+      "tenant",
+      "job_class",
+      "tier",
+      "source_class",
+      "chips",
+      "chip_type",
+      "submit_t_us",
+      "first_start_t_us",
+      "end_t_us",
+      "status",
+      "n_starts",
+      "n_restarts",
+      "n_domains_spanned",
+      "n_preemptions",
+      "n_preempt_scheduler",
+      "n_node_failures",
+      "productive_chip_s",
+      "lost_chip_s",
+      "running_elapsed_s",
+      "queue_wait_s",
+      "jct_s",
+      "ettr"
+     ],
+     "n_rows": 36119,
+     "sha256": "6a7791bfe3ff752bbdb7768f2b8db88ef5c8338b43ab42d2878531e005ce8bb4"
+    },
+    "stints.parquet": {
+     "bytes": 744046,
+     "col_stats": {
+      "chips": {
+       "max": 4096.0,
+       "min": 1.0,
+       "n_finite": 56235,
+       "sum": 6576236.0
+      },
+      "class_name": {
+       "n_unique": 5,
+       "sha256": "b48fe7190f956b901e8b8edda7ff7c813216db5fb6662246bd5148f1261ec50e"
+      },
+      "domain": {
+       "n_unique": 128,
+       "sha256": "1aff8cd9756cd554e87f095737fe324e25400c7ce9db951c564bfe055a2b1d0e"
+      },
+      "end_reason": {
+       "n_unique": 5,
+       "sha256": "0f821554df6899d788ca051ff3eedbc197dda8f8b88e3084c0e5167b471d498b"
+      },
+      "job_class": {
+       "n_unique": 3,
+       "sha256": "cba6240dba3a4f566ab7a0752e172ca4087d617bdbe64b52e6ab68003912cc5d"
+      },
+      "job_id": {
+       "n_unique": 35923,
+       "sha256": "dc9cb381abae84387fcf67088150f0202b966b64fa20b0dd9235e2d0d89b9611"
+      },
+      "t0_us": {
+       "max": 172800000000.0,
+       "min": 0.0,
+       "n_finite": 56235,
+       "sum": 4510768920000000.0
+      },
+      "t1_us": {
+       "max": 172800000000.0,
+       "min": 13677783.0,
+       "n_finite": 56235,
+       "sum": 4955803512580037.0
+      },
+      "tier": {
+       "n_unique": 3,
+       "sha256": "6966fa2a001f3b2a4447269d73d1f67548592b4377fe7df68954dc2dac080a73"
+      }
+     },
+     "columns": [
+      "job_id",
+      "class_name",
+      "job_class",
+      "tier",
+      "domain",
+      "chips",
+      "t0_us",
+      "t1_us",
+      "end_reason"
+     ],
+     "n_rows": 56235,
+     "sha256": "c77ef755663009b9988fba6c4638ae6ed93b8fe952ad3623a4b4816e0c904096"
+    },
+    "summary.json": {
+     "bytes": 88074,
+     "doc": {
+      "full": {
+       "allocated_chip_hours": {
+        "by_chip_type": {
+         "h100": 24947691.67365492
+        },
+        "by_class": {
+         "EVAL": 4118.8932801491665,
+         "FINETUNE": 19877077.219062917,
+         "PRETRAIN": 5066495.561311858
+        },
+        "total": 24947691.67365492
+       },
+       "allocation_rate": 0.9913322001161147,
+       "counts": {
+        "drains_started": 0,
+        "failure_kills": 0,
+        "jobs_by_status": {
+         "CANCELED": 2095,
+         "COMPLETED": 23816,
+         "FAILED": 8511
+        },
+        "jobs_finished": 34422,
+        "jobs_started": 35923,
+        "node_failures": 0,
+        "node_failures_by_cause": {},
+        "node_repairs": 0,
+        "preemptions": 1626
+       },
+       "duration_s": 172800.0,
+       "ettr": {
+        "chip_hour_weighted": {
+         "mean": 0.9644058395468486,
+         "n": 34421,
+         "p10": 0.9098519477539712,
+         "p50": 0.999999999986125,
+         "p90": 1.0000000000228169
+        },
+        "job_weighted": {
+         "mean": 0.991436403304626,
+         "n": 34421,
+         "p10": 0.9836065574398171,
+         "p50": 0.9999999999783783,
+         "p90": 1.0000000054897147
+        }
+       },
+       "fragmentation": {
+        "cluster": {
+         "max": 0.7012060692517184,
+         "mean": 0.28743299818986096,
+         "n_samples": 1440
+        },
+        "metro": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 1440
+        },
+        "node": {
+         "max": 0.9999811144816515,
+         "mean": 0.9257016249668302,
+         "n_samples": 1440
+        },
+        "pod": {
+         "max": 0.9903306146055878,
+         "mean": 0.4742745144128619,
+         "n_samples": 1440
+        },
+        "su": {
+         "max": 0.9993956634128492,
+         "mean": 0.5769779793111738,
+         "n_samples": 1440
+        }
+       },
+       "goodput": 0.8926746241709663,
+       "jct_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 3214.251734148074,
+          "n": 13250,
+          "p50": 1371.223087,
+          "p90": 9286.133212,
+          "p99": 32883.179097
+         },
+         "job_weighted": {
+          "mean": 510.23161046996216,
+          "n": 13250,
+          "p50": 237.154079,
+          "p90": 1140.421587,
+          "p99": 4124.615587
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 36402.54302393917,
+          "n": 2979,
+          "p50": 28530.010303,
+          "p90": 74579.950223,
+          "p99": 137561.336391
+         },
+         "job_weighted": {
+          "mean": 16382.026094502853,
+          "n": 2979,
+          "p50": 10105.380309,
+          "p90": 38945.831504,
+          "p99": 84356.39526
+         }
+        }
+       },
+       "jct_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 3214.251734148074,
+          "n": 13250,
+          "p50": 1371.223087,
+          "p90": 9286.133212,
+          "p99": 32883.179097
+         },
+         "job_weighted": {
+          "mean": 510.23161046996216,
+          "n": 13250,
+          "p50": 237.154079,
+          "p90": 1140.421587,
+          "p99": 4124.615587
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 36402.54302393917,
+          "n": 2979,
+          "p50": 28530.010303,
+          "p90": 74579.950223,
+          "p99": 137561.336391
+         },
+         "job_weighted": {
+          "mean": 16382.026094502853,
+          "n": 2979,
+          "p50": 10105.380309,
+          "p90": 38945.831504,
+          "p99": 84356.39526
+         }
+        }
+       },
+       "mean_pending_by_class": {
+        "EVAL": 15.578698093715278,
+        "FINETUNE": 184.78802172952547,
+        "PRETRAIN": 0.03502053464699074
+       },
+       "occupancy": 0.9913322001161147,
+       "per_tenant": {
+        "t0": {
+         "chip_hours": 5207463.50147204,
+         "median_queue_wait_s": 111.06441,
+         "n_jobs_submitted": 9094
+        },
+        "t1": {
+         "chip_hours": 2677805.3680081256,
+         "median_queue_wait_s": 110.260129,
+         "n_jobs_submitted": 4032
+        },
+        "t10": {
+         "chip_hours": 282871.29251603386,
+         "median_queue_wait_s": 100.841923,
+         "n_jobs_submitted": 507
+        },
+        "t100": {
+         "chip_hours": 12813.003790622777,
+         "median_queue_wait_s": 83.724028,
+         "n_jobs_submitted": 37
+        },
+        "t101": {
+         "chip_hours": 15828.661170735833,
+         "median_queue_wait_s": 63.316056,
+         "n_jobs_submitted": 31
+        },
+        "t102": {
+         "chip_hours": 23203.431823519168,
+         "median_queue_wait_s": 125.232154,
+         "n_jobs_submitted": 40
+        },
+        "t103": {
+         "chip_hours": 22607.709795328334,
+         "median_queue_wait_s": 108.99688,
+         "n_jobs_submitted": 33
+        },
+        "t104": {
+         "chip_hours": 19998.899133016665,
+         "median_queue_wait_s": 119.15967,
+         "n_jobs_submitted": 31
+        },
+        "t105": {
+         "chip_hours": 14233.29803780639,
+         "median_queue_wait_s": 65.850733,
+         "n_jobs_submitted": 34
+        },
+        "t106": {
+         "chip_hours": 80638.41471372917,
+         "median_queue_wait_s": 94.968231,
+         "n_jobs_submitted": 35
+        },
+        "t107": {
+         "chip_hours": 19030.919556480832,
+         "median_queue_wait_s": 110.890002,
+         "n_jobs_submitted": 36
+        },
+        "t108": {
+         "chip_hours": 20650.440804416943,
+         "median_queue_wait_s": 169.490032,
+         "n_jobs_submitted": 36
+        },
+        "t109": {
+         "chip_hours": 3859.8320766711113,
+         "median_queue_wait_s": 91.060883,
+         "n_jobs_submitted": 35
+        },
+        "t11": {
+         "chip_hours": 215350.45501633917,
+         "median_queue_wait_s": 119.672685,
+         "n_jobs_submitted": 439
+        },
+        "t110": {
+         "chip_hours": 6977.293627246667,
+         "median_queue_wait_s": 115.462401,
+         "n_jobs_submitted": 29
+        },
+        "t111": {
+         "chip_hours": 19351.208213815557,
+         "median_queue_wait_s": 104.453882,
+         "n_jobs_submitted": 31
+        },
+        "t112": {
+         "chip_hours": 8412.211371976111,
+         "median_queue_wait_s": 64.131035,
+         "n_jobs_submitted": 32
+        },
+        "t113": {
+         "chip_hours": 13657.550923417222,
+         "median_queue_wait_s": 106.763257,
+         "n_jobs_submitted": 39
+        },
+        "t114": {
+         "chip_hours": 13943.235441328055,
+         "median_queue_wait_s": 139.727957,
+         "n_jobs_submitted": 40
+        },
+        "t115": {
+         "chip_hours": 25720.899585533054,
+         "median_queue_wait_s": 109.494649,
+         "n_jobs_submitted": 31
+        },
+        "t116": {
+         "chip_hours": 14634.542619614724,
+         "median_queue_wait_s": 104.174508,
+         "n_jobs_submitted": 43
+        },
+        "t117": {
+         "chip_hours": 13297.594103055,
+         "median_queue_wait_s": 115.365277,
+         "n_jobs_submitted": 35
+        },
+        "t118": {
+         "chip_hours": 8557.861458946389,
+         "median_queue_wait_s": 96.957645,
+         "n_jobs_submitted": 27
+        },
+        "t119": {
+         "chip_hours": 9501.506512844167,
+         "median_queue_wait_s": 117.870285,
+         "n_jobs_submitted": 21
+        },
+        "t12": {
+         "chip_hours": 274356.4308245547,
+         "median_queue_wait_s": 116.702225,
+         "n_jobs_submitted": 421
+        },
+        "t120": {
+         "chip_hours": 5563.136191963611,
+         "median_queue_wait_s": 96.369832,
+         "n_jobs_submitted": 33
+        },
+        "t121": {
+         "chip_hours": 23393.871121595002,
+         "median_queue_wait_s": 515.211311,
+         "n_jobs_submitted": 34
+        },
+        "t122": {
+         "chip_hours": 18906.558460565833,
+         "median_queue_wait_s": 154.511698,
+         "n_jobs_submitted": 24
+        },
+        "t123": {
+         "chip_hours": 5387.787175075833,
+         "median_queue_wait_s": 87.606773,
+         "n_jobs_submitted": 23
+        },
+        "t124": {
+         "chip_hours": 12592.507723893334,
+         "median_queue_wait_s": 153.568624,
+         "n_jobs_submitted": 29
+        },
+        "t125": {
+         "chip_hours": 6803.5814581938885,
+         "median_queue_wait_s": 93.67843,
+         "n_jobs_submitted": 33
+        },
+        "t126": {
+         "chip_hours": 3905.205454192222,
+         "median_queue_wait_s": 103.948278,
+         "n_jobs_submitted": 20
+        },
+        "t127": {
+         "chip_hours": 36836.8747257025,
+         "median_queue_wait_s": 104.454779,
+         "n_jobs_submitted": 32
+        },
+        "t128": {
+         "chip_hours": 4806.733287393334,
+         "median_queue_wait_s": 73.8111,
+         "n_jobs_submitted": 26
+        },
+        "t129": {
+         "chip_hours": 9656.745371530278,
+         "median_queue_wait_s": 136.278363,
+         "n_jobs_submitted": 30
+        },
+        "t13": {
+         "chip_hours": 282639.02692660864,
+         "median_queue_wait_s": 115.612656,
+         "n_jobs_submitted": 416
+        },
+        "t130": {
+         "chip_hours": 14080.610938608612,
+         "median_queue_wait_s": 179.409012,
+         "n_jobs_submitted": 20
+        },
+        "t131": {
+         "chip_hours": 20394.784100269997,
+         "median_queue_wait_s": 87.712471,
+         "n_jobs_submitted": 30
+        },
+        "t132": {
+         "chip_hours": 15694.455995624445,
+         "median_queue_wait_s": 72.878188,
+         "n_jobs_submitted": 29
+        },
+        "t133": {
+         "chip_hours": 13172.356433895555,
+         "median_queue_wait_s": 103.411954,
+         "n_jobs_submitted": 23
+        },
+        "t134": {
+         "chip_hours": 5504.882850379444,
+         "median_queue_wait_s": 78.018169,
+         "n_jobs_submitted": 32
+        },
+        "t135": {
+         "chip_hours": 9570.332227165276,
+         "median_queue_wait_s": 102.291365,
+         "n_jobs_submitted": 22
+        },
+        "t136": {
+         "chip_hours": 9377.429195170278,
+         "median_queue_wait_s": 81.027599,
+         "n_jobs_submitted": 21
+        },
+        "t137": {
+         "chip_hours": 39035.467563979444,
+         "median_queue_wait_s": 241.883884,
+         "n_jobs_submitted": 31
+        },
+        "t138": {
+         "chip_hours": 6042.000253919166,
+         "median_queue_wait_s": 96.219421,
+         "n_jobs_submitted": 19
+        },
+        "t139": {
+         "chip_hours": 14487.848177512778,
+         "median_queue_wait_s": 114.127851,
+         "n_jobs_submitted": 28
+        },
+        "t14": {
+         "chip_hours": 185228.35621609498,
+         "median_queue_wait_s": 107.945922,
+         "n_jobs_submitted": 351
+        },
+        "t140": {
+         "chip_hours": 9938.814874470278,
+         "median_queue_wait_s": 154.242829,
+         "n_jobs_submitted": 20
+        },
+        "t141": {
+         "chip_hours": 16515.532972271387,
+         "median_queue_wait_s": 102.969492,
+         "n_jobs_submitted": 20
+        },
+        "t142": {
+         "chip_hours": 12584.81116770611,
+         "median_queue_wait_s": 118.638551,
+         "n_jobs_submitted": 22
+        },
+        "t143": {
+         "chip_hours": 8673.003989725277,
+         "median_queue_wait_s": 91.103558,
+         "n_jobs_submitted": 21
+        },
+        "t144": {
+         "chip_hours": 4550.069229279722,
+         "median_queue_wait_s": 80.552849,
+         "n_jobs_submitted": 18
+        },
+        "t145": {
+         "chip_hours": 3975.629137711111,
+         "median_queue_wait_s": 95.175017,
+         "n_jobs_submitted": 20
+        },
+        "t146": {
+         "chip_hours": 16409.492342133333,
+         "median_queue_wait_s": 113.652191,
+         "n_jobs_submitted": 29
+        },
+        "t147": {
+         "chip_hours": 3476.9830981569444,
+         "median_queue_wait_s": 118.493542,
+         "n_jobs_submitted": 16
+        },
+        "t148": {
+         "chip_hours": 4941.344819598889,
+         "median_queue_wait_s": 960.0,
+         "n_jobs_submitted": 14
+        },
+        "t149": {
+         "chip_hours": 13623.08443919139,
+         "median_queue_wait_s": 85.742135,
+         "n_jobs_submitted": 25
+        },
+        "t15": {
+         "chip_hours": 181480.58972636305,
+         "median_queue_wait_s": 112.334904,
+         "n_jobs_submitted": 356
+        },
+        "t150": {
+         "chip_hours": 6214.555973939445,
+         "median_queue_wait_s": 101.16324,
+         "n_jobs_submitted": 18
+        },
+        "t151": {
+         "chip_hours": 24689.848689769166,
+         "median_queue_wait_s": 80.238427,
+         "n_jobs_submitted": 17
+        },
+        "t152": {
+         "chip_hours": 15801.658794733055,
+         "median_queue_wait_s": 84.926143,
+         "n_jobs_submitted": 16
+        },
+        "t153": {
+         "chip_hours": 18988.123161573614,
+         "median_queue_wait_s": 47.995296,
+         "n_jobs_submitted": 30
+        },
+        "t154": {
+         "chip_hours": 12107.882847095834,
+         "median_queue_wait_s": 133.532994,
+         "n_jobs_submitted": 20
+        },
+        "t155": {
+         "chip_hours": 3597390.2427068804,
+         "median_queue_wait_s": 135.252428,
+         "n_jobs_submitted": 23
+        },
+        "t156": {
+         "chip_hours": 4905.360625672778,
+         "median_queue_wait_s": 54.296826,
+         "n_jobs_submitted": 14
+        },
+        "t157": {
+         "chip_hours": 5191.627861431666,
+         "median_queue_wait_s": 110.493286,
+         "n_jobs_submitted": 18
+        },
+        "t158": {
+         "chip_hours": 5637.343178335833,
+         "median_queue_wait_s": 101.845583,
+         "n_jobs_submitted": 17
+        },
+        "t159": {
+         "chip_hours": 3913.1456596580556,
+         "median_queue_wait_s": 100.080569,
+         "n_jobs_submitted": 18
+        },
+        "t16": {
+         "chip_hours": 154671.6546833222,
+         "median_queue_wait_s": 108.473905,
+         "n_jobs_submitted": 307
+        },
+        "t160": {
+         "chip_hours": 15994.312934040556,
+         "median_queue_wait_s": 69.588976,
+         "n_jobs_submitted": 16
+        },
+        "t161": {
+         "chip_hours": 11609.9654178725,
+         "median_queue_wait_s": 109.233834,
+         "n_jobs_submitted": 26
+        },
+        "t162": {
+         "chip_hours": 9022.670349470833,
+         "median_queue_wait_s": 138.72758,
+         "n_jobs_submitted": 25
+        },
+        "t163": {
+         "chip_hours": 11889.667616286944,
+         "median_queue_wait_s": 110.918901,
+         "n_jobs_submitted": 14
+        },
+        "t164": {
+         "chip_hours": 21738.1172342575,
+         "median_queue_wait_s": 88.471334,
+         "n_jobs_submitted": 21
+        },
+        "t165": {
+         "chip_hours": 10160.59058108361,
+         "median_queue_wait_s": 107.440469,
+         "n_jobs_submitted": 22
+        },
+        "t166": {
+         "chip_hours": 2418.514884739445,
+         "median_queue_wait_s": 120.0,
+         "n_jobs_submitted": 19
+        },
+        "t167": {
+         "chip_hours": 16491.349524774167,
+         "median_queue_wait_s": 73.494731,
+         "n_jobs_submitted": 20
+        },
+        "t168": {
+         "chip_hours": 7625.0051698844445,
+         "median_queue_wait_s": 63.274678,
+         "n_jobs_submitted": 10
+        },
+        "t169": {
+         "chip_hours": 7242.168135145834,
+         "median_queue_wait_s": 37.751962,
+         "n_jobs_submitted": 14
+        },
+        "t17": {
+         "chip_hours": 224403.21841691804,
+         "median_queue_wait_s": 98.34981,
+         "n_jobs_submitted": 289
+        },
+        "t170": {
+         "chip_hours": 14758.469090352222,
+         "median_queue_wait_s": 141.944643,
+         "n_jobs_submitted": 18
+        },
+        "t171": {
+         "chip_hours": 9662.331758921666,
+         "median_queue_wait_s": 122.190541,
+         "n_jobs_submitted": 23
+        },
+        "t172": {
+         "chip_hours": 4399.688886491111,
+         "median_queue_wait_s": 69.760667,
+         "n_jobs_submitted": 20
+        },
+        "t173": {
+         "chip_hours": 12698.59966755639,
+         "median_queue_wait_s": 480.0,
+         "n_jobs_submitted": 21
+        },
+        "t174": {
+         "chip_hours": 4372.894800568333,
+         "median_queue_wait_s": 79.836726,
+         "n_jobs_submitted": 15
+        },
+        "t175": {
+         "chip_hours": 5665.0498071875,
+         "median_queue_wait_s": 74.580945,
+         "n_jobs_submitted": 14
+        },
+        "t176": {
+         "chip_hours": 5192.6309424647225,
+         "median_queue_wait_s": 163.327325,
+         "n_jobs_submitted": 17
+        },
+        "t177": {
+         "chip_hours": 7674.973035061944,
+         "median_queue_wait_s": 71.568978,
+         "n_jobs_submitted": 17
+        },
+        "t178": {
+         "chip_hours": 2211.8939834608336,
+         "median_queue_wait_s": 479.583766,
+         "n_jobs_submitted": 13
+        },
+        "t179": {
+         "chip_hours": 4086.2630751244446,
+         "median_queue_wait_s": 71.504695,
+         "n_jobs_submitted": 16
+        },
+        "t18": {
+         "chip_hours": 118961.72030137805,
+         "median_queue_wait_s": 103.610365,
+         "n_jobs_submitted": 287
+        },
+        "t180": {
+         "chip_hours": 5393.077353746945,
+         "median_queue_wait_s": 101.566012,
+         "n_jobs_submitted": 25
+        },
+        "t181": {
+         "chip_hours": 6441.132259561667,
+         "median_queue_wait_s": 103.417678,
+         "n_jobs_submitted": 13
+        },
+        "t182": {
+         "chip_hours": 8069.70923382,
+         "median_queue_wait_s": 233.924949,
+         "n_jobs_submitted": 16
+        },
+        "t183": {
+         "chip_hours": 388.5109373508334,
+         "median_queue_wait_s": 107.717463,
+         "n_jobs_submitted": 10
+        },
+        "t184": {
+         "chip_hours": 5211.812296406667,
+         "median_queue_wait_s": 78.685909,
+         "n_jobs_submitted": 13
+        },
+        "t185": {
+         "chip_hours": 13750.215618396944,
+         "median_queue_wait_s": 465.469751,
+         "n_jobs_submitted": 20
+        },
+        "t186": {
+         "chip_hours": 1791.3170807733331,
+         "median_queue_wait_s": 45.375447,
+         "n_jobs_submitted": 15
+        },
+        "t187": {
+         "chip_hours": 895.7057103252778,
+         "median_queue_wait_s": 88.307769,
+         "n_jobs_submitted": 12
+        },
+        "t188": {
+         "chip_hours": 11760.062059157222,
+         "median_queue_wait_s": 118.405582,
+         "n_jobs_submitted": 22
+        },
+        "t189": {
+         "chip_hours": 21064.793513106666,
+         "median_queue_wait_s": 110.085387,
+         "n_jobs_submitted": 22
+        },
+        "t19": {
+         "chip_hours": 124849.70094010083,
+         "median_queue_wait_s": 106.207296,
+         "n_jobs_submitted": 253
+        },
+        "t190": {
+         "chip_hours": 4120.009285693611,
+         "median_queue_wait_s": 105.889956,
+         "n_jobs_submitted": 16
+        },
+        "t191": {
+         "chip_hours": 8962.876881788334,
+         "median_queue_wait_s": 83.641922,
+         "n_jobs_submitted": 17
+        },
+        "t192": {
+         "chip_hours": 7912.640661924444,
+         "median_queue_wait_s": 77.418164,
+         "n_jobs_submitted": 18
+        },
+        "t193": {
+         "chip_hours": 4438.523751448333,
+         "median_queue_wait_s": 108.45052,
+         "n_jobs_submitted": 19
+        },
+        "t194": {
+         "chip_hours": 6265.546152313611,
+         "median_queue_wait_s": 87.473729,
+         "n_jobs_submitted": 12
+        },
+        "t195": {
+         "chip_hours": 5370.407168435833,
+         "median_queue_wait_s": 77.331254,
+         "n_jobs_submitted": 17
+        },
+        "t196": {
+         "chip_hours": 3340.267034338889,
+         "median_queue_wait_s": 101.870067,
+         "n_jobs_submitted": 14
+        },
+        "t197": {
+         "chip_hours": 1131.1659014430556,
+         "median_queue_wait_s": 93.534543,
+         "n_jobs_submitted": 17
+        },
+        "t198": {
+         "chip_hours": 8164.382324731667,
+         "median_queue_wait_s": 114.756174,
+         "n_jobs_submitted": 23
+        },
+        "t199": {
+         "chip_hours": 21066.008050679444,
+         "median_queue_wait_s": 129.24143,
+         "n_jobs_submitted": 19
+        },
+        "t2": {
+         "chip_hours": 1538885.5889965931,
+         "median_queue_wait_s": 109.773028,
+         "n_jobs_submitted": 2458
+        },
+        "t20": {
+         "chip_hours": 107392.41592362167,
+         "median_queue_wait_s": 113.579689,
+         "n_jobs_submitted": 239
+        },
+        "t200": {
+         "chip_hours": 1732.5396325455556,
+         "median_queue_wait_s": 77.865016,
+         "n_jobs_submitted": 19
+        },
+        "t201": {
+         "chip_hours": 7745.985783750555,
+         "median_queue_wait_s": 122.894998,
+         "n_jobs_submitted": 13
+        },
+        "t202": {
+         "chip_hours": 2391.118497404444,
+         "median_queue_wait_s": 55.911735,
+         "n_jobs_submitted": 11
+        },
+        "t203": {
+         "chip_hours": 6880.5943533088885,
+         "median_queue_wait_s": 407.160477,
+         "n_jobs_submitted": 23
+        },
+        "t204": {
+         "chip_hours": 3463.9591319233336,
+         "median_queue_wait_s": 85.067792,
+         "n_jobs_submitted": 14
+        },
+        "t205": {
+         "chip_hours": 339.3280097977778,
+         "median_queue_wait_s": 81.765375,
+         "n_jobs_submitted": 7
+        },
+        "t206": {
+         "chip_hours": 4182.8010611058335,
+         "median_queue_wait_s": 84.36762,
+         "n_jobs_submitted": 16
+        },
+        "t207": {
+         "chip_hours": 4292.612799387222,
+         "median_queue_wait_s": 73.698487,
+         "n_jobs_submitted": 10
+        },
+        "t208": {
+         "chip_hours": 5766.1758763299995,
+         "median_queue_wait_s": 348.292621,
+         "n_jobs_submitted": 15
+        },
+        "t209": {
+         "chip_hours": 886.1173085033333,
+         "median_queue_wait_s": 96.269474,
+         "n_jobs_submitted": 10
+        },
+        "t21": {
+         "chip_hours": 144654.7063917411,
+         "median_queue_wait_s": 114.562112,
+         "n_jobs_submitted": 199
+        },
+        "t210": {
+         "chip_hours": 2277.786339607778,
+         "median_queue_wait_s": 103.826773,
+         "n_jobs_submitted": 12
+        },
+        "t211": {
+         "chip_hours": 5129.8997950786115,
+         "median_queue_wait_s": 94.729508,
+         "n_jobs_submitted": 18
+        },
+        "t212": {
+         "chip_hours": 7397.604483571389,
+         "median_queue_wait_s": 70.94086,
+         "n_jobs_submitted": 16
+        },
+        "t213": {
+         "chip_hours": 66074.48836964973,
+         "median_queue_wait_s": 105.1513,
+         "n_jobs_submitted": 16
+        },
+        "t214": {
+         "chip_hours": 3058.141303736667,
+         "median_queue_wait_s": 36.376329,
+         "n_jobs_submitted": 14
+        },
+        "t215": {
+         "chip_hours": 8397.299047842222,
+         "median_queue_wait_s": 54.541556,
+         "n_jobs_submitted": 18
+        },
+        "t216": {
+         "chip_hours": 11333.779249995,
+         "median_queue_wait_s": 69.93323,
+         "n_jobs_submitted": 15
+        },
+        "t217": {
+         "chip_hours": 10363.152269832222,
+         "median_queue_wait_s": 380.644546,
+         "n_jobs_submitted": 15
+        },
+        "t218": {
+         "chip_hours": 33654.469037846386,
+         "median_queue_wait_s": 221.190644,
+         "n_jobs_submitted": 17
+        },
+        "t219": {
+         "chip_hours": 3517.8940556144444,
+         "median_queue_wait_s": 600.0,
+         "n_jobs_submitted": 9
+        },
+        "t22": {
+         "chip_hours": 110603.75723604693,
+         "median_queue_wait_s": 109.150691,
+         "n_jobs_submitted": 201
+        },
+        "t220": {
+         "chip_hours": 4027.7100422205554,
+         "median_queue_wait_s": 97.243249,
+         "n_jobs_submitted": 13
+        },
+        "t221": {
+         "chip_hours": 1783.4006371941666,
+         "median_queue_wait_s": 99.424763,
+         "n_jobs_submitted": 8
+        },
+        "t222": {
+         "chip_hours": 926.4182831725,
+         "median_queue_wait_s": 656.017295,
+         "n_jobs_submitted": 8
+        },
+        "t223": {
+         "chip_hours": 4777.609693878333,
+         "median_queue_wait_s": 89.865921,
+         "n_jobs_submitted": 12
+        },
+        "t224": {
+         "chip_hours": 6226.984097513611,
+         "median_queue_wait_s": 119.877657,
+         "n_jobs_submitted": 14
+        },
+        "t225": {
+         "chip_hours": 1888.8265045155556,
+         "median_queue_wait_s": 78.889593,
+         "n_jobs_submitted": 14
+        },
+        "t226": {
+         "chip_hours": 2229.803412351944,
+         "median_queue_wait_s": 89.160611,
+         "n_jobs_submitted": 10
+        },
+        "t227": {
+         "chip_hours": 5392.484558391945,
+         "median_queue_wait_s": 98.45759,
+         "n_jobs_submitted": 16
+        },
+        "t228": {
+         "chip_hours": 16542.91930413611,
+         "median_queue_wait_s": 117.597132,
+         "n_jobs_submitted": 14
+        },
+        "t229": {
+         "chip_hours": 1100.8726269830554,
+         "median_queue_wait_s": 239.221972,
+         "n_jobs_submitted": 9
+        },
+        "t23": {
+         "chip_hours": 85663.93869078028,
+         "median_queue_wait_s": 95.483397,
+         "n_jobs_submitted": 195
+        },
+        "t230": {
+         "chip_hours": 3240.885921557778,
+         "median_queue_wait_s": 116.612033,
+         "n_jobs_submitted": 12
+        },
+        "t231": {
+         "chip_hours": 24136.096496040554,
+         "median_queue_wait_s": 112.406862,
+         "n_jobs_submitted": 22
+        },
+        "t232": {
+         "chip_hours": 3012.346354235278,
+         "median_queue_wait_s": 108.130661,
+         "n_jobs_submitted": 5
+        },
+        "t233": {
+         "chip_hours": 5761.797769254999,
+         "median_queue_wait_s": 91.605572,
+         "n_jobs_submitted": 9
+        },
+        "t234": {
+         "chip_hours": 111997.13114877,
+         "median_queue_wait_s": 96.728069,
+         "n_jobs_submitted": 13
+        },
+        "t235": {
+         "chip_hours": 12764.031765648057,
+         "median_queue_wait_s": 600.0,
+         "n_jobs_submitted": 15
+        },
+        "t236": {
+         "chip_hours": 3864.7779659358334,
+         "median_queue_wait_s": 98.809101,
+         "n_jobs_submitted": 21
+        },
+        "t237": {
+         "chip_hours": 5608.001362060833,
+         "median_queue_wait_s": 84.350792,
+         "n_jobs_submitted": 15
+        },
+        "t238": {
+         "chip_hours": 8498.487682524721,
+         "median_queue_wait_s": 59.180666,
+         "n_jobs_submitted": 11
+        },
+        "t239": {
+         "chip_hours": 22380.71527857611,
+         "median_queue_wait_s": 172.21148,
+         "n_jobs_submitted": 12
+        },
+        "t24": {
+         "chip_hours": 138964.66422434917,
+         "median_queue_wait_s": 110.93562,
+         "n_jobs_submitted": 185
+        },
+        "t240": {
+         "chip_hours": 5768.358452365833,
+         "median_queue_wait_s": 85.38834,
+         "n_jobs_submitted": 21
+        },
+        "t241": {
+         "chip_hours": 19558.293254198055,
+         "median_queue_wait_s": 114.574497,
+         "n_jobs_submitted": 17
+        },
+        "t242": {
+         "chip_hours": 3104.9607256958334,
+         "median_queue_wait_s": 66.615758,
+         "n_jobs_submitted": 7
+        },
+        "t243": {
+         "chip_hours": 5454.40975321611,
+         "median_queue_wait_s": 98.54728,
+         "n_jobs_submitted": 14
+        },
+        "t244": {
+         "chip_hours": 11639.93219744611,
+         "median_queue_wait_s": 113.596006,
+         "n_jobs_submitted": 15
+        },
+        "t245": {
+         "chip_hours": 3134.2705616030557,
+         "median_queue_wait_s": 80.632328,
+         "n_jobs_submitted": 11
+        },
+        "t246": {
+         "chip_hours": 3681.457300936667,
+         "median_queue_wait_s": 473.168788,
+         "n_jobs_submitted": 13
+        },
+        "t247": {
+         "chip_hours": 6389.107518870278,
+         "median_queue_wait_s": 119.635369,
+         "n_jobs_submitted": 15
+        },
+        "t248": {
+         "chip_hours": 8899.819313119722,
+         "median_queue_wait_s": 154.472547,
+         "n_jobs_submitted": 16
+        },
+        "t249": {
+         "chip_hours": 4622.887604939722,
+         "median_queue_wait_s": 64.123397,
+         "n_jobs_submitted": 14
+        },
+        "t25": {
+         "chip_hours": 128202.25080485389,
+         "median_queue_wait_s": 96.153896,
+         "n_jobs_submitted": 201
+        },
+        "t250": {
+         "chip_hours": 6118.448700818333,
+         "median_queue_wait_s": 119.024623,
+         "n_jobs_submitted": 7
+        },
+        "t251": {
+         "chip_hours": 8803.992322480279,
+         "median_queue_wait_s": 109.332589,
+         "n_jobs_submitted": 10
+        },
+        "t252": {
+         "chip_hours": 2889.992293302778,
+         "median_queue_wait_s": 105.943089,
+         "n_jobs_submitted": 8
+        },
+        "t253": {
+         "chip_hours": 15109.841683395834,
+         "median_queue_wait_s": 600.0,
+         "n_jobs_submitted": 20
+        },
+        "t254": {
+         "chip_hours": 1049.2481920508333,
+         "median_queue_wait_s": 105.925076,
+         "n_jobs_submitted": 8
+        },
+        "t255": {
+         "chip_hours": 8073.219193638333,
+         "median_queue_wait_s": 164.800453,
+         "n_jobs_submitted": 16
+        },
+        "t26": {
+         "chip_hours": 119270.38406308166,
+         "median_queue_wait_s": 107.545844,
+         "n_jobs_submitted": 182
+        },
+        "t27": {
+         "chip_hours": 159185.2050829289,
+         "median_queue_wait_s": 104.925362,
+         "n_jobs_submitted": 171
+        },
+        "t28": {
+         "chip_hours": 81069.52704543805,
+         "median_queue_wait_s": 114.784138,
+         "n_jobs_submitted": 161
+        },
+        "t29": {
+         "chip_hours": 125337.5120682625,
+         "median_queue_wait_s": 112.128928,
+         "n_jobs_submitted": 150
+        },
+        "t3": {
+         "chip_hours": 861209.5143225513,
+         "median_queue_wait_s": 113.617719,
+         "n_jobs_submitted": 1636
+        },
+        "t30": {
+         "chip_hours": 101997.09083376222,
+         "median_queue_wait_s": 94.243157,
+         "n_jobs_submitted": 166
+        },
+        "t31": {
+         "chip_hours": 57704.00545790222,
+         "median_queue_wait_s": 111.284985,
+         "n_jobs_submitted": 143
+        },
+        "t32": {
+         "chip_hours": 46590.952822483334,
+         "median_queue_wait_s": 115.186226,
+         "n_jobs_submitted": 128
+        },
+        "t33": {
+         "chip_hours": 202571.33671717692,
+         "median_queue_wait_s": 106.186357,
+         "n_jobs_submitted": 115
+        },
+        "t34": {
+         "chip_hours": 65664.63970004945,
+         "median_queue_wait_s": 96.456154,
+         "n_jobs_submitted": 120
+        },
+        "t35": {
+         "chip_hours": 70823.79811026056,
+         "median_queue_wait_s": 93.206322,
+         "n_jobs_submitted": 125
+        },
+        "t36": {
+         "chip_hours": 52371.14084758556,
+         "median_queue_wait_s": 121.491569,
+         "n_jobs_submitted": 116
+        },
+        "t37": {
+         "chip_hours": 67931.85966114611,
+         "median_queue_wait_s": 180.093068,
+         "n_jobs_submitted": 102
+        },
+        "t38": {
+         "chip_hours": 52164.68308070861,
+         "median_queue_wait_s": 96.682758,
+         "n_jobs_submitted": 136
+        },
+        "t39": {
+         "chip_hours": 63462.61974167834,
+         "median_queue_wait_s": 109.925478,
+         "n_jobs_submitted": 111
+        },
+        "t4": {
+         "chip_hours": 849978.995373532,
+         "median_queue_wait_s": 110.857866,
+         "n_jobs_submitted": 1444
+        },
+        "t40": {
+         "chip_hours": 73321.27921774834,
+         "median_queue_wait_s": 102.847628,
+         "n_jobs_submitted": 130
+        },
+        "t41": {
+         "chip_hours": 75390.10651265665,
+         "median_queue_wait_s": 137.303316,
+         "n_jobs_submitted": 104
+        },
+        "t42": {
+         "chip_hours": 67898.64085194972,
+         "median_queue_wait_s": 93.026627,
+         "n_jobs_submitted": 107
+        },
+        "t43": {
+         "chip_hours": 79955.79200306194,
+         "median_queue_wait_s": 105.00949,
+         "n_jobs_submitted": 96
+        },
+        "t44": {
+         "chip_hours": 55162.68960106917,
+         "median_queue_wait_s": 102.061699,
+         "n_jobs_submitted": 100
+        },
+        "t45": {
+         "chip_hours": 37435.638734725,
+         "median_queue_wait_s": 111.040097,
+         "n_jobs_submitted": 96
+        },
+        "t46": {
+         "chip_hours": 22599.563893964165,
+         "median_queue_wait_s": 89.113451,
+         "n_jobs_submitted": 76
+        },
+        "t47": {
+         "chip_hours": 59811.2635449975,
+         "median_queue_wait_s": 216.048579,
+         "n_jobs_submitted": 84
+        },
+        "t48": {
+         "chip_hours": 54650.68344727611,
+         "median_queue_wait_s": 102.527245,
+         "n_jobs_submitted": 89
+        },
+        "t49": {
+         "chip_hours": 36476.374766624445,
+         "median_queue_wait_s": 107.510378,
+         "n_jobs_submitted": 86
+        },
+        "t5": {
+         "chip_hours": 657747.2323402462,
+         "median_queue_wait_s": 111.544368,
+         "n_jobs_submitted": 1071
+        },
+        "t50": {
+         "chip_hours": 40333.78070500528,
+         "median_queue_wait_s": 195.892815,
+         "n_jobs_submitted": 82
+        },
+        "t51": {
+         "chip_hours": 70206.58286772222,
+         "median_queue_wait_s": 89.298564,
+         "n_jobs_submitted": 88
+        },
+        "t52": {
+         "chip_hours": 29004.474574979722,
+         "median_queue_wait_s": 83.805703,
+         "n_jobs_submitted": 70
+        },
+        "t53": {
+         "chip_hours": 26627.25669987778,
+         "median_queue_wait_s": 97.942622,
+         "n_jobs_submitted": 71
+        },
+        "t54": {
+         "chip_hours": 59947.873710689164,
+         "median_queue_wait_s": 103.51477,
+         "n_jobs_submitted": 75
+        },
+        "t55": {
+         "chip_hours": 20336.541515645833,
+         "median_queue_wait_s": 99.135473,
+         "n_jobs_submitted": 59
+        },
+        "t56": {
+         "chip_hours": 39634.079673400556,
+         "median_queue_wait_s": 209.68278,
+         "n_jobs_submitted": 60
+        },
+        "t57": {
+         "chip_hours": 47068.78707580083,
+         "median_queue_wait_s": 98.652062,
+         "n_jobs_submitted": 68
+        },
+        "t58": {
+         "chip_hours": 56662.11019487445,
+         "median_queue_wait_s": 103.600369,
+         "n_jobs_submitted": 72
+        },
+        "t59": {
+         "chip_hours": 24667.43216394528,
+         "median_queue_wait_s": 94.807022,
+         "n_jobs_submitted": 71
+        },
+        "t6": {
+         "chip_hours": 632793.3478690548,
+         "median_queue_wait_s": 104.616069,
+         "n_jobs_submitted": 888
+        },
+        "t60": {
+         "chip_hours": 28865.445736256945,
+         "median_queue_wait_s": 100.221877,
+         "n_jobs_submitted": 67
+        },
+        "t61": {
+         "chip_hours": 26336.269633460277,
+         "median_queue_wait_s": 80.222251,
+         "n_jobs_submitted": 58
+        },
+        "t62": {
+         "chip_hours": 41852.50783443805,
+         "median_queue_wait_s": 162.059317,
+         "n_jobs_submitted": 69
+        },
+        "t63": {
+         "chip_hours": 37564.15567826667,
+         "median_queue_wait_s": 122.21781,
+         "n_jobs_submitted": 69
+        },
+        "t64": {
+         "chip_hours": 16701.97146060361,
+         "median_queue_wait_s": 61.864037,
+         "n_jobs_submitted": 48
+        },
+        "t65": {
+         "chip_hours": 23773.059063379722,
+         "median_queue_wait_s": 106.152766,
+         "n_jobs_submitted": 69
+        },
+        "t66": {
+         "chip_hours": 43693.50191199917,
+         "median_queue_wait_s": 143.316259,
+         "n_jobs_submitted": 66
+        },
+        "t67": {
+         "chip_hours": 15559.403396184167,
+         "median_queue_wait_s": 114.486925,
+         "n_jobs_submitted": 53
+        },
+        "t68": {
+         "chip_hours": 28755.538956245557,
+         "median_queue_wait_s": 105.480354,
+         "n_jobs_submitted": 56
+        },
+        "t69": {
+         "chip_hours": 46374.93421365639,
+         "median_queue_wait_s": 129.635466,
+         "n_jobs_submitted": 59
+        },
+        "t7": {
+         "chip_hours": 449212.8787549011,
+         "median_queue_wait_s": 110.478605,
+         "n_jobs_submitted": 731
+        },
+        "t70": {
+         "chip_hours": 32483.650151847225,
+         "median_queue_wait_s": 104.416456,
+         "n_jobs_submitted": 52
+        },
+        "t71": {
+         "chip_hours": 14584.60876430389,
+         "median_queue_wait_s": 103.23392,
+         "n_jobs_submitted": 58
+        },
+        "t72": {
+         "chip_hours": 18864.898013195558,
+         "median_queue_wait_s": 98.253259,
+         "n_jobs_submitted": 50
+        },
+        "t73": {
+         "chip_hours": 30514.105822919722,
+         "median_queue_wait_s": 118.681464,
+         "n_jobs_submitted": 62
+        },
+        "t74": {
+         "chip_hours": 21667.457112374446,
+         "median_queue_wait_s": 132.638243,
+         "n_jobs_submitted": 57
+        },
+        "t75": {
+         "chip_hours": 30318.557370751667,
+         "median_queue_wait_s": 101.095654,
+         "n_jobs_submitted": 43
+        },
+        "t76": {
+         "chip_hours": 108898.63199714111,
+         "median_queue_wait_s": 101.296389,
+         "n_jobs_submitted": 64
+        },
+        "t77": {
+         "chip_hours": 39593.19661160305,
+         "median_queue_wait_s": 100.484463,
+         "n_jobs_submitted": 49
+        },
+        "t78": {
+         "chip_hours": 26661.36360047972,
+         "median_queue_wait_s": 95.841875,
+         "n_jobs_submitted": 50
+        },
+        "t79": {
+         "chip_hours": 30725.5609424,
+         "median_queue_wait_s": 127.237498,
+         "n_jobs_submitted": 51
+        },
+        "t8": {
+         "chip_hours": 380580.8263216736,
+         "median_queue_wait_s": 115.374145,
+         "n_jobs_submitted": 693
+        },
+        "t80": {
+         "chip_hours": 30595.383132409446,
+         "median_queue_wait_s": 112.145757,
+         "n_jobs_submitted": 52
+        },
+        "t81": {
+         "chip_hours": 17786.81145116528,
+         "median_queue_wait_s": 140.888319,
+         "n_jobs_submitted": 48
+        },
+        "t82": {
+         "chip_hours": 20122.99190053861,
+         "median_queue_wait_s": 183.99495,
+         "n_jobs_submitted": 49
+        },
+        "t83": {
+         "chip_hours": 22630.63458732806,
+         "median_queue_wait_s": 76.047026,
+         "n_jobs_submitted": 38
+        },
+        "t84": {
+         "chip_hours": 10938.971689175278,
+         "median_queue_wait_s": 97.02041,
+         "n_jobs_submitted": 26
+        },
+        "t85": {
+         "chip_hours": 14970.305483948057,
+         "median_queue_wait_s": 74.968145,
+         "n_jobs_submitted": 36
+        },
+        "t86": {
+         "chip_hours": 19665.3103760925,
+         "median_queue_wait_s": 96.548572,
+         "n_jobs_submitted": 34
+        },
+        "t87": {
+         "chip_hours": 30410.79969987861,
+         "median_queue_wait_s": 79.189916,
+         "n_jobs_submitted": 40
+        },
+        "t88": {
+         "chip_hours": 14914.279474595278,
+         "median_queue_wait_s": 118.824429,
+         "n_jobs_submitted": 47
+        },
+        "t89": {
+         "chip_hours": 15778.302504266945,
+         "median_queue_wait_s": 91.974973,
+         "n_jobs_submitted": 41
+        },
+        "t9": {
+         "chip_hours": 287760.53830686776,
+         "median_queue_wait_s": 101.377169,
+         "n_jobs_submitted": 600
+        },
+        "t90": {
+         "chip_hours": 6413.545612257778,
+         "median_queue_wait_s": 138.71664,
+         "n_jobs_submitted": 30
+        },
+        "t91": {
+         "chip_hours": 15212.084295688333,
+         "median_queue_wait_s": 89.210237,
+         "n_jobs_submitted": 49
+        },
+        "t92": {
+         "chip_hours": 18834.879597350555,
+         "median_queue_wait_s": 123.89052,
+         "n_jobs_submitted": 37
+        },
+        "t93": {
+         "chip_hours": 21531.857358808054,
+         "median_queue_wait_s": 85.405962,
+         "n_jobs_submitted": 38
+        },
+        "t94": {
+         "chip_hours": 35243.29919346556,
+         "median_queue_wait_s": 117.552845,
+         "n_jobs_submitted": 53
+        },
+        "t95": {
+         "chip_hours": 13552.411949970277,
+         "median_queue_wait_s": 78.06954,
+         "n_jobs_submitted": 34
+        },
+        "t96": {
+         "chip_hours": 7868.563302228334,
+         "median_queue_wait_s": 112.634132,
+         "n_jobs_submitted": 33
+        },
+        "t97": {
+         "chip_hours": 19903.926927579443,
+         "median_queue_wait_s": 114.204524,
+         "n_jobs_submitted": 40
+        },
+        "t98": {
+         "chip_hours": 22123.321896024445,
+         "median_queue_wait_s": 180.988378,
+         "n_jobs_submitted": 41
+        },
+        "t99": {
+         "chip_hours": 66878.65177134583,
+         "median_queue_wait_s": 100.087929,
+         "n_jobs_submitted": 35
+        }
+       },
+       "preemptions_per_min": {
+        "node_failure": 0.0,
+        "scheduler": 0.5645833333333333,
+        "total": 0.5645833333333333
+       },
+       "queue_wait_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 141.24448866390043,
+          "n": 18978,
+          "p50": 79.529152,
+          "p90": 301.62617,
+          "p99": 1243.960077
+         },
+         "job_weighted": {
+          "mean": 141.253338368773,
+          "n": 18990,
+          "p50": 77.75448,
+          "p90": 296.546321,
+          "p99": 1291.616334
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 247.32681595383892,
+          "n": 5768,
+          "p50": 105.224451,
+          "p90": 622.410715,
+          "p99": 2154.571151
+         },
+         "job_weighted": {
+          "mean": 381.36171842614675,
+          "n": 5775,
+          "p50": 116.424496,
+          "p90": 1282.35927,
+          "p99": 2364.766547
+         }
+        },
+        "PRETRAIN": {
+         "chip_hour_weighted": {
+          "mean": 216.19911967447086,
+          "n": 34,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 239.637449
+         },
+         "job_weighted": {
+          "mean": 177.9867172647059,
+          "n": 34,
+          "p50": 163.807977,
+          "p90": 224.179462,
+          "p99": 239.637449
+         }
+        }
+       },
+       "queue_wait_s_by_chips": {
+        "1-8": {
+         "chip_hour_weighted": {
+          "mean": 141.24448866390043,
+          "n": 18978,
+          "p50": 79.529152,
+          "p90": 301.62617,
+          "p99": 1243.960077
+         },
+         "job_weighted": {
+          "mean": 141.253338368773,
+          "n": 18990,
+          "p50": 77.75448,
+          "p90": 296.546321,
+          "p99": 1291.616334
+         }
+        },
+        "513+": {
+         "chip_hour_weighted": {
+          "mean": 240.1086096883432,
+          "n": 579,
+          "p50": 233.404631,
+          "p90": 263.669549,
+          "p99": 1312.051008
+         },
+         "job_weighted": {
+          "mean": 419.1814272677027,
+          "n": 579,
+          "p50": 185.048037,
+          "p90": 1235.024212,
+          "p99": 2633.095547
+         }
+        },
+        "65-512": {
+         "chip_hour_weighted": {
+          "mean": 226.4562586444151,
+          "n": 3494,
+          "p50": 95.763378,
+          "p90": 556.266097,
+          "p99": 2077.510241
+         },
+         "job_weighted": {
+          "mean": 379.2737195829042,
+          "n": 3498,
+          "p50": 114.657796,
+          "p90": 1284.496035,
+          "p99": 2378.173637
+         }
+        },
+        "9-64": {
+         "chip_hour_weighted": {
+          "mean": 218.09185728617797,
+          "n": 1729,
+          "p50": 91.939224,
+          "p90": 565.103212,
+          "p99": 1864.381932
+         },
+         "job_weighted": {
+          "mean": 368.94339192205564,
+          "n": 1732,
+          "p50": 112.406862,
+          "p90": 1282.35927,
+          "p99": 2250.667686
+         }
+        }
+       },
+       "queue_wait_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 141.24448866390043,
+          "n": 18978,
+          "p50": 79.529152,
+          "p90": 301.62617,
+          "p99": 1243.960077
+         },
+         "job_weighted": {
+          "mean": 141.253338368773,
+          "n": 18990,
+          "p50": 77.75448,
+          "p90": 296.546321,
+          "p99": 1291.616334
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 247.32681595383892,
+          "n": 5768,
+          "p50": 105.224451,
+          "p90": 622.410715,
+          "p99": 2154.571151
+         },
+         "job_weighted": {
+          "mean": 381.36171842614675,
+          "n": 5775,
+          "p50": 116.424496,
+          "p90": 1282.35927,
+          "p99": 2364.766547
+         }
+        },
+        "frontier": {
+         "chip_hour_weighted": {
+          "mean": 233.404631,
+          "n": 1,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 233.404631
+         },
+         "job_weighted": {
+          "mean": 233.404631,
+          "n": 1,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 233.404631
+         }
+        },
+        "pretrain": {
+         "chip_hour_weighted": {
+          "mean": 174.48463893759072,
+          "n": 33,
+          "p50": 163.807977,
+          "p90": 220.82579,
+          "p99": 239.637449
+         },
+         "job_weighted": {
+          "mean": 176.30738654545456,
+          "n": 33,
+          "p50": 163.807977,
+          "p90": 220.82579,
+          "p99": 239.637449
+         }
+        }
+       },
+       "replica_availability": null
+      },
+      "horizon_us": 172800000000,
+      "steady_state_window": {
+       "drain_frac": 0.1,
+       "end_us": 155520000000,
+       "start_us": 17280000000,
+       "warmup_frac": 0.1
+      },
+      "window": {
+       "allocated_chip_hours": {
+        "by_chip_type": {
+         "h100": 20030257.185123954
+        },
+        "by_class": {
+         "EVAL": 3423.874955472222,
+         "FINETUNE": 15893876.868247911,
+         "PRETRAIN": 4132956.4419205687
+        },
+        "total": 20030257.185123954
+       },
+       "allocation_rate": 0.9949136368991908,
+       "counts": {
+        "drains_started": 0,
+        "failure_kills": 0,
+        "jobs_by_status": {
+         "CANCELED": 1619,
+         "COMPLETED": 19176,
+         "FAILED": 6627
+        },
+        "jobs_finished": 27422,
+        "jobs_started": 27552,
+        "node_failures": 0,
+        "node_failures_by_cause": {},
+        "node_repairs": 0,
+        "preemptions": 1501
+       },
+       "duration_s": 138240.0,
+       "ettr": {
+        "chip_hour_weighted": {
+         "mean": 0.9602745725239673,
+         "n": 27421,
+         "p10": 0.8797139933572111,
+         "p50": 0.9999999999897782,
+         "p90": 1.000000000020735
+        },
+        "job_weighted": {
+         "mean": 0.9900408738445096,
+         "n": 27421,
+         "p10": 0.9836065574417073,
+         "p50": 0.9999999999802651,
+         "p90": 1.0000000058482263
+        }
+       },
+       "fragmentation": {
+        "cluster": {
+         "max": 0.6857493583305434,
+         "mean": 0.3192814115031843,
+         "n_samples": 1153
+        },
+        "metro": {
+         "max": 0.0,
+         "mean": 0.0,
+         "n_samples": 1153
+        },
+        "node": {
+         "max": 0.9999321355253559,
+         "mean": 0.9638770349188072,
+         "n_samples": 1153
+        },
+        "pod": {
+         "max": 0.9652533889822026,
+         "mean": 0.5123561175232654,
+         "n_samples": 1153
+        },
+        "su": {
+         "max": 0.9978283368113876,
+         "mean": 0.6166370300264737,
+         "n_samples": 1153
+        }
+       },
+       "goodput": 0.879732161580302,
+       "jct_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 3450.366319119135,
+          "n": 10929,
+          "p50": 1448.414766,
+          "p90": 10009.724791,
+          "p99": 32883.179097
+         },
+         "job_weighted": {
+          "mean": 530.134005621831,
+          "n": 10929,
+          "p50": 242.679246,
+          "p90": 1190.899499,
+          "p99": 4260.01051
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 35681.62063728636,
+          "n": 2293,
+          "p50": 26868.284969,
+          "p90": 75236.163347,
+          "p99": 137561.336391
+         },
+         "job_weighted": {
+          "mean": 15563.229085627116,
+          "n": 2293,
+          "p50": 9607.514378,
+          "p90": 36295.376973,
+          "p99": 83208.318176
+         }
+        }
+       },
+       "jct_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 3450.366319119135,
+          "n": 10929,
+          "p50": 1448.414766,
+          "p90": 10009.724791,
+          "p99": 32883.179097
+         },
+         "job_weighted": {
+          "mean": 530.134005621831,
+          "n": 10929,
+          "p50": 242.679246,
+          "p90": 1190.899499,
+          "p99": 4260.01051
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 35681.62063728636,
+          "n": 2293,
+          "p50": 26868.284969,
+          "p90": 75236.163347,
+          "p99": 137561.336391
+         },
+         "job_weighted": {
+          "mean": 15563.229085627116,
+          "n": 2293,
+          "p50": 9607.514378,
+          "p90": 36295.376973,
+          "p99": 83208.318176
+         }
+        }
+       },
+       "mean_pending_by_class": {
+        "EVAL": 17.574344423668983,
+        "FINETUNE": 166.89931730322627,
+        "PRETRAIN": 0.03184135425347222
+       },
+       "occupancy": 0.9949136368991908,
+       "per_tenant": {
+        "t0": {
+         "chip_hours": 4154631.2236992647,
+         "median_queue_wait_s": 112.948803,
+         "n_jobs_submitted": 6901
+        },
+        "t1": {
+         "chip_hours": 2139710.7233149833,
+         "median_queue_wait_s": 111.89163,
+         "n_jobs_submitted": 3058
+        },
+        "t10": {
+         "chip_hours": 222445.7109648125,
+         "median_queue_wait_s": 97.430313,
+         "n_jobs_submitted": 387
+        },
+        "t100": {
+         "chip_hours": 8142.3275905538885,
+         "median_queue_wait_s": 96.001319,
+         "n_jobs_submitted": 29
+        },
+        "t101": {
+         "chip_hours": 12864.964978441389,
+         "median_queue_wait_s": 76.654498,
+         "n_jobs_submitted": 24
+        },
+        "t102": {
+         "chip_hours": 18592.6777738125,
+         "median_queue_wait_s": 125.232154,
+         "n_jobs_submitted": 33
+        },
+        "t103": {
+         "chip_hours": 18209.02187746,
+         "median_queue_wait_s": 147.514345,
+         "n_jobs_submitted": 22
+        },
+        "t104": {
+         "chip_hours": 16604.120756891112,
+         "median_queue_wait_s": 104.862352,
+         "n_jobs_submitted": 26
+        },
+        "t105": {
+         "chip_hours": 10932.802557134166,
+         "median_queue_wait_s": 65.850733,
+         "n_jobs_submitted": 27
+        },
+        "t106": {
+         "chip_hours": 69249.5986694475,
+         "median_queue_wait_s": 85.71532,
+         "n_jobs_submitted": 27
+        },
+        "t107": {
+         "chip_hours": 17674.72914975611,
+         "median_queue_wait_s": 118.701921,
+         "n_jobs_submitted": 29
+        },
+        "t108": {
+         "chip_hours": 15206.90662852,
+         "median_queue_wait_s": 186.525587,
+         "n_jobs_submitted": 24
+        },
+        "t109": {
+         "chip_hours": 2196.1804681427775,
+         "median_queue_wait_s": 91.060883,
+         "n_jobs_submitted": 28
+        },
+        "t11": {
+         "chip_hours": 170239.74260416473,
+         "median_queue_wait_s": 119.672685,
+         "n_jobs_submitted": 355
+        },
+        "t110": {
+         "chip_hours": 6005.202504496945,
+         "median_queue_wait_s": 115.462401,
+         "n_jobs_submitted": 25
+        },
+        "t111": {
+         "chip_hours": 11540.0848378175,
+         "median_queue_wait_s": 310.909615,
+         "n_jobs_submitted": 20
+        },
+        "t112": {
+         "chip_hours": 6122.2690844555555,
+         "median_queue_wait_s": 58.589301,
+         "n_jobs_submitted": 27
+        },
+        "t113": {
+         "chip_hours": 11891.78499966389,
+         "median_queue_wait_s": 110.516545,
+         "n_jobs_submitted": 29
+        },
+        "t114": {
+         "chip_hours": 12511.981930029167,
+         "median_queue_wait_s": 111.320669,
+         "n_jobs_submitted": 35
+        },
+        "t115": {
+         "chip_hours": 17880.445599239167,
+         "median_queue_wait_s": 152.723543,
+         "n_jobs_submitted": 20
+        },
+        "t116": {
+         "chip_hours": 12350.821165939165,
+         "median_queue_wait_s": 105.271617,
+         "n_jobs_submitted": 36
+        },
+        "t117": {
+         "chip_hours": 11636.987411529999,
+         "median_queue_wait_s": 116.590924,
+         "n_jobs_submitted": 29
+        },
+        "t118": {
+         "chip_hours": 8202.136604094167,
+         "median_queue_wait_s": 107.726035,
+         "n_jobs_submitted": 22
+        },
+        "t119": {
+         "chip_hours": 8988.690050695834,
+         "median_queue_wait_s": 134.348864,
+         "n_jobs_submitted": 15
+        },
+        "t12": {
+         "chip_hours": 225391.840529245,
+         "median_queue_wait_s": 117.214886,
+         "n_jobs_submitted": 322
+        },
+        "t120": {
+         "chip_hours": 4097.889615445,
+         "median_queue_wait_s": 92.713332,
+         "n_jobs_submitted": 24
+        },
+        "t121": {
+         "chip_hours": 16100.213146753335,
+         "median_queue_wait_s": 617.904567,
+         "n_jobs_submitted": 26
+        },
+        "t122": {
+         "chip_hours": 16004.640714705833,
+         "median_queue_wait_s": 154.511698,
+         "n_jobs_submitted": 19
+        },
+        "t123": {
+         "chip_hours": 2218.909996853889,
+         "median_queue_wait_s": 92.903097,
+         "n_jobs_submitted": 15
+        },
+        "t124": {
+         "chip_hours": 11029.727727456111,
+         "median_queue_wait_s": 153.568624,
+         "n_jobs_submitted": 22
+        },
+        "t125": {
+         "chip_hours": 6097.825545648333,
+         "median_queue_wait_s": 93.67843,
+         "n_jobs_submitted": 24
+        },
+        "t126": {
+         "chip_hours": 3639.0744100844445,
+         "median_queue_wait_s": 103.948278,
+         "n_jobs_submitted": 17
+        },
+        "t127": {
+         "chip_hours": 28369.666037894167,
+         "median_queue_wait_s": 115.266229,
+         "n_jobs_submitted": 25
+        },
+        "t128": {
+         "chip_hours": 2242.031479857222,
+         "median_queue_wait_s": 101.011939,
+         "n_jobs_submitted": 16
+        },
+        "t129": {
+         "chip_hours": 6521.602786925833,
+         "median_queue_wait_s": 143.216739,
+         "n_jobs_submitted": 22
+        },
+        "t13": {
+         "chip_hours": 212242.2856513889,
+         "median_queue_wait_s": 115.612656,
+         "n_jobs_submitted": 302
+        },
+        "t130": {
+         "chip_hours": 5577.821872640834,
+         "median_queue_wait_s": 243.599258,
+         "n_jobs_submitted": 13
+        },
+        "t131": {
+         "chip_hours": 19412.09327264889,
+         "median_queue_wait_s": 87.712471,
+         "n_jobs_submitted": 23
+        },
+        "t132": {
+         "chip_hours": 11113.590058454445,
+         "median_queue_wait_s": 72.926915,
+         "n_jobs_submitted": 25
+        },
+        "t133": {
+         "chip_hours": 10150.051257271667,
+         "median_queue_wait_s": 80.98676,
+         "n_jobs_submitted": 18
+        },
+        "t134": {
+         "chip_hours": 4371.2239307097225,
+         "median_queue_wait_s": 45.40113,
+         "n_jobs_submitted": 25
+        },
+        "t135": {
+         "chip_hours": 9384.460040246944,
+         "median_queue_wait_s": 112.602212,
+         "n_jobs_submitted": 17
+        },
+        "t136": {
+         "chip_hours": 6369.733918244722,
+         "median_queue_wait_s": 87.168418,
+         "n_jobs_submitted": 16
+        },
+        "t137": {
+         "chip_hours": 33592.63525272611,
+         "median_queue_wait_s": 241.883884,
+         "n_jobs_submitted": 26
+        },
+        "t138": {
+         "chip_hours": 3731.033205314722,
+         "median_queue_wait_s": 96.219421,
+         "n_jobs_submitted": 15
+        },
+        "t139": {
+         "chip_hours": 11359.7329316075,
+         "median_queue_wait_s": 187.912285,
+         "n_jobs_submitted": 21
+        },
+        "t14": {
+         "chip_hours": 157012.7605275975,
+         "median_queue_wait_s": 108.010881,
+         "n_jobs_submitted": 273
+        },
+        "t140": {
+         "chip_hours": 7736.898386281111,
+         "median_queue_wait_s": 220.661837,
+         "n_jobs_submitted": 15
+        },
+        "t141": {
+         "chip_hours": 13770.061155735833,
+         "median_queue_wait_s": 105.275786,
+         "n_jobs_submitted": 12
+        },
+        "t142": {
+         "chip_hours": 9356.334666159444,
+         "median_queue_wait_s": 141.574517,
+         "n_jobs_submitted": 18
+        },
+        "t143": {
+         "chip_hours": 8476.040900750279,
+         "median_queue_wait_s": 117.321994,
+         "n_jobs_submitted": 15
+        },
+        "t144": {
+         "chip_hours": 3574.806731269722,
+         "median_queue_wait_s": 80.552849,
+         "n_jobs_submitted": 13
+        },
+        "t145": {
+         "chip_hours": 2425.0557626513887,
+         "median_queue_wait_s": 171.728313,
+         "n_jobs_submitted": 10
+        },
+        "t146": {
+         "chip_hours": 13872.413736764445,
+         "median_queue_wait_s": 113.652191,
+         "n_jobs_submitted": 26
+        },
+        "t147": {
+         "chip_hours": 2765.9719966447224,
+         "median_queue_wait_s": 118.493542,
+         "n_jobs_submitted": 11
+        },
+        "t148": {
+         "chip_hours": 4713.232630611389,
+         "median_queue_wait_s": 960.0,
+         "n_jobs_submitted": 12
+        },
+        "t149": {
+         "chip_hours": 8732.392082242777,
+         "median_queue_wait_s": 100.260213,
+         "n_jobs_submitted": 19
+        },
+        "t15": {
+         "chip_hours": 146382.9786985975,
+         "median_queue_wait_s": 115.580197,
+         "n_jobs_submitted": 275
+        },
+        "t150": {
+         "chip_hours": 3178.8775107216666,
+         "median_queue_wait_s": 110.59024,
+         "n_jobs_submitted": 13
+        },
+        "t151": {
+         "chip_hours": 20365.405713515833,
+         "median_queue_wait_s": 99.756569,
+         "n_jobs_submitted": 13
+        },
+        "t152": {
+         "chip_hours": 13574.053668119723,
+         "median_queue_wait_s": 63.326433,
+         "n_jobs_submitted": 14
+        },
+        "t153": {
+         "chip_hours": 18286.029810273612,
+         "median_queue_wait_s": 47.995296,
+         "n_jobs_submitted": 24
+        },
+        "t154": {
+         "chip_hours": 9020.134100002499,
+         "median_queue_wait_s": 227.561655,
+         "n_jobs_submitted": 19
+        },
+        "t155": {
+         "chip_hours": 2965227.92300168,
+         "median_queue_wait_s": 125.169127,
+         "n_jobs_submitted": 16
+        },
+        "t156": {
+         "chip_hours": 4590.935000965277,
+         "median_queue_wait_s": 62.525494,
+         "n_jobs_submitted": 11
+        },
+        "t157": {
+         "chip_hours": 3920.9909591027777,
+         "median_queue_wait_s": 109.290406,
+         "n_jobs_submitted": 16
+        },
+        "t158": {
+         "chip_hours": 1831.0445649269445,
+         "median_queue_wait_s": 115.920927,
+         "n_jobs_submitted": 9
+        },
+        "t159": {
+         "chip_hours": 2954.785835800278,
+         "median_queue_wait_s": 104.415496,
+         "n_jobs_submitted": 14
+        },
+        "t16": {
+         "chip_hours": 120109.97395117056,
+         "median_queue_wait_s": 109.15745,
+         "n_jobs_submitted": 231
+        },
+        "t160": {
+         "chip_hours": 13187.247696991666,
+         "median_queue_wait_s": 55.900025,
+         "n_jobs_submitted": 14
+        },
+        "t161": {
+         "chip_hours": 9194.789498477778,
+         "median_queue_wait_s": 114.25508,
+         "n_jobs_submitted": 20
+        },
+        "t162": {
+         "chip_hours": 5505.797466752778,
+         "median_queue_wait_s": 138.72758,
+         "n_jobs_submitted": 17
+        },
+        "t163": {
+         "chip_hours": 11275.209133729168,
+         "median_queue_wait_s": 609.73962,
+         "n_jobs_submitted": 13
+        },
+        "t164": {
+         "chip_hours": 18197.151423049723,
+         "median_queue_wait_s": 103.126354,
+         "n_jobs_submitted": 15
+        },
+        "t165": {
+         "chip_hours": 3609.181630470556,
+         "median_queue_wait_s": 118.143691,
+         "n_jobs_submitted": 15
+        },
+        "t166": {
+         "chip_hours": 2163.393608151111,
+         "median_queue_wait_s": 101.613449,
+         "n_jobs_submitted": 14
+        },
+        "t167": {
+         "chip_hours": 15982.81524460139,
+         "median_queue_wait_s": 73.494731,
+         "n_jobs_submitted": 16
+        },
+        "t168": {
+         "chip_hours": 5148.186171941112,
+         "median_queue_wait_s": 63.274678,
+         "n_jobs_submitted": 8
+        },
+        "t169": {
+         "chip_hours": 5919.971280457499,
+         "median_queue_wait_s": 115.061168,
+         "n_jobs_submitted": 7
+        },
+        "t17": {
+         "chip_hours": 170206.9519917892,
+         "median_queue_wait_s": 98.34981,
+         "n_jobs_submitted": 226
+        },
+        "t170": {
+         "chip_hours": 10901.102423685556,
+         "median_queue_wait_s": 217.303683,
+         "n_jobs_submitted": 15
+        },
+        "t171": {
+         "chip_hours": 9280.017671810556,
+         "median_queue_wait_s": 104.369659,
+         "n_jobs_submitted": 21
+        },
+        "t172": {
+         "chip_hours": 2150.0578566424997,
+         "median_queue_wait_s": 102.636443,
+         "n_jobs_submitted": 18
+        },
+        "t173": {
+         "chip_hours": 10921.788159334166,
+         "median_queue_wait_s": 720.0,
+         "n_jobs_submitted": 16
+        },
+        "t174": {
+         "chip_hours": 4065.694800568333,
+         "median_queue_wait_s": 79.836726,
+         "n_jobs_submitted": 15
+        },
+        "t175": {
+         "chip_hours": 4866.251855817501,
+         "median_queue_wait_s": 82.254896,
+         "n_jobs_submitted": 9
+        },
+        "t176": {
+         "chip_hours": 3555.939186980278,
+         "median_queue_wait_s": 108.116643,
+         "n_jobs_submitted": 15
+        },
+        "t177": {
+         "chip_hours": 7598.880666974722,
+         "median_queue_wait_s": 91.113677,
+         "n_jobs_submitted": 14
+        },
+        "t178": {
+         "chip_hours": 1839.847746180278,
+         "median_queue_wait_s": 479.583766,
+         "n_jobs_submitted": 12
+        },
+        "t179": {
+         "chip_hours": 2760.645788288889,
+         "median_queue_wait_s": 87.509206,
+         "n_jobs_submitted": 11
+        },
+        "t18": {
+         "chip_hours": 91274.43936073944,
+         "median_queue_wait_s": 103.610365,
+         "n_jobs_submitted": 226
+        },
+        "t180": {
+         "chip_hours": 5059.321238092778,
+         "median_queue_wait_s": 104.969207,
+         "n_jobs_submitted": 22
+        },
+        "t181": {
+         "chip_hours": 1506.9575879713889,
+         "median_queue_wait_s": 88.130171,
+         "n_jobs_submitted": 7
+        },
+        "t182": {
+         "chip_hours": 4854.177238815555,
+         "median_queue_wait_s": 300.130763,
+         "n_jobs_submitted": 15
+        },
+        "t183": {
+         "chip_hours": 225.3477613863889,
+         "median_queue_wait_s": 107.717463,
+         "n_jobs_submitted": 9
+        },
+        "t184": {
+         "chip_hours": 3765.334228055278,
+         "median_queue_wait_s": 78.685909,
+         "n_jobs_submitted": 9
+        },
+        "t185": {
+         "chip_hours": 11181.265777015278,
+         "median_queue_wait_s": 465.469751,
+         "n_jobs_submitted": 15
+        },
+        "t186": {
+         "chip_hours": 1207.2492815822222,
+         "median_queue_wait_s": 34.024227,
+         "n_jobs_submitted": 13
+        },
+        "t187": {
+         "chip_hours": 469.9375495277778,
+         "median_queue_wait_s": 88.307769,
+         "n_jobs_submitted": 9
+        },
+        "t188": {
+         "chip_hours": 10803.302667760556,
+         "median_queue_wait_s": 139.102783,
+         "n_jobs_submitted": 17
+        },
+        "t189": {
+         "chip_hours": 19934.286975297502,
+         "median_queue_wait_s": 110.085387,
+         "n_jobs_submitted": 18
+        },
+        "t19": {
+         "chip_hours": 92559.11818485193,
+         "median_queue_wait_s": 107.293201,
+         "n_jobs_submitted": 195
+        },
+        "t190": {
+         "chip_hours": 2450.8811459158337,
+         "median_queue_wait_s": 540.599381,
+         "n_jobs_submitted": 9
+        },
+        "t191": {
+         "chip_hours": 7392.658875409445,
+         "median_queue_wait_s": 83.641922,
+         "n_jobs_submitted": 14
+        },
+        "t192": {
+         "chip_hours": 7632.001450833611,
+         "median_queue_wait_s": 77.418164,
+         "n_jobs_submitted": 13
+        },
+        "t193": {
+         "chip_hours": 1870.1679173083335,
+         "median_queue_wait_s": 108.45052,
+         "n_jobs_submitted": 15
+        },
+        "t194": {
+         "chip_hours": 5888.745170436111,
+         "median_queue_wait_s": 87.473729,
+         "n_jobs_submitted": 9
+        },
+        "t195": {
+         "chip_hours": 3481.692669351389,
+         "median_queue_wait_s": 46.500751,
+         "n_jobs_submitted": 12
+        },
+        "t196": {
+         "chip_hours": 2892.209157317778,
+         "median_queue_wait_s": 101.870067,
+         "n_jobs_submitted": 11
+        },
+        "t197": {
+         "chip_hours": 1073.5659014430555,
+         "median_queue_wait_s": 89.841241,
+         "n_jobs_submitted": 16
+        },
+        "t198": {
+         "chip_hours": 6142.561470153889,
+         "median_queue_wait_s": 114.756174,
+         "n_jobs_submitted": 20
+        },
+        "t199": {
+         "chip_hours": 20955.597894199724,
+         "median_queue_wait_s": 129.24143,
+         "n_jobs_submitted": 16
+        },
+        "t2": {
+         "chip_hours": 1263888.462825204,
+         "median_queue_wait_s": 110.101816,
+         "n_jobs_submitted": 1873
+        },
+        "t20": {
+         "chip_hours": 89554.80211743861,
+         "median_queue_wait_s": 114.894098,
+         "n_jobs_submitted": 182
+        },
+        "t200": {
+         "chip_hours": 990.8989395266667,
+         "median_queue_wait_s": 77.865016,
+         "n_jobs_submitted": 13
+        },
+        "t201": {
+         "chip_hours": 5457.491647359444,
+         "median_queue_wait_s": 92.733886,
+         "n_jobs_submitted": 9
+        },
+        "t202": {
+         "chip_hours": 973.1816331344445,
+         "median_queue_wait_s": 55.911735,
+         "n_jobs_submitted": 7
+        },
+        "t203": {
+         "chip_hours": 4594.029522066389,
+         "median_queue_wait_s": 407.160477,
+         "n_jobs_submitted": 16
+        },
+        "t204": {
+         "chip_hours": 3159.4431924280557,
+         "median_queue_wait_s": 97.957842,
+         "n_jobs_submitted": 10
+        },
+        "t205": {
+         "chip_hours": 339.3280097977778,
+         "median_queue_wait_s": 81.765375,
+         "n_jobs_submitted": 7
+        },
+        "t206": {
+         "chip_hours": 864.8009694791667,
+         "median_queue_wait_s": 84.36762,
+         "n_jobs_submitted": 10
+        },
+        "t207": {
+         "chip_hours": 3461.899637076111,
+         "median_queue_wait_s": 73.698487,
+         "n_jobs_submitted": 7
+        },
+        "t208": {
+         "chip_hours": 4156.178305376111,
+         "median_queue_wait_s": 348.292621,
+         "n_jobs_submitted": 12
+        },
+        "t209": {
+         "chip_hours": 817.8506418366667,
+         "median_queue_wait_s": 96.269474,
+         "n_jobs_submitted": 9
+        },
+        "t21": {
+         "chip_hours": 119617.03834524362,
+         "median_queue_wait_s": 115.110609,
+         "n_jobs_submitted": 151
+        },
+        "t210": {
+         "chip_hours": 1545.5640591658334,
+         "median_queue_wait_s": 182.917465,
+         "n_jobs_submitted": 8
+        },
+        "t211": {
+         "chip_hours": 3194.8700364786114,
+         "median_queue_wait_s": 81.77063,
+         "n_jobs_submitted": 15
+        },
+        "t212": {
+         "chip_hours": 7107.333526710278,
+         "median_queue_wait_s": 70.94086,
+         "n_jobs_submitted": 14
+        },
+        "t213": {
+         "chip_hours": 53098.79422853833,
+         "median_queue_wait_s": 99.576719,
+         "n_jobs_submitted": 11
+        },
+        "t214": {
+         "chip_hours": 122.29049036555556,
+         "median_queue_wait_s": 76.288208,
+         "n_jobs_submitted": 10
+        },
+        "t215": {
+         "chip_hours": 6076.1526004,
+         "median_queue_wait_s": 59.572474,
+         "n_jobs_submitted": 15
+        },
+        "t216": {
+         "chip_hours": 7610.709321081945,
+         "median_queue_wait_s": 65.539573,
+         "n_jobs_submitted": 8
+        },
+        "t217": {
+         "chip_hours": 8319.68612000111,
+         "median_queue_wait_s": 380.644546,
+         "n_jobs_submitted": 11
+        },
+        "t218": {
+         "chip_hours": 32161.255295593055,
+         "median_queue_wait_s": 133.884544,
+         "n_jobs_submitted": 11
+        },
+        "t219": {
+         "chip_hours": 3304.5607222811113,
+         "median_queue_wait_s": 135.637554,
+         "n_jobs_submitted": 8
+        },
+        "t22": {
+         "chip_hours": 90587.05499062972,
+         "median_queue_wait_s": 111.591702,
+         "n_jobs_submitted": 150
+        },
+        "t220": {
+         "chip_hours": 2560.900069499722,
+         "median_queue_wait_s": 119.005858,
+         "n_jobs_submitted": 9
+        },
+        "t221": {
+         "chip_hours": 915.0438461541667,
+         "median_queue_wait_s": 99.424763,
+         "n_jobs_submitted": 7
+        },
+        "t222": {
+         "chip_hours": 399.19295183027776,
+         "median_queue_wait_s": 656.017295,
+         "n_jobs_submitted": 6
+        },
+        "t223": {
+         "chip_hours": 4743.526934312222,
+         "median_queue_wait_s": 104.420712,
+         "n_jobs_submitted": 8
+        },
+        "t224": {
+         "chip_hours": 4998.076731058611,
+         "median_queue_wait_s": 193.762811,
+         "n_jobs_submitted": 12
+        },
+        "t225": {
+         "chip_hours": 1649.8926892166667,
+         "median_queue_wait_s": 78.889593,
+         "n_jobs_submitted": 11
+        },
+        "t226": {
+         "chip_hours": 2207.6113779341667,
+         "median_queue_wait_s": 168.464268,
+         "n_jobs_submitted": 9
+        },
+        "t227": {
+         "chip_hours": 4691.434848072779,
+         "median_queue_wait_s": 98.45759,
+         "n_jobs_submitted": 13
+        },
+        "t228": {
+         "chip_hours": 13671.218750251111,
+         "median_queue_wait_s": 150.697831,
+         "n_jobs_submitted": 11
+        },
+        "t229": {
+         "chip_hours": 555.0362283497223,
+         "median_queue_wait_s": 74.370872,
+         "n_jobs_submitted": 6
+        },
+        "t23": {
+         "chip_hours": 68698.69142879694,
+         "median_queue_wait_s": 100.546688,
+         "n_jobs_submitted": 146
+        },
+        "t230": {
+         "chip_hours": 2598.7916541283334,
+         "median_queue_wait_s": 119.64561,
+         "n_jobs_submitted": 8
+        },
+        "t231": {
+         "chip_hours": 15095.270298521666,
+         "median_queue_wait_s": 112.406862,
+         "n_jobs_submitted": 16
+        },
+        "t232": {
+         "chip_hours": 2705.1463542352776,
+         "median_queue_wait_s": 108.130661,
+         "n_jobs_submitted": 5
+        },
+        "t233": {
+         "chip_hours": 5660.923542963889,
+         "median_queue_wait_s": 91.605572,
+         "n_jobs_submitted": 8
+        },
+        "t234": {
+         "chip_hours": 91107.33294218333,
+         "median_queue_wait_s": 118.917485,
+         "n_jobs_submitted": 12
+        },
+        "t235": {
+         "chip_hours": 11805.9882773375,
+         "median_queue_wait_s": 840.0,
+         "n_jobs_submitted": 10
+        },
+        "t236": {
+         "chip_hours": 2246.714023820278,
+         "median_queue_wait_s": 93.515317,
+         "n_jobs_submitted": 17
+        },
+        "t237": {
+         "chip_hours": 3999.720561785278,
+         "median_queue_wait_s": 61.093969,
+         "n_jobs_submitted": 12
+        },
+        "t238": {
+         "chip_hours": 5663.589034773611,
+         "median_queue_wait_s": 1080.0,
+         "n_jobs_submitted": 9
+        },
+        "t239": {
+         "chip_hours": 21850.360959451667,
+         "median_queue_wait_s": 256.241007,
+         "n_jobs_submitted": 9
+        },
+        "t24": {
+         "chip_hours": 103906.36340874221,
+         "median_queue_wait_s": 109.613711,
+         "n_jobs_submitted": 155
+        },
+        "t240": {
+         "chip_hours": 4562.281294432778,
+         "median_queue_wait_s": 85.38834,
+         "n_jobs_submitted": 16
+        },
+        "t241": {
+         "chip_hours": 17501.430355078057,
+         "median_queue_wait_s": 229.38188,
+         "n_jobs_submitted": 11
+        },
+        "t242": {
+         "chip_hours": 818.0273923625,
+         "median_queue_wait_s": 66.615758,
+         "n_jobs_submitted": 6
+        },
+        "t243": {
+         "chip_hours": 5216.604975758333,
+         "median_queue_wait_s": 109.446076,
+         "n_jobs_submitted": 13
+        },
+        "t244": {
+         "chip_hours": 10496.465530779444,
+         "median_queue_wait_s": 97.193765,
+         "n_jobs_submitted": 13
+        },
+        "t245": {
+         "chip_hours": 1955.645944316389,
+         "median_queue_wait_s": 80.632328,
+         "n_jobs_submitted": 8
+        },
+        "t246": {
+         "chip_hours": 3104.4835417188892,
+         "median_queue_wait_s": 473.168788,
+         "n_jobs_submitted": 11
+        },
+        "t247": {
+         "chip_hours": 6233.031721068612,
+         "median_queue_wait_s": 119.635369,
+         "n_jobs_submitted": 10
+        },
+        "t248": {
+         "chip_hours": 5022.083337301667,
+         "median_queue_wait_s": 154.472547,
+         "n_jobs_submitted": 12
+        },
+        "t249": {
+         "chip_hours": 4532.679554148056,
+         "median_queue_wait_s": 70.551458,
+         "n_jobs_submitted": 9
+        },
+        "t25": {
+         "chip_hours": 103030.932751595,
+         "median_queue_wait_s": 97.115954,
+         "n_jobs_submitted": 156
+        },
+        "t250": {
+         "chip_hours": 6118.448700818333,
+         "median_queue_wait_s": 119.024623,
+         "n_jobs_submitted": 7
+        },
+        "t251": {
+         "chip_hours": 8098.2050007825,
+         "median_queue_wait_s": 109.332589,
+         "n_jobs_submitted": 8
+        },
+        "t252": {
+         "chip_hours": 1418.8484776922223,
+         "median_queue_wait_s": 691.708173,
+         "n_jobs_submitted": 5
+        },
+        "t253": {
+         "chip_hours": 14455.6669075025,
+         "median_queue_wait_s": 680.778578,
+         "n_jobs_submitted": 17
+        },
+        "t254": {
+         "chip_hours": 989.1506328675,
+         "median_queue_wait_s": 106.335084,
+         "n_jobs_submitted": 6
+        },
+        "t255": {
+         "chip_hours": 6870.055920854445,
+         "median_queue_wait_s": 636.025839,
+         "n_jobs_submitted": 12
+        },
+        "t26": {
+         "chip_hours": 99310.30877452777,
+         "median_queue_wait_s": 108.831084,
+         "n_jobs_submitted": 142
+        },
+        "t27": {
+         "chip_hours": 130423.28753617528,
+         "median_queue_wait_s": 110.505766,
+         "n_jobs_submitted": 133
+        },
+        "t28": {
+         "chip_hours": 53342.64540362167,
+         "median_queue_wait_s": 116.777581,
+         "n_jobs_submitted": 123
+        },
+        "t29": {
+         "chip_hours": 99307.78461442333,
+         "median_queue_wait_s": 109.025801,
+         "n_jobs_submitted": 116
+        },
+        "t3": {
+         "chip_hours": 679011.5615158727,
+         "median_queue_wait_s": 115.247439,
+         "n_jobs_submitted": 1233
+        },
+        "t30": {
+         "chip_hours": 86144.02092594195,
+         "median_queue_wait_s": 98.298879,
+         "n_jobs_submitted": 124
+        },
+        "t31": {
+         "chip_hours": 43166.1371662775,
+         "median_queue_wait_s": 115.303883,
+         "n_jobs_submitted": 108
+        },
+        "t32": {
+         "chip_hours": 31155.437305741667,
+         "median_queue_wait_s": 127.700409,
+         "n_jobs_submitted": 103
+        },
+        "t33": {
+         "chip_hours": 172847.0644770711,
+         "median_queue_wait_s": 106.186357,
+         "n_jobs_submitted": 88
+        },
+        "t34": {
+         "chip_hours": 52337.88061789639,
+         "median_queue_wait_s": 89.714884,
+         "n_jobs_submitted": 90
+        },
+        "t35": {
+         "chip_hours": 52048.60800980972,
+         "median_queue_wait_s": 98.022509,
+         "n_jobs_submitted": 89
+        },
+        "t36": {
+         "chip_hours": 44840.288684469444,
+         "median_queue_wait_s": 238.923328,
+         "n_jobs_submitted": 91
+        },
+        "t37": {
+         "chip_hours": 54138.27223576722,
+         "median_queue_wait_s": 180.093068,
+         "n_jobs_submitted": 76
+        },
+        "t38": {
+         "chip_hours": 39158.83442481389,
+         "median_queue_wait_s": 106.725802,
+         "n_jobs_submitted": 100
+        },
+        "t39": {
+         "chip_hours": 57615.27180492806,
+         "median_queue_wait_s": 117.303536,
+         "n_jobs_submitted": 87
+        },
+        "t4": {
+         "chip_hours": 655519.4175682117,
+         "median_queue_wait_s": 110.403958,
+         "n_jobs_submitted": 1115
+        },
+        "t40": {
+         "chip_hours": 54468.524157644446,
+         "median_queue_wait_s": 118.101311,
+         "n_jobs_submitted": 96
+        },
+        "t41": {
+         "chip_hours": 55803.26821099055,
+         "median_queue_wait_s": 144.405777,
+         "n_jobs_submitted": 82
+        },
+        "t42": {
+         "chip_hours": 49835.33919032111,
+         "median_queue_wait_s": 100.90643,
+         "n_jobs_submitted": 74
+        },
+        "t43": {
+         "chip_hours": 68022.77134422584,
+         "median_queue_wait_s": 106.613976,
+         "n_jobs_submitted": 79
+        },
+        "t44": {
+         "chip_hours": 48604.110119576115,
+         "median_queue_wait_s": 102.061699,
+         "n_jobs_submitted": 76
+        },
+        "t45": {
+         "chip_hours": 31858.303280428612,
+         "median_queue_wait_s": 124.729459,
+         "n_jobs_submitted": 75
+        },
+        "t46": {
+         "chip_hours": 18265.976352250833,
+         "median_queue_wait_s": 88.36169,
+         "n_jobs_submitted": 60
+        },
+        "t47": {
+         "chip_hours": 55107.01481556666,
+         "median_queue_wait_s": 208.253845,
+         "n_jobs_submitted": 67
+        },
+        "t48": {
+         "chip_hours": 42936.51914185361,
+         "median_queue_wait_s": 100.237307,
+         "n_jobs_submitted": 71
+        },
+        "t49": {
+         "chip_hours": 26998.635622241112,
+         "median_queue_wait_s": 113.622183,
+         "n_jobs_submitted": 65
+        },
+        "t5": {
+         "chip_hours": 531142.7446329136,
+         "median_queue_wait_s": 114.337562,
+         "n_jobs_submitted": 831
+        },
+        "t50": {
+         "chip_hours": 32142.925767415833,
+         "median_queue_wait_s": 195.892815,
+         "n_jobs_submitted": 61
+        },
+        "t51": {
+         "chip_hours": 51617.573495473334,
+         "median_queue_wait_s": 95.394235,
+         "n_jobs_submitted": 66
+        },
+        "t52": {
+         "chip_hours": 20308.06293852222,
+         "median_queue_wait_s": 90.853713,
+         "n_jobs_submitted": 55
+        },
+        "t53": {
+         "chip_hours": 22159.50327233167,
+         "median_queue_wait_s": 97.942622,
+         "n_jobs_submitted": 58
+        },
+        "t54": {
+         "chip_hours": 50746.25645213611,
+         "median_queue_wait_s": 103.51477,
+         "n_jobs_submitted": 53
+        },
+        "t55": {
+         "chip_hours": 16066.688730421944,
+         "median_queue_wait_s": 120.730997,
+         "n_jobs_submitted": 47
+        },
+        "t56": {
+         "chip_hours": 34341.38169598361,
+         "median_queue_wait_s": 211.457755,
+         "n_jobs_submitted": 47
+        },
+        "t57": {
+         "chip_hours": 41325.96041168611,
+         "median_queue_wait_s": 124.997214,
+         "n_jobs_submitted": 56
+        },
+        "t58": {
+         "chip_hours": 46792.66607547111,
+         "median_queue_wait_s": 98.471195,
+         "n_jobs_submitted": 53
+        },
+        "t59": {
+         "chip_hours": 17573.430370779446,
+         "median_queue_wait_s": 99.058853,
+         "n_jobs_submitted": 50
+        },
+        "t6": {
+         "chip_hours": 519081.4042175236,
+         "median_queue_wait_s": 107.452976,
+         "n_jobs_submitted": 680
+        },
+        "t60": {
+         "chip_hours": 25020.103603828888,
+         "median_queue_wait_s": 107.299767,
+         "n_jobs_submitted": 53
+        },
+        "t61": {
+         "chip_hours": 19862.075122751667,
+         "median_queue_wait_s": 89.216473,
+         "n_jobs_submitted": 43
+        },
+        "t62": {
+         "chip_hours": 35350.51678900861,
+         "median_queue_wait_s": 157.659723,
+         "n_jobs_submitted": 50
+        },
+        "t63": {
+         "chip_hours": 27005.620461174443,
+         "median_queue_wait_s": 443.26125,
+         "n_jobs_submitted": 50
+        },
+        "t64": {
+         "chip_hours": 8982.914841438333,
+         "median_queue_wait_s": 70.913118,
+         "n_jobs_submitted": 32
+        },
+        "t65": {
+         "chip_hours": 15994.40512541639,
+         "median_queue_wait_s": 101.74756,
+         "n_jobs_submitted": 49
+        },
+        "t66": {
+         "chip_hours": 32877.9955436625,
+         "median_queue_wait_s": 106.025529,
+         "n_jobs_submitted": 46
+        },
+        "t67": {
+         "chip_hours": 12071.271554035835,
+         "median_queue_wait_s": 118.311261,
+         "n_jobs_submitted": 46
+        },
+        "t68": {
+         "chip_hours": 23824.900408085832,
+         "median_queue_wait_s": 132.919128,
+         "n_jobs_submitted": 44
+        },
+        "t69": {
+         "chip_hours": 42341.58987954139,
+         "median_queue_wait_s": 129.635466,
+         "n_jobs_submitted": 49
+        },
+        "t7": {
+         "chip_hours": 359475.35589286056,
+         "median_queue_wait_s": 114.337147,
+         "n_jobs_submitted": 569
+        },
+        "t70": {
+         "chip_hours": 28600.089397575277,
+         "median_queue_wait_s": 114.740485,
+         "n_jobs_submitted": 42
+        },
+        "t71": {
+         "chip_hours": 11973.763761790276,
+         "median_queue_wait_s": 104.321928,
+         "n_jobs_submitted": 42
+        },
+        "t72": {
+         "chip_hours": 14352.538286902502,
+         "median_queue_wait_s": 105.069668,
+         "n_jobs_submitted": 36
+        },
+        "t73": {
+         "chip_hours": 23370.890592090553,
+         "median_queue_wait_s": 106.961578,
+         "n_jobs_submitted": 48
+        },
+        "t74": {
+         "chip_hours": 15834.400991288056,
+         "median_queue_wait_s": 114.90049,
+         "n_jobs_submitted": 44
+        },
+        "t75": {
+         "chip_hours": 22314.795031365276,
+         "median_queue_wait_s": 101.095654,
+         "n_jobs_submitted": 33
+        },
+        "t76": {
+         "chip_hours": 96499.3859032572,
+         "median_queue_wait_s": 113.843153,
+         "n_jobs_submitted": 46
+        },
+        "t77": {
+         "chip_hours": 29398.726338211112,
+         "median_queue_wait_s": 103.50836,
+         "n_jobs_submitted": 29
+        },
+        "t78": {
+         "chip_hours": 22555.454455080275,
+         "median_queue_wait_s": 100.110769,
+         "n_jobs_submitted": 40
+        },
+        "t79": {
+         "chip_hours": 23590.947032079166,
+         "median_queue_wait_s": 158.450735,
+         "n_jobs_submitted": 42
+        },
+        "t8": {
+         "chip_hours": 309041.53955058835,
+         "median_queue_wait_s": 115.266548,
+         "n_jobs_submitted": 519
+        },
+        "t80": {
+         "chip_hours": 22889.09869993139,
+         "median_queue_wait_s": 112.145757,
+         "n_jobs_submitted": 44
+        },
+        "t81": {
+         "chip_hours": 12869.479693613612,
+         "median_queue_wait_s": 145.442463,
+         "n_jobs_submitted": 37
+        },
+        "t82": {
+         "chip_hours": 12203.614927775832,
+         "median_queue_wait_s": 107.85672,
+         "n_jobs_submitted": 35
+        },
+        "t83": {
+         "chip_hours": 15338.526256186666,
+         "median_queue_wait_s": 87.79838,
+         "n_jobs_submitted": 27
+        },
+        "t84": {
+         "chip_hours": 5597.883224533333,
+         "median_queue_wait_s": 97.02041,
+         "n_jobs_submitted": 16
+        },
+        "t85": {
+         "chip_hours": 10503.9190111975,
+         "median_queue_wait_s": 74.968145,
+         "n_jobs_submitted": 24
+        },
+        "t86": {
+         "chip_hours": 12793.89490472611,
+         "median_queue_wait_s": 117.913342,
+         "n_jobs_submitted": 26
+        },
+        "t87": {
+         "chip_hours": 26259.041365836387,
+         "median_queue_wait_s": 95.766424,
+         "n_jobs_submitted": 32
+        },
+        "t88": {
+         "chip_hours": 14206.868338423888,
+         "median_queue_wait_s": 113.734769,
+         "n_jobs_submitted": 41
+        },
+        "t89": {
+         "chip_hours": 11947.381319896665,
+         "median_queue_wait_s": 100.059728,
+         "n_jobs_submitted": 30
+        },
+        "t9": {
+         "chip_hours": 229513.31900111417,
+         "median_queue_wait_s": 100.559075,
+         "n_jobs_submitted": 463
+        },
+        "t90": {
+         "chip_hours": 5954.06855308,
+         "median_queue_wait_s": 118.268521,
+         "n_jobs_submitted": 24
+        },
+        "t91": {
+         "chip_hours": 12161.311081290556,
+         "median_queue_wait_s": 98.347916,
+         "n_jobs_submitted": 37
+        },
+        "t92": {
+         "chip_hours": 16554.517923928335,
+         "median_queue_wait_s": 125.561296,
+         "n_jobs_submitted": 33
+        },
+        "t93": {
+         "chip_hours": 17368.179575376944,
+         "median_queue_wait_s": 85.405962,
+         "n_jobs_submitted": 25
+        },
+        "t94": {
+         "chip_hours": 27580.759269861945,
+         "median_queue_wait_s": 114.227329,
+         "n_jobs_submitted": 42
+        },
+        "t95": {
+         "chip_hours": 12913.659574111389,
+         "median_queue_wait_s": 78.06954,
+         "n_jobs_submitted": 24
+        },
+        "t96": {
+         "chip_hours": 7252.069063245833,
+         "median_queue_wait_s": 191.159121,
+         "n_jobs_submitted": 23
+        },
+        "t97": {
+         "chip_hours": 15302.862184150277,
+         "median_queue_wait_s": 156.823899,
+         "n_jobs_submitted": 30
+        },
+        "t98": {
+         "chip_hours": 21413.190609402776,
+         "median_queue_wait_s": 523.247224,
+         "n_jobs_submitted": 34
+        },
+        "t99": {
+         "chip_hours": 54889.77169200528,
+         "median_queue_wait_s": 108.401959,
+         "n_jobs_submitted": 28
+        }
+       },
+       "preemptions_per_min": {
+        "node_failure": 0.0,
+        "scheduler": 0.6514756944444444,
+        "total": 0.6514756944444444
+       },
+       "queue_wait_s": {
+        "EVAL": {
+         "chip_hour_weighted": {
+          "mean": 153.0959620144979,
+          "n": 15630,
+          "p50": 79.836935,
+          "p90": 373.648357,
+          "p99": 1329.852976
+         },
+         "job_weighted": {
+          "mean": 154.92150039920668,
+          "n": 15631,
+          "p50": 79.769819,
+          "p90": 392.033237,
+          "p99": 1370.46204
+         }
+        },
+        "FINETUNE": {
+         "chip_hour_weighted": {
+          "mean": 207.72899190446347,
+          "n": 4704,
+          "p50": 103.70748,
+          "p90": 553.504181,
+          "p99": 1463.168402
+         },
+         "job_weighted": {
+          "mean": 225.65074586585885,
+          "n": 4704,
+          "p50": 102.964362,
+          "p90": 603.253254,
+          "p99": 1485.008103
+         }
+        },
+        "PRETRAIN": {
+         "chip_hour_weighted": {
+          "mean": 217.75576553788,
+          "n": 25,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 239.637449
+         },
+         "job_weighted": {
+          "mean": 176.06995248000004,
+          "n": 25,
+          "p50": 162.681587,
+          "p90": 232.662351,
+          "p99": 239.637449
+         }
+        }
+       },
+       "queue_wait_s_by_chips": {
+        "1-8": {
+         "chip_hour_weighted": {
+          "mean": 153.0959620144979,
+          "n": 15630,
+          "p50": 79.836935,
+          "p90": 373.648357,
+          "p99": 1329.852976
+         },
+         "job_weighted": {
+          "mean": 154.92150039920668,
+          "n": 15631,
+          "p50": 79.769819,
+          "p90": 392.033237,
+          "p99": 1370.46204
+         }
+        },
+        "513+": {
+         "chip_hour_weighted": {
+          "mean": 227.98740686607488,
+          "n": 481,
+          "p50": 233.404631,
+          "p90": 239.637449,
+          "p99": 1174.865541
+         },
+         "job_weighted": {
+          "mean": 263.9683510270269,
+          "n": 481,
+          "p50": 153.700691,
+          "p90": 648.158252,
+          "p99": 1623.419374
+         }
+        },
+        "65-512": {
+         "chip_hour_weighted": {
+          "mean": 186.45725716516407,
+          "n": 2879,
+          "p50": 93.192835,
+          "p90": 502.885569,
+          "p99": 1409.681156
+         },
+         "job_weighted": {
+          "mean": 224.47955267662394,
+          "n": 2879,
+          "p50": 101.250172,
+          "p90": 605.650846,
+          "p99": 1461.712852
+         }
+        },
+        "9-64": {
+         "chip_hour_weighted": {
+          "mean": 184.48040837778646,
+          "n": 1369,
+          "p50": 88.429734,
+          "p90": 493.443445,
+          "p99": 1454.979479
+         },
+         "job_weighted": {
+          "mean": 213.74539690650124,
+          "n": 1369,
+          "p50": 98.85602,
+          "p90": 582.991668,
+          "p99": 1514.656232
+         }
+        }
+       },
+       "queue_wait_s_by_source_class": {
+        "eval": {
+         "chip_hour_weighted": {
+          "mean": 153.0959620144979,
+          "n": 15630,
+          "p50": 79.836935,
+          "p90": 373.648357,
+          "p99": 1329.852976
+         },
+         "job_weighted": {
+          "mean": 154.92150039920668,
+          "n": 15631,
+          "p50": 79.769819,
+          "p90": 392.033237,
+          "p99": 1370.46204
+         }
+        },
+        "finetune": {
+         "chip_hour_weighted": {
+          "mean": 207.72899190446347,
+          "n": 4704,
+          "p50": 103.70748,
+          "p90": 553.504181,
+          "p99": 1463.168402
+         },
+         "job_weighted": {
+          "mean": 225.65074586585885,
+          "n": 4704,
+          "p50": 102.964362,
+          "p90": 603.253254,
+          "p99": 1485.008103
+         }
+        },
+        "frontier": {
+         "chip_hour_weighted": {
+          "mean": 233.404631,
+          "n": 1,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 233.404631
+         },
+         "job_weighted": {
+          "mean": 233.404631,
+          "n": 1,
+          "p50": 233.404631,
+          "p90": 233.404631,
+          "p99": 233.404631
+         }
+        },
+        "pretrain": {
+         "chip_hour_weighted": {
+          "mean": 174.84565516012609,
+          "n": 24,
+          "p50": 162.681587,
+          "p90": 220.82579,
+          "p99": 239.637449
+         },
+         "job_weighted": {
+          "mean": 173.68100754166667,
+          "n": 24,
+          "p50": 158.692365,
+          "p90": 220.82579,
+          "p99": 239.637449
+         }
+        }
+       },
+       "replica_availability": null
+      }
+     },
+     "sha256": "a9f2426340b585532707972a4fd600999b815211b939af5c856442f99fe91685"
+    },
+    "timeseries.parquet": {
+     "bytes": 124283,
+     "col_stats": {
+      "allocated_chips": {
+       "max": 524288.0,
+       "min": 100683.0,
+       "n_finite": 1440,
+       "sum": 751833663.0
+      },
+      "allocation_rate_to_date": {
+       "max": 0.9913322001161147,
+       "min": 0.09632965649820964,
+       "n_finite": 1440,
+       "sum": 1398.0631394408183
+      },
+      "cum_failure_kills": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 0.0
+      },
+      "cum_node_failures": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 0.0
+      },
+      "cum_preemptions": {
+       "max": 1626.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 1019041.0
+      },
+      "frag_index_cluster": {
+       "max": 0.7012060692517184,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 413.90351739340053
+      },
+      "frag_index_metro": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 0.0
+      },
+      "frag_index_node": {
+       "max": 0.9999811144816515,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 1333.0103399522322
+      },
+      "frag_index_pod": {
+       "max": 0.9903306146055878,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 682.9553007545221
+      },
+      "frag_index_su": {
+       "max": 0.9993956634128492,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 830.848290208092
+      },
+      "goodput_to_date": {
+       "max": 0.8926746241709663,
+       "min": 0.0115728923982402,
+       "n_finite": 1440,
+       "sum": 926.9294457251845
+      },
+      "healthy_chips": {
+       "max": 524288.0,
+       "min": 524288.0,
+       "n_finite": 1440,
+       "sum": 754974720.0
+      },
+      "largest_placeable_cluster": {
+       "max": 131072.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 1739474.0
+      },
+      "largest_placeable_metro": {
+       "max": 423605.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 3141057.0
+      },
+      "largest_placeable_node": {
+       "max": 8.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 11244.0
+      },
+      "largest_placeable_pod": {
+       "max": 4096.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 290292.0
+      },
+      "largest_placeable_su": {
+       "max": 256.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 180484.0
+      },
+      "occupancy_to_date": {
+       "max": 0.9913322001161147,
+       "min": 0.09632965649820964,
+       "n_finite": 1440,
+       "sum": 1398.0631394408183
+      },
+      "pending_jobs": {
+       "max": 550.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 276218.0
+      },
+      "running_jobs": {
+       "max": 1485.0,
+       "min": 258.0,
+       "n_finite": 1440,
+       "sum": 1861888.0
+      },
+      "stranded_chips": {
+       "max": 0.0,
+       "min": 0.0,
+       "n_finite": 1440,
+       "sum": 0.0
+      },
+      "t_us": {
+       "max": 172800000000.0,
+       "min": 120000000.0,
+       "n_finite": 1440,
+       "sum": 124502400000000.0
+      }
+     },
+     "columns": [
+      "t_us",
+      "allocated_chips",
+      "healthy_chips",
+      "pending_jobs",
+      "running_jobs",
+      "occupancy_to_date",
+      "allocation_rate_to_date",
+      "goodput_to_date",
+      "cum_preemptions",
+      "cum_failure_kills",
+      "cum_node_failures",
+      "stranded_chips",
+      "largest_placeable_cluster",
+      "frag_index_cluster",
+      "largest_placeable_metro",
+      "frag_index_metro",
+      "largest_placeable_node",
+      "frag_index_node",
+      "largest_placeable_pod",
+      "frag_index_pod",
+      "largest_placeable_su",
+      "frag_index_su"
+     ],
+     "n_rows": 1440,
+     "sha256": "adb2eaafebef3a2084284e7fb5b4aaee9fc5014f9a6f514688d60e47f1d526fe"
+    }
+   }
+  }
+ }
+}

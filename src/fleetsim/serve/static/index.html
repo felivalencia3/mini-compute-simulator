@@ -14,17 +14,32 @@
 <div id="app">
   <nav id="rail" aria-label="runs">
     <div id="brand">
-      <a href="#" id="brandLink"><span class="wordmark">fleetsim</span><span class="ver">v0.5</span></a>
+      <a href="#" id="brandLink"><span class="wordmark">fleetsim</span><span class="ver">v0.8</span></a>
+      <a id="validationLink" class="minibtn" href="#validation"
+        title="Published-vs-fleetsim results, and the documented anti-goals">validation</a>
     </div>
-    <a id="newRunBtn" class="btn primary" href="#new">New run</a>
+    <div id="railActions">
+      <a id="newRunBtn" class="btn primary" href="#new">New run</a>
+      <a id="newSweepBtn" class="btn" href="#sweep" title="Sweep a parameter grid: one run per cell">Explore…</a>
+    </div>
     <div id="railHead">
       <h2>Runs</h2>
       <span id="runsCount" class="sub"></span>
+      <button id="selectToggle" class="minibtn" type="button" aria-pressed="false"
+        title="Select runs to compare (checkboxes also appear on hover)">compare</button>
     </div>
     <!-- the empty note sits ABOVE the flex:1 list so it hugs the RUNS
          header instead of being pushed to the bottom of the rail -->
     <div id="railEmpty" class="railnote hidden">No runs yet. Start one with <span class="kbd">New run</span>.</div>
     <ul id="runsList" role="list"></ul>
+    <div id="railSelect" class="railselect hidden">
+      <div class="ctlrow">
+        <span id="selCount" class="sub mono" role="status"></span>
+        <a id="compareBtn" class="btn primary" href="#" aria-disabled="true">Compare</a>
+        <button id="clearSelBtn" class="btn" type="button">Clear</button>
+      </div>
+      <div id="selNote" class="railnote hidden"></div>
+    </div>
     <div id="railError" class="railnote err hidden"></div>
   </nav>
 
@@ -37,8 +52,19 @@
         <ul class="homelist">
           <li>Pick a run on the left to open its interactive 2D report.</li>
           <li><a href="#new">New run</a> opens the scenario editor: validate YAML, launch, watch live progress.</li>
+          <li><span class="kbd">compare</span> in the rail header selects runs
+            (shift-click for a range) — 2 or more open the
+            <strong>compare view</strong>: metric matrix, overlaid timelines, config diff.</li>
+          <li><a href="#sweep">Explore…</a> sweeps a parameter grid — one run per cell,
+            then compare the cells.</li>
+          <li><a href="#validation">Validation</a> shows every published number fleetsim is
+            measured against — including what it deliberately does <strong>not</strong> reproduce.</li>
           <li>Runs finished from the CLI into this workspace show up here too.</li>
         </ul>
+        <div id="homeSweeps" class="hidden">
+          <div class="phead"><h2>Sweeps</h2><span id="homeSweepsSub" class="sub"></span></div>
+          <ul id="homeSweepList" class="sweeplist" role="list"></ul>
+        </div>
       </div>
     </section>
 
@@ -56,6 +82,7 @@
         <div id="runTabs" aria-label="run views">
           <a id="tabReport" class="tab">2D report</a>
           <a id="tab3d" class="tab">3D fleet</a>
+          <a id="tabInsight" class="tab" title="Attribution: what the disruptions cost, what correlates, where occupancy went">Analysis</a>
           <a id="downloadReport" class="btn" download>Download report.html</a>
         </div>
       </div>
@@ -80,6 +107,21 @@
           </div>
           <p id="progressNote" class="sub">The report opens automatically when the run finishes.</p>
         </div>
+        <!-- live fleet map: the run's stints as they settle (live.js + fleetmap.js) -->
+        <div id="liveMap" class="panel livemap hidden">
+          <div class="phead">
+            <h2>Live fleet map</h2>
+            <span id="liveMapSub" class="sub mono"></span>
+            <span id="liveMapTools" class="livetools"></span>
+          </div>
+          <!-- the map is PARTIAL whenever the feed is capped or stalled;
+               a half-empty fleet with a confident caption reads as idle -->
+          <p id="liveMapWarn" class="livewarn hidden" role="status"></p>
+          <div id="liveMapMount"></div>
+          <p class="sub">One block per domain, filled by the classes running on it right
+            now — streamed from the run's stint spool while it executes. The 3D fleet
+            tab shows the same data as a fleet you can fly through.</p>
+        </div>
         <div id="runFailed" class="panel failpanel hidden">
           <div class="phead"><h2>Run failed</h2></div>
           <pre id="failError" class="errtext mono"></pre>
@@ -93,6 +135,10 @@
           <p class="sub">Is <span class="kbd">fleetsim serve</span> still running? This view retries automatically.</p>
         </div>
         <iframe id="reportFrame" class="hidden" title="fleetsim 2D report"></iframe>
+        <!-- analysis (insight.js): event drill-down, correlation, dip attribution -->
+        <div id="insight" class="hidden">
+          <div id="insightMount" class="insroot"></div>
+        </div>
         <div id="fleet3d" class="panel hidden">
           <div id="fleet3dMount" class="threedph">
             <div class="threedbadge" aria-hidden="true">
@@ -106,12 +152,78 @@
       </div>
     </section>
 
-    <!-- new run (scenario editor) -->
+    <!-- compare (metric matrix + overlaid timelines + config diff) -->
+    <section id="view-compare" class="view hidden" aria-label="compare runs">
+      <div id="compareToolbar" class="vbar">
+        <div class="vbarmain">
+          <h1 id="compareTitle">Compare</h1>
+          <span id="compareMeta" class="sub mono"></span>
+        </div>
+        <div class="vbarctl">
+          <label class="ctl" for="scopeSelect">scope</label>
+          <select id="scopeSelect" aria-label="metric scope">
+            <option value="window">steady-state window</option>
+            <option value="full">full run</option>
+          </select>
+          <button id="compareRefresh" class="btn" type="button">Refresh</button>
+        </div>
+      </div>
+      <div id="compareBody"></div>
+    </section>
+
+    <!-- sweep dashboard -->
+    <section id="view-sweep" class="view hidden" aria-label="sweep">
+      <div id="sweepToolbar" class="vbar">
+        <div class="vbarmain">
+          <h1 id="sweepTitle">Sweep</h1>
+          <span id="sweepMeta" class="sub mono"></span>
+        </div>
+        <div class="vbarctl">
+          <label class="ctl" for="sweepMetric">metric</label>
+          <!-- options are rebuilt from the sweep's own cells: every
+               fragmentation key the runs recorded is offered too, because
+               a placement axis is flat on occupancy and moves only there -->
+          <select id="sweepMetric" aria-label="sweep metric">
+            <option value="occupancy">occupancy</option>
+            <option value="goodput">goodput</option>
+            <option value="jobs_finished">jobs finished</option>
+          </select>
+          <a class="btn" href="#sweep">New sweep</a>
+        </div>
+      </div>
+      <div id="sweepBody"></div>
+    </section>
+
+    <!-- validation: published-vs-fleetsim results straight from the suite -->
+    <section id="view-validation" class="view hidden" aria-label="validation">
+      <div id="validationToolbar" class="vbar">
+        <div class="vbarmain">
+          <h1 id="validationTitle">Validation</h1>
+          <span id="validationMeta" class="sub mono"></span>
+        </div>
+        <div class="vbarctl">
+          <label class="ctl" for="valRung">rung</label>
+          <!-- options are filled from GET /api/validation (payload.rungs):
+               hand-written labels had V2 and V3 swapped and offered a rung
+               no measurement row uses -->
+          <select id="valRung" aria-label="validation rung">
+            <option value="all">all rungs</option>
+          </select>
+        </div>
+      </div>
+      <div id="validationBody"></div>
+    </section>
+
+    <!-- new run (scenario editor); #sweep opens the same view in explore mode -->
     <section id="view-new" class="view hidden" aria-label="new run">
       <div class="panel editorpanel">
         <div class="phead">
-          <h2>New run</h2>
-          <span class="sub">Scenario YAML — validated server-side before anything executes.</span>
+          <h2 id="editorHead">New run</h2>
+          <span id="editorSub" class="sub">Scenario YAML — validated server-side before anything executes.</span>
+          <span class="modeswitch">
+            <a id="modeSingle" class="tab" href="#new">Single run</a>
+            <a id="modeExplore" class="tab" href="#sweep">Explore (sweep)</a>
+          </span>
         </div>
         <div class="editrow">
           <label class="ctl" for="tplSelect">starter template</label>
@@ -120,6 +232,10 @@
           </select>
           <label class="ctl" for="titleInput">title</label>
           <input id="titleInput" type="text" placeholder="optional run title" maxlength="120">
+          <!-- a starter's caveat lives HERE, not in the option label: an
+               option's text sets the <select>'s intrinsic width, and one
+               long caveat pushed the control off the panel -->
+          <p id="tplNote" class="sub hidden"></p>
         </div>
         <div id="editorWrap">
           <div id="gutter" aria-hidden="true"></div>
@@ -128,13 +244,45 @@
         </div>
         <div class="editorHint sub">Tip: keep <span class="kbd">outputs: {stints: true}</span> in the scenario —
           the report&#39;s fleet map needs stint data. <span class="kbd">Cmd/Ctrl-Enter</span> validates.</div>
+        <!-- explore mode (#sweep): parameter axes over the scenario above -->
+        <div id="explorePanel" class="explorepanel hidden">
+          <div class="phead">
+            <h2>Parameter axes</h2>
+            <span class="sub">Dotted paths into the scenario above — same overrides as
+              <span class="kbd">fleetsim run -o path=value</span>. One run per grid cell.</span>
+          </div>
+          <div class="ctlrow presetrow">
+            <span class="ctl">presets</span>
+            <button class="btn preset" type="button" data-preset="rate">arrival rate</button>
+            <button class="btn preset" type="button" data-preset="scheduler">scheduler</button>
+            <button class="btn preset" type="button" data-preset="placement">placement</button>
+            <button class="btn preset" type="button" data-preset="seed">seed</button>
+          </div>
+          <div id="axisList"></div>
+          <div class="ctlrow">
+            <button id="addAxisBtn" class="btn" type="button">Add axis</button>
+            <span id="sweepSize" class="sizenote mono" role="status"></span>
+          </div>
+        </div>
         <div class="ctlrow">
           <button id="validateBtn" class="btn" type="button">Validate</button>
           <button id="runBtn" class="btn primary" type="button">Run scenario</button>
+          <button id="launchSweepBtn" class="btn primary hidden" type="button">Launch sweep</button>
           <span id="editorStatus" class="sub" role="status"></span>
         </div>
         <div id="valOk" class="valok hidden" role="status">Scenario is valid.</div>
         <ul id="valErrors" class="valerrors hidden"></ul>
+        <!-- fleet-shape preview: what the YAML above describes, before it runs -->
+        <div id="fleetPreview" class="previewpanel">
+          <div class="phead">
+            <h2>Fleet shape</h2>
+            <span id="previewSub" class="sub mono"></span>
+            <span id="previewTools" class="livetools"></span>
+          </div>
+          <div id="previewMount"></div>
+          <p id="previewNote" class="sub">Type a scenario above — the fleet it describes
+            appears here.</p>
+        </div>
       </div>
     </section>
   </main>
