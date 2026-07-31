@@ -1,0 +1,117 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\definecolor{linknavy}{rgb}{0.15,0.25,0.55}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linknavy,
+  citecolor=linknavy,
+  urlcolor=linknavy,
+  breaklinks=true,
+  pdftitle={fleetsim: a validated discrete-event simulator for machine-learning
+            accelerator fleets},
+  pdfauthor={Felipe Valencia},
+}
+
+% Listings are configured but the paper currently sets no code blocks; the
+% style is here so that adding one does not change the document's look.
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  framerule=0.3pt,
+  rulecolor=\color[gray]{0.7},
+  showstringspaces=false,
+}
+
+% Tables in the fragments are dense: more vertical air, less horizontal
+% padding, so the widest ones fit the text block.
+\renewcommand{\arraystretch}{1.12}
+\setlength{\tabcolsep}{5pt}
+
+% The paper is mostly tables. Loosen LaTeX's default float limits so a large
+% table lands near the text that discusses it instead of being deferred to
+% the end of the document.
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.7}
+
+% Several paragraphs contain unbreakable tokens (long URLs, full-precision
+% floats, shell commands). Let TeX stretch a line as a last resort rather
+% than run it into the margin, and let URLs break at any character.
+\setlength{\emergencystretch}{2em}
+\makeatletter
+\g@addto@macro{\UrlBreaks}{\UrlOrds}
+\makeatother
+
+\title{\texttt{fleetsim}: a validated discrete-event simulator for
+       machine-learning accelerator fleets}
+
+\author{Felipe Valencia\\[2pt]
+  \normalsize\url{https://github.com/felivalencia3/mini-compute-simulator}}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent
+\texttt{fleetsim} is an open-source discrete-event simulator for fleets of
+machine-learning accelerators. It models a hierarchy of clusters, pods, racks
+and nodes; gang scheduling, where a job needs all its chips at once or none;
+preemption priced in the training work it destroys; node failures, repair and
+maintenance drains; and a traffic generator whose parameters come from published
+cluster characterizations. Existing open tools sit at other \emph{altitudes} ---
+altitude meaning what one simulated run represents: a single cluster with a flat
+GPU count, or one job's network traffic with no queue in front of it --- and the
+production fleet managers at this altitude ship nothing anyone outside can run.
+
+The central claim is validation against published measurements of real
+clusters. On the four Helios GPU clusters, \texttt{fleetsim} reproduces the
+published ratio between first-in-first-out (FIFO) and shortest-job-first mean
+completion times inside the stated tolerance bands on all four, at a
+four-cluster mean absolute error of 3.4\,\%. The absolute mean FIFO completion
+time on Saturn, the busiest of the four, lands within 0.01\,\% of published ---
+a coincidence, not a precision claim, because reordering jobs inside the trace's
+tied submit seconds moves that same quantity by 17\,\%. What the absolute
+comparison supports is agreement within $\pm 14$\,\% across all four clusters,
+never a single cell. Two further qualifiers travel with the result: the bands
+are wide for stated reasons --- a deliberately bad placement policy passes them
+--- and every number holds only under three named modelling choices. We also
+list the published quantities \texttt{fleetsim} deliberately does \emph{not}
+reproduce.
+
+\medskip
+\noindent\textbf{Availability.} \texttt{fleetsim} is Apache-2.0 licensed at\\
+\url{https://github.com/felivalencia3/mini-compute-simulator}\\
+The offline checks are one command, \texttt{pytest tests validation -q}. The
+Helios replay is environment-gated: it downloads the 36\,MB public trace and
+replays four clusters under two schedulers in roughly four minutes
+(250--266\,s across the repository's own timings, on a laptop).
+\end{abstract}
+
+\input{sec1-3}
+\input{sec4-5}
+\input{sec6-7}
+\input{sec8-10}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

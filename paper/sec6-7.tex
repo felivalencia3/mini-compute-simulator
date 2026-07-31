@@ -1,0 +1,299 @@
+\section{Case studies}\label{sec:cases}
+
+Three studies follow, each shipping as a runnable example directory and each a
+paired experiment: runs differing by exactly one configuration line. Because
+every random draw comes from a stream keyed by name rather than call order,
+every other class's arrivals, sizes and durations stay byte-identical across
+the pair.
+
+\subsection{Frontier scale: running hot without starving
+production}\label{sec:case-frontier}
+
+\texttt{examples/04\_frontier/} is 4 clusters $\times$ 32 pods $\times$ 16
+scalable units $\times$ 32 nodes $\times$ 8 chips = 524,288 H100 GPUs, run for
+two simulated days with a 120\,s scheduler round at seed 42. Node failures are
+off deliberately: a 16,384-node gang is eight times the size of Llama~3's 405B
+run, which measured one unplanned interruption every 3.1 hours \cite{llama3}, so
+it would break about every 23 minutes (\S\ref{sec:failures} gives the
+derivation and the disagreement between the two published anchors), and the
+restart churn would drown the scheduling effect. This is therefore a
+failure-free result. The two runs differ only in whether a best-effort class
+exists: the lowest, always-preemptible priority band, in the sense Borg made
+standard \cite{borg2015}. A closed loop holds a fixed number of those jobs in
+flight; over the two-day horizon that cycles 11,252 of them through the fleet.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lrr}
+\toprule
+ & No backlog & With backlog \\
+\midrule
+Occupancy (window) & 0.477 & 0.995 \\
+Goodput (window) & 0.966 & 0.880 \\
+Productive fraction, occupancy $\times$ goodput & 0.461 & 0.876 \\
+\midrule
+Eval queue wait, p50 & 61.3\,s & 77.8\,s \\
+Batch fine-tune queue wait, p50 & 66.9\,s & 116.4\,s \\
+Pretrain queue wait, p50 & 51.7\,s & 163.8\,s \\
+Eval queue wait, p99 & 236\,s & 1{,}292\,s \\
+Preemptions per minute & 0.068 & 0.565 \\
+Jobs finished & 23{,}538 & 34{,}422 \\
+\bottomrule
+\end{tabular}
+\caption{A 524,288-chip fleet with and without a preemptible backlog, seed 42.
+The first three rows are measured over the steady-state window (the middle
+80\,\% of the run); the rest are full-run figures. The two scopes are not
+interchangeable, which is why the example labels them.}
+\label{tab:frontier}
+\end{table}
+
+Table~\ref{tab:frontier} is the trade. The backlog roughly doubles
+steady-state occupancy and finishes 10,884 more jobs. Production medians move
+by one or two scheduler rounds --- the largest is the pretrain median, 51.7\,s
+to 163.8\,s --- which is the sense in which production waits stay roughly
+flat; the tails do not, the eval p99 going from 236\,s to 1,292\,s, roughly 4
+minutes to 22. The cost is goodput, 8.6 points of it: the backlog runs with
+checkpointing off, which is exactly what makes it instantly reclaimable, so
+every eviction discards a whole \emph{stint} --- one contiguous period of
+holding an allocation, and with no checkpoint behind it, everything that job
+computed since it was last given chips. The product of the two
+still nearly doubles. Best-effort jobs are excluded from every wait
+distribution by contract, waiting time being meaningless for a closed loop at
+saturation.
+
+Then one large job: a 131,072-chip pretraining gang of 32 pod-sized segments,
+modelled on the multi-pod shape Llama-3 405B training used \cite{llama3},
+submitted at hour 20.57 of both
+runs. On the idle fleet it waits 113\,s; above 99\,\% occupancy, 233\,s ---
+exactly one 120\,s round more, so the reclaim costs nothing and the wake
+boundary costs everything. One wake carries 345 preemptions, allocated chips
+dip from 523,946 to 406,406 and recover to 522,998 a round later, and pending
+jobs spike from 116 to 441. The gang spans 32 pods in both runs.
+
+\subsection{Occupancy and goodput can move in opposite
+directions}\label{sec:case-tradeoff}
+
+\texttt{examples/05\_topology\_tradeoff/} is 8,192 H100s (8 pods $\times$ 16
+racks $\times$ 8 nodes $\times$ 8 chips) over seven days at seed 42, failures
+off, near 86\,\% utilization so pod-shaped holes are scarce. Pretraining jobs
+draw 256, 512 or 1,024 chips and ask for one pod, but softly: they wait ten
+minutes for a pod-shaped hole, then take whatever fits. Run~A charges a job
+spanning more than one pod a speed multiplier of 0.7, so it needs $1/0.7
+\approx 1.43$ times the wall time for the same work; run~B sets that
+multiplier to 1.0.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lrr}
+\toprule
+ & A: crossing costs 0.7$\times$ & B: crossings free \\
+\midrule
+Occupancy (window) & 0.862 & 0.826 \\
+Goodput (window) & 0.861 & 0.983 \\
+\midrule
+Cross-pod placements & 35 of 112 & 17 of 112 \\
+Pretrain queue wait, p50 & 484.5\,s & 47.9\,s \\
+Pretrain job completion time, p50 & 51{,}002\,s & 43{,}136\,s \\
+Pretrains completed & 99 & 103 \\
+Eval queue wait, p50 & 31.9\,s & 31.4\,s \\
+\bottomrule
+\end{tabular}
+\caption{Turning the cross-pod speed penalty on raises occupancy and lowers
+goodput at the same time (seed 42, 7-day horizon).}
+\label{tab:penalty}
+\end{table}
+
+Switching the penalty \emph{on} raises occupancy, 0.826 to 0.862, and
+\emph{lowers} goodput, 0.983 to 0.861. Both are correct: occupancy is the
+fraction of healthy chip-time allocated to some job, goodput the fraction of
+that allocated time which produced surviving work. A slowed job holds its
+chips about 1.43 times longer for the same work, inflating the first and
+deflating the second. The busier-looking run completed four fewer pretrains
+and finished them later.
+
+Table~\ref{tab:penalty} also shows the feedback loop that makes this
+self-reinforcing, and it reads backwards at first: charging for pod crossings
+\emph{doubles} them, from 17 of 112 placements to 35. The chain is that a
+penalised job holds its chips 1.43 times longer, so pod-shaped holes are
+scarcer when the next pretraining job arrives, so more jobs exhaust their
+ten-minute soft wait and take whatever fits. Pretrain queue wait moves
+accordingly, 47.9\,s to 484.5\,s.
+
+Two details keep this honest. Run~B's goodput is 0.983 rather than 1.0 because
+of checkpoint-save amortization --- a one-hour interval with a 60\,s save
+costs about 1.6\,\% --- so the penalty accounts for 12 of those points, not
+14. And the effect is confined to large jobs: eval waits are 31.9\,s and
+31.4\,s, while the chance of crossing pods rises from 18\,\% at 256 chips to
+61\,\% at 1,024. This is the strongest argument available against an
+occupancy-only dashboard: occupancy rose 3.6 points and the fleet got worse.
+
+\subsection{Placement: where the small jobs land decides how long the big ones
+wait}\label{sec:case-placement}
+
+\texttt{examples/07\_placement\_study/} is deliberately tiny --- 4 racks
+$\times$ 8 nodes $\times$ 8 chips = 256 H100s in 32 nodes --- and deliberately
+two levels deep, since \texttt{best\_fit} and \texttt{consolidate} are
+bit-identical on a single-level fleet. Fourteen days, seed 42, failures off.
+The workload is mice (1-, 2- and 4-chip jobs lasting hours) plus gangs of
+16, 32 and 64 chips --- 2, 4 and 8 \emph{whole nodes} --- at an offered load of
+78\,\% by construction, 81\,\% realised at this seed, because Poisson arrivals
+and a lognormal duration tail land above the mean here. A best-effort FIFO
+scheduler holds ordering fixed, so only the
+placement policy varies. It reproduces the mechanism the Helios replay
+identified: a 1-chip job landing on a completely free node converts eight
+whole-node chips into a remainder no gang can claim, and the gangs, not the
+mice, pay for it.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+ & \texttt{first\_fit} & \texttt{best\_fit} & \texttt{consolidate} & \texttt{spread} \\
+\midrule
+Stranded whole nodes, mean (of 32) & 6.55 & 5.31 & 5.37 & 25.31 \\
+64-chip gang queue wait, mean (s) & 19{,}056.8 & 16{,}195.3 & 16{,}314.7 & 739{,}842.1 \\
+64-chip gangs ever started (of 109) & 107 & 107 & 107 & 29 \\
+Mice queue wait, p50 (s) & 31.0 & 31.4 & 31.3 & 30.1 \\
+Occupancy (full run) & 0.8141 & 0.8141 & 0.8141 & 0.5829 \\
+Jobs completed & 3{,}436 & 3{,}436 & 3{,}436 & 3{,}309 \\
+\bottomrule
+\end{tabular}
+\caption{Four placement policies on identical hardware, identical arrivals and
+identical ordering (seed 42, 14-day horizon). A ``stranded'' node is a healthy
+node that is partly occupied, so its free chips cannot satisfy any whole-node
+request. The whole study runs in about 10\,s on a laptop: about 1\,s each for
+the three packing arms and about 7\,s for \texttt{spread}, whose queue is
+roughly 30$\times$ deeper.}
+\label{tab:placement}
+\end{table}
+
+Tightest-fit packing (\texttt{best\_fit}; \texttt{consolidate} is within noise
+of it here) cuts time-average stranded nodes from 6.55 to 5.31 of 32
+and the mean queue wait of an 8-node gang from 19,056.8\,s to 16,195.3\,s
+(Table~\ref{tab:placement}). The mice pay for it: their median wait is flat,
+31.0 against 31.4\,s, but their mean rises from 80.7\,s to 95.3\,s --- about
+15 seconds of mouse wait buying about 2,900 seconds of gang wait.
+\texttt{spread} prices the mechanism from the other side: it strands 25.31 of
+32 nodes, never starts 80 of the 109 8-node gangs and delivers 28.4\,\% fewer
+chip-hours on identical hardware --- and it averages only the gangs it did
+start.
+
+The negative result matters more. Full-run occupancy, goodput and allocated
+chip-hours are \emph{bit-identical} across \texttt{first\_fit},
+\texttt{best\_fit} and \texttt{consolidate} --- 0.8140502977503281,
+0.9831464030337717 and 70,021.35041129222 chip-hours --- because the same
+3,436 jobs complete for the same durations in all three, and windowed
+occupancy moves 0.2 percentage points. The entire placement effect is
+\emph{when} work ran, never how much: a placement study reporting only
+occupancy has measured almost nothing.
+
+Three caveats travel with it. At seed 1234 the mechanism metric still improves
+by about 20\,\% while the outcome regresses: mean gang wait 8,205\,s to
+9,407\,s, 15\,\% worse. A hard \texttt{within: rack} constraint inverts the
+ranking outright --- 64-chip mean wait 39,677\,s under \texttt{first\_fit}
+against 121,486\,s under \texttt{best\_fit} --- because node-level
+tightest-fit spreads gangs across racks, so no rack ever drains. And this
+scheduler is best-effort, so a stuck gang does not hold up the mice behind it:
+a floor, not a best case. ``\texttt{best\_fit} is a better scheduler'' is not
+a claim this study supports.
+
+\section{Implementation, testing and reproducibility}\label{sec:impl}
+
+\paragraph{Language and size.} fleetsim is Python 3.11 or newer under
+Apache-2.0, depending at runtime on numpy, pandas, pyarrow, pyyaml and
+optionally matplotlib. The event loop is hand-written rather than built on a
+simulation framework --- full control over tie-breaking and determinism is
+worth about 200 lines --- and the local web application is pure
+standard-library \texttt{http.server}, so running it adds no dependency. The
+simulator is 22,563 lines of Python across 47 files; the tests are 18,896
+lines across 36 files plus 2,585 lines of validation rungs across 12, and
+pytest collects 1,024 of them. The four placement policies behind
+Section~\ref{sec:case-placement} are 340 lines together; the FIFO scheduler is
+48.
+
+\paragraph{Determinism, and its per-platform limit.} Simulated time is a
+64-bit integer count of microseconds, so ordering and tie-breaking are exact.
+Random draws come from numpy seed sequences whose spawn key is the first 16
+bytes of the SHA-256 of the stream's \emph{name}, never Python's salted
+\texttt{hash()}, so a
+given stream yields the same numbers in every process on every machine. The
+contract is that an identical scenario and seed produce byte-identical Parquet
+and JSON, on a given platform, and a CI test enforces it by running the whole
+pipeline twice with failures, maintenance and preemption switched on.
+
+That qualifier is load-bearing. The lognormal and exponential samplers call
+the platform's C math library, whose \texttt{exp} and \texttt{log} differ in
+the last bit between glibc and Apple's implementation. An early release (v0.1;
+the project is at v0.8) shipped a compatibility test pinning a SHA-256 of the
+arrival stream captured on macOS, and it failed the first time CI ran on Ubuntu. The replacement compares golden
+\emph{data} --- the first 1,000 arrivals at nine significant digits, plus
+aggregate counts --- with tolerances: 2 microseconds on times, $10^{-6}$
+relative on durations, and at most 5 differing rows per 1,000 for draws
+sitting on a discrete knife edge. Cross-platform reproduction means the same
+distributions, not the same bytes.
+
+\paragraph{Continuous integration, and what a clean machine caught.} One
+GitHub Actions workflow runs on every push and pull request: Ubuntu, a Python
+3.11 and 3.12 matrix, an editable install of the package and the out-of-tree
+plugin example, \texttt{pytest tests validation -q}, then a smoke test running
+\texttt{fleetsim validate} and \texttt{fleetsim run} on the minimal example.
+It runs with no network in about 80\,s with exactly four skips --- two Helios
+full-trace rungs, one Philly, one frontier-budget gate --- and anything else
+skipping is a signal.
+
+Two defects surfaced only because CI is a clean room. The first was an
+environment leak: a test asserting that every shipped example validates passed
+locally only because the developer's virtual environment still had the
+example-03 plugin scheduler installed from an earlier session, and that
+example names an out-of-tree scheduler which enters the registry only when its
+package is installed. The fix skips an example whose scheduler is unregistered
+--- validation \emph{should} reject unknown names --- while asserting a floor
+on how many examples were actually checked, so the skip cannot hollow the test
+out; CI now installs the plugin. The second was a concurrency deadlock a
+laptop could not reach: the 3.12 job hung at 91\,\% and was killed by the job
+timeout while 3.11 passed the same commit, the developer machine having many
+cores and the hosted runners two. The cause was a helper process that starts
+lazily, combined with a setup step that re-ran on every worker-pool creation and
+mutated interpreter-global state; on a two-core runner the two raced. Building
+that context once per process fixed the hang, and a faulthandler timeout was
+added so that the next hang of any kind would fail loudly with every thread's
+stack. That dump then named a deeper bug: CPython invokes a future's
+done-callback while holding the executor's shutdown lock, so a callback
+calling \texttt{shutdown()} deadlocks itself. A broken pool is now disposed on
+a separate daemon thread.
+
+\paragraph{Adversarial review.} Several releases were reviewed adversarially ---
+a pass whose goal was to find defects rather than approve --- and each such pass
+leaves a regression file that lists its findings:
+\texttt{test\_\allowbreak review\_\allowbreak fixes.py} in \texttt{tests/}, plus
+its \texttt{v02}, \texttt{v04}, \texttt{v05} and \texttt{v05\_hardening}
+successors. Five files across eight releases, so this is a habit rather than a
+gate. The same
+discipline governs the published figures: each lives once, as data, in a
+single module from which the validation tests import their assertion constants
+and which the web application serves verbatim, and a test checks by object
+identity that nobody has retyped a number into a test.
+
+\paragraph{Reproducing the validation.} The offline checks are one command,
+\texttt{pytest tests validation -q}, and \texttt{fleetsim validation run}
+prints the vendored-slice checks in about 5\,s. The trace results are opt-in
+and environment-gated because they download real data:
+\texttt{FLEETSIM\_HELIOS\_FULL=1} \texttt{pytest -m trace\_full}
+\texttt{validation/test\_helios\_ratio.py} fetches the 36\,MB Helios archive
+\cite{helios2021} and replays four clusters under two schedulers in 266\,s.
+The Philly rung \cite{philly2019} is gated the same way but needs \texttt{git
+lfs pull} first, since a plain fetch of that 1\,GB artifact yields a 135-byte
+pointer; it was written to specification and has not been run against the real
+trace in this build. Each rung self-skips unless its variable is set and never
+downloads implicitly. \texttt{fleetsim validation cite} prints each trace's
+required attribution.
+
+\paragraph{Tooling.} Six subcommands cover the loop: \texttt{fleetsim
+validate}, \texttt{run}, \texttt{compare}, \texttt{plot}, \texttt{viz} and
+\texttt{serve}. Two properties of them carry an argument rather than a feature
+list. \texttt{viz} renders a run directory into one self-contained HTML replay
+that makes zero external requests, and a test greps both the template and the
+output for any external URL or fetch call, so the claim is enforced rather than
+intended. And parameter sweeps run one simulation per grid cell in worker
+processes: the same sweep run twice is byte-identical cell for cell, so
+parallelism does not weaken determinism, and a test enforces that too.

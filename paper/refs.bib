@@ -1,0 +1,215 @@
+% refs.bib --- bibliography for the fleetsim paper.
+%
+% Convention, chosen for honesty: author names appear only where the
+% repository's own citation records pin them (the three trace registries in
+% src/fleetsim/validation/registry.py and docs/validation.md Sec. 13) or where the
+% work is a landmark whose lead author is not in doubt.  Where the source
+% material pins only a system name and a venue, the entry carries title, venue
+% and identifier and no author list.  No page numbers are given anywhere,
+% because none were verified.
+
+% ---------------------------------------------------------------- traces ----
+
+@inproceedings{helios2021,
+  author    = {{Hu et al.}},
+  title     = {Characterization and Prediction of Deep Learning Workloads in
+               Large-Scale {GPU} Datacenters},
+  booktitle = {International Conference for High Performance Computing,
+               Networking, Storage and Analysis (SC '21)},
+  year      = {2021},
+  note      = {DOI 10.1145/3458817.3476223, arXiv:2109.01313.
+               Trace: \url{https://github.com/S-Lab-System-Group/HeliosData},
+               CC-BY-4.0}
+}
+
+@inproceedings{philly2019,
+  author    = {{Jeon et al.}},
+  title     = {Analysis of Large-Scale Multi-Tenant {GPU} Clusters for {DNN}
+               Training Workloads},
+  booktitle = {USENIX Annual Technical Conference (ATC '19)},
+  year      = {2019},
+  note      = {Trace: \url{https://github.com/msr-fiddle/philly-traces},
+               CC-BY-4.0}
+}
+
+@inproceedings{alibabapai2022,
+  author    = {{Weng et al.}},
+  title     = {{MLaaS} in the Wild},
+  booktitle = {USENIX Symposium on Networked Systems Design and Implementation
+               (NSDI '22)},
+  year      = {2022},
+  note      = {Alibaba PAI trace:
+               \url{https://github.com/alibaba/clusterdata}}
+}
+
+@inproceedings{acme2024,
+  author    = {{Hu et al.}},
+  title     = {Characterization of Large Language Model Development in the
+               Datacenter},
+  booktitle = {USENIX Symposium on Networked Systems Design and Implementation
+               (NSDI '24)},
+  year      = {2024},
+  note      = {The ``Acme'' characterization; arXiv:2403.07648}
+}
+
+% ------------------------------------------------- fleets and reliability ----
+
+@inproceedings{borg2015,
+  author    = {{Verma et al.}},
+  title     = {Large-Scale Cluster Management at {Google} with {Borg}},
+  booktitle = {European Conference on Computer Systems (EuroSys '15)},
+  year      = {2015}
+}
+
+@inproceedings{borgtng2020,
+  author    = {{Tirmazi et al.}},
+  title     = {{Borg}: The Next Generation},
+  booktitle = {European Conference on Computer Systems (EuroSys '20)},
+  year      = {2020}
+}
+
+@misc{mast2024,
+  key          = {MAST},
+  title        = {{MAST}: Global Scheduling of {ML} Training across
+                  Geo-Distributed Datacenters at Hyperscale},
+  howpublished = {USENIX Symposium on Operating Systems Design and
+                  Implementation (OSDI '24)},
+  year         = {2024}
+}
+
+@misc{singularity2022,
+  key          = {Singularity},
+  title        = {{Singularity}: Planet-Scale, Preemptive and Elastic
+                  Scheduling of {AI} Workloads},
+  howpublished = {arXiv:2202.07848},
+  year         = {2022}
+}
+
+@misc{metareliability2024,
+  key          = {Meta reliability},
+  title        = {Revisiting Reliability in Large-Scale Machine Learning
+                  Research Clusters},
+  howpublished = {arXiv:2410.21680},
+  year         = {2024},
+  note         = {Source of fleetsim's 42-node-day node MTBF, 15-minute restart
+                  overhead and one-hour checkpoint-interval defaults}
+}
+
+@misc{llama3,
+  key          = {Llama 3},
+  title        = {The {Llama} 3 Herd of Models},
+  howpublished = {arXiv:2407.21783},
+  year         = {2024}
+}
+
+% MegaScale (NSDI '24) and Pathways (MLSys '22) appear in the repository's
+% general reading list but are not the source of any fleetsim default or
+% result, so no entry is kept here: an uncited key invites a reader to assume
+% a claim it does not support.
+
+% -------------------------------------------------------------- hardware ----
+
+@inproceedings{tpuv4isca2023,
+  author    = {{Jouppi et al.}},
+  title     = {{TPU} v4: An Optically Reconfigurable Supercomputer for Machine
+               Learning with Hardware Support for Embeddings},
+  booktitle = {International Symposium on Computer Architecture (ISCA '23)},
+  year      = {2023},
+  note      = {arXiv:2304.01433}
+}
+
+% ------------------------------------------------------------ simulators ----
+
+@misc{blox2024,
+  key          = {Blox},
+  title        = {{Blox}: A Modular Toolkit for Deep Learning Schedulers},
+  howpublished = {European Conference on Computer Systems (EuroSys '24)},
+  year         = {2024},
+  note         = {\url{https://github.com/msr-fiddle/blox}}
+}
+
+@misc{astrasim2023,
+  key          = {ASTRA-sim},
+  title        = {{ASTRA-sim}: a distributed machine-learning system simulator},
+  howpublished = {\url{https://github.com/astra-sim/astra-sim}},
+  year         = {2023}
+}
+
+@misc{simai2025,
+  key          = {SimAI},
+  title        = {{SimAI}: a large-scale {AI} training simulation toolkit},
+  howpublished = {\url{https://github.com/aliyun/SimAI}},
+  year         = {2025}
+}
+
+@misc{vidur2024,
+  key          = {Vidur},
+  title        = {{Vidur}: A Large-Scale Simulation Framework for {LLM}
+                  Inference},
+  howpublished = {Proceedings of Machine Learning and Systems (MLSys '24)},
+  year         = {2024}
+}
+
+@misc{batsim2016,
+  key          = {Batsim},
+  title        = {{Batsim}: a Realistic Language-Independent Resources and Jobs
+                  Management Systems Simulator},
+  howpublished = {Workshop on Job Scheduling Strategies for Parallel Processing
+                  (JSSPP)},
+  year         = {2016}
+}
+
+@misc{kubescheduler,
+  key          = {kube-scheduler-simulator},
+  title        = {kube-scheduler-simulator},
+  howpublished = {\url{https://github.com/kubernetes-sigs/kube-scheduler-simulator}},
+  note         = {Kubernetes SIG Scheduling}
+}
+
+@misc{aireesim,
+  key          = {AIReSim},
+  title        = {{AIReSim}: a reliability simulator for a single large training
+                  job},
+  note         = {No venue, year or identifier: the repository names this tool
+                  as the source of its node-repair defaults (automatic repair
+                  uniform on 60--180 minutes, manual repair 1--3 days for
+                  10\,\% of failures) but does not pin it to a citable
+                  artefact, so those two defaults are the least checkable in
+                  the paper.  Stated here rather than dressed up}
+}
+
+% ------------------------------------------- scheduling and queueing theory --
+
+@inproceedings{easybackfill1995,
+  author    = {{Lifka}},
+  title     = {The {ANL}/{IBM} {SP} Scheduling System},
+  booktitle = {Workshop on Job Scheduling Strategies for Parallel Processing
+               (JSSPP)},
+  year      = {1995},
+  note      = {The EASY backfill algorithm. fleetsim's documented guarantee is
+               the later form of Mu'alem and Feitelson, IEEE TPDS, 2001: the
+               queue head never starts later than the shadow computed when
+               backfill was granted}
+}
+
+@article{kingman1961,
+  author  = {{Kingman}},
+  title   = {The Single Server Queue in Heavy Traffic},
+  journal = {Mathematical Proceedings of the Cambridge Philosophical Society},
+  year    = {1961}
+}
+
+@article{paxsonfloyd1995,
+  author  = {{Paxson and Floyd}},
+  title   = {Wide-Area Traffic: The Failure of {Poisson} Modeling},
+  journal = {IEEE/ACM Transactions on Networking},
+  year    = {1995}
+}
+
+@article{feitelson2003,
+  author  = {{Lublin and Feitelson}},
+  title   = {The Workload on Parallel Supercomputers: Modeling the
+             Characteristics of Rigid Jobs},
+  journal = {Journal of Parallel and Distributed Computing},
+  year    = {2003}
+}

@@ -1,0 +1,269 @@
+\section{Related work}
+\label{sec:related}
+
+Recall from \S\ref{sec:intro} that simulators are best compared by
+\emph{altitude}: what one simulated run
+represents. A run of \texttt{fleetsim} represents weeks of a whole fleet ---
+many clusters, many tenants, thousands of jobs arriving, queueing, running,
+being preempted and occasionally dying with their nodes. Most existing tools sit
+at a different altitude, which is not a deficiency in them: a tool that models
+one job's network traffic in microseconds is not a worse fleet simulator, it is
+not a fleet simulator at all, and it answers questions \texttt{fleetsim} cannot.
+Table~\ref{tab:related} summarises the landscape. One caveat: this is a survey of
+what each tool's papers and documentation describe, not a benchmark --- we did
+not install, run or measure any of these systems.
+
+\begin{table}[!t]
+\centering
+\small
+\caption{Related tools by altitude. Characterisations are taken from each
+tool's published description, not from measurements we made.}
+\label{tab:related}
+\begin{tabular}{@{}p{2.6cm}p{2.2cm}p{4.0cm}p{4.3cm}@{}}
+\toprule
+\raggedright Family & \raggedright Altitude & \raggedright What it does well & \raggedright What a fleet question needs that it omits \tabularnewline
+\midrule
+\raggedright Blox \cite{blox2024}; the simulators inside Gavel, Pollux, Sia
+  & \raggedright One cluster
+  & \raggedright Fast, faithful replay of published deep-learning scheduling policies; Blox reports seven schedulers in 12--1157 lines each
+  & \raggedright Capacity is a flat GPU count: no topology levels, no node failures or repair, no inference, no multi-cluster \tabularnewline
+\addlinespace
+\raggedright ASTRA-sim \cite{astrasim2023}, SimAI \cite{simai2025}
+  & \raggedright One job $\times$ network
+  & \raggedright Collective communication and per-iteration time at packet and flow detail
+  & \raggedright There is no queue: the job is already placed, so there are no arrivals, no waiting and no preemption \tabularnewline
+\addlinespace
+\raggedright Vidur \cite{vidur2024}, LLMServingSim
+  & \raggedright One inference service
+  & \raggedright Request batching, KV-cache behaviour and tail latency for LLM serving
+  & \raggedright Inference only, one service; training gangs, quota and failures are outside the model \tabularnewline
+\addlinespace
+\raggedright Batsim \cite{batsim2016}, the UBCCR Slurm simulator
+  & \raggedright HPC batch
+  & \raggedright Decades of batch-queue semantics, backfill \cite{easybackfill1995}, and a clean engine/policy separation
+  & \raggedright No accelerator cost model: preemption is not priced in lost training work, and there is no checkpoint or gang-restart notion \tabularnewline
+\addlinespace
+\raggedright AIReSim \cite{aireesim}
+  & \raggedright Reliability of one job
+  & \raggedright Failure, repair and restart accounting for a single long training run
+  & \raggedright No scheduler, no queue, no competing tenants \tabularnewline
+\addlinespace
+\raggedright kube-scheduler-simulator \cite{kubescheduler}
+  & \raggedright Kubernetes placement
+  & \raggedright Explains, decision by decision, why a pod landed where it did
+  & \raggedright Wall-clock, no simulated time: no job completion time, no occupancy over a horizon \tabularnewline
+\addlinespace
+\raggedright Borg \cite{borg2015,borgtng2020}, MAST \cite{mast2024}, Singularity \cite{singularity2022}
+  & \raggedright Fleet --- the existence proof
+  & \raggedright Run real fleets at exactly this altitude and publish what the hard problems are
+  & \raggedright They are production systems, not simulators; there is no public artefact in which to run an experiment \tabularnewline
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Single-cluster scheduler simulators.}
+Blox \cite{blox2024} and the simulators built inside scheduling papers such as
+Gavel, Pollux and Sia take a job trace and a policy, apply them to one cluster
+of $N$ interchangeable GPUs, and report completion times. They are the closest
+prior art, and \texttt{fleetsim} borrows from them directly: Blox's decomposition
+of a scheduler into an \emph{ordering} policy (who runs next) and a
+\emph{placement} policy (where it goes) is the API we adopted, and its convention
+of measuring the steady middle of a run is our metrics window. What a flat GPU
+count cannot express is a job failing to fit for structural reasons. Our
+placement study makes the consequence concrete: on a 256-chip fleet at one seed,
+changing only the placement rule left occupancy identical to the last digit
+(0.8141 under three of four policies) while the mean queue wait of eight-node
+gangs moved from 19{,}057\,s to 16{,}195\,s. A simulator whose capacity is an
+integer cannot represent that mechanism; node failures are the second gap.
+
+\paragraph{Per-job network simulators.}
+ASTRA-sim \cite{astrasim2023} and SimAI \cite{simai2025} simulate one training
+job's iteration in detail --- collectives, fabric topology, congestion. This is
+precisely the layer \texttt{fleetsim} collapses into a single number: a
+placement spanning a configured topology level multiplies the job's progress
+rate by a configured multiplier, and there is no default multiplier because the
+honest value is fleet-specific. The two altitudes compose rather than compete ---
+a network-level study is how a lab would derive that multiplier. What these tools
+do not have is a queue: one already-placed job has nothing to wait behind.
+
+\paragraph{Inference-serving simulators.}
+Vidur \cite{vidur2024} and LLMServingSim model a serving deployment: request
+arrivals, batching, KV cache, latency percentiles. \texttt{fleetsim} models
+inference at replica granularity --- a replica being a fixed block of chips held
+for a service --- and stops there, because per-request burstiness sits below
+fleet altitude.
+
+\paragraph{HPC batch simulators.}
+Batsim \cite{batsim2016} and the Slurm simulator carry decades of batch-queue
+semantics, and \texttt{fleetsim} copies Batsim's central architectural choice:
+the engine mutates state, policies emit intents, and the engine validates and
+applies them, in-process rather than over a socket. EASY backfill
+\cite{easybackfill1995} is a shipped \texttt{fleetsim} scheduler for the same
+reason. The gap is not gangs as such --- MPI jobs are gangs --- but the
+accelerator cost model around them: killing a training job destroys the work done
+since its last checkpoint, a GPU job cannot be suspended in place because its
+memory is held, and a restart costs minutes. Those costs are what make preemption
+policy interesting, and what these models do not price.
+
+\paragraph{Production fleet managers.}
+Borg \cite{borg2015,borgtng2020}, MAST \cite{mast2024} and Singularity
+\cite{singularity2022} operate at fleet altitude, and supply much of
+\texttt{fleetsim}'s substance: Borg's priority bands are the tier semantics, and
+published reliability figures \cite{metareliability2024,llama3} set the failure
+defaults. Borg TNG's tail of per-job \emph{resource-hours} ($\alpha \approx
+0.69$--$0.77$, the top 1\,\% of jobs accounting for 97--99\,\% of load) is a
+target the traffic generator is meant to satisfy --- not a configured parameter,
+and not yet checked by a shipped rung. What
+none of them ships is something you can run, and the public traces
+\cite{philly2019,helios2021,alibabapai2022,acme2024} record only what happened
+under one policy, never what a different one would have done. That counterfactual
+is the gap. One precision about the borrowing: \texttt{fleetsim}'s quota model is
+inspired by MAST but is not a model \emph{of} it (Section~\ref{sec:limitations}).
+
+The workload generator likewise stands in the workload-modelling tradition of
+rigid parallel jobs \cite{feitelson2003}, with non-Poisson arrivals
+\cite{paxsonfloyd1995} and lognormal duration bodies taken from the Helios and
+Acme characterizations \cite{helios2021,acme2024} --- and the closed-form checks
+of
+Section~\ref{sec:validation} are ordinary queueing theory \cite{kingman1961}. A
+cross-simulator check against Blox's published percentiles was planned and never
+built.
+
+\section{Limitations and future work}
+\label{sec:limitations}
+
+\paragraph{No fractional GPUs.}
+The smallest unit \texttt{fleetsim} allocates is one whole chip. Alibaba PAI's
+headline results \cite{alibabapai2022} --- roughly a 50\,\% saving from GPU
+sharing, with a median instance requesting 0.042 of a GPU --- are therefore out
+of reach, and no placement policy substitutes for the missing mechanism. It was
+a target of the previous release that the release did not reach, and we record
+it as still open rather than quietly re-dating it.
+
+\paragraph{No per-job delay-cause attribution.}
+\texttt{fleetsim} records how long each job waited, not \emph{why}. Philly's
+split of queueing delay into a fair-share component and a fragmentation component
+\cite{philly2019} --- the result that motivated this design, where fragmentation
+accounts for 59--98\,\% of multi-GPU delay --- cannot be reproduced, and is a
+second promise carried over from the release before last, still open. The metric
+we did add, a count of
+partially-occupied nodes, is a down payment, not a substitute, and it is
+directional rather than proportional: an 8.9\,\% reduction in its
+time-average accompanied a 25.7\,\% reduction in mean FIFO completion time,
+because a mean over all instants dilutes exactly the moments when the queue head
+needs a whole free node.
+
+\paragraph{The performance model is analytical.}
+A job's progress rate is the product of configured per-level multipliers. The
+identity \emph{completion $=$ start $+$ overhead $+$ remaining work / rate} is
+pinned exactly in integer microseconds, but the rate is an input, not a
+derivation, and there is no default crossing penalty. Chip heterogeneity is worse
+off: the throughput hook always returns 1.0, and scenarios using unpinned chip
+types are rejected outright. CPU contention and co-location interference are not
+modelled at all.
+
+\paragraph{Failures are sampled from a rate, not from a physical model.}
+One exponential draw at the fleet-wide aggregate rate, a thinning test, then a
+uniform victim pick --- at a default mean time between failures of 42 node-days
+with a fixed cause mix (60\,\% GPU/HBM, 10\,\% network, 13\,\% software, 17\,\%
+other). Nothing in that is physical: no correlated failures (a rack losing power
+takes one node at a time here), no thermal or age dependence, and unreliable
+``lemon'' nodes are off by default. Spot preemption is deliberately harsher than
+the products it abstracts --- zero notice, no banked progress --- so spot losses
+are an upper bound, not an estimate.
+
+\paragraph{One trace family, validated in depth.}
+The quantitative validation is Helios \cite{helios2021}: four clusters, both
+schedulers, the full September window. Philly \cite{philly2019} is exercised only
+at converter level, and even there the full check, though written, was never run
+against the real one-gigabyte artefact, so every Philly row reports
+``unmeasured'' rather than a number; only structural assertions on a synthetic
+2{,}000-row slice run in CI. Alibaba PAI is registered but never replayed. One
+trace family is one lab's workload, one scheduler lineage, one hardware
+generation.
+
+\paragraph{The absolute numbers are order-sensitive.}
+On Saturn, 35.5\,\% of the 105{,}969 jobs in the window share an exact submit
+second, and 92.9\,\% share a 60-second scheduler round --- so the order in which
+tied arrivals are served is a modelling choice, not a property of the trace.
+Flipping the FIFO tie-break from ascending to descending job id moves Saturn's
+mean FIFO completion time from 75{,}329\,s to 62{,}549\,s, a 17.0\,\% move, and
+inverts which placement policy looks closer to published. Ascending id is
+demonstrably the faithful order (ids are assigned at submission and are monotone
+in submit time on three of the four clusters), so this is a sensitivity probe
+under a deliberately wrong order, not an error bar. Its magnitude still matters:
+17\,\% is wider than the $\pm 14$\,\% agreement we report on absolute completion
+times, and a large fraction of the 25.7\,\% move the placement change itself
+produced. No single cluster's absolute number can select a modelling choice,
+which is why our discriminator aggregates four clusters --- and whether that
+discriminator survives the same perturbation is \emph{unmeasured}: the probe ran
+on one cluster under one scheduler (Saturn under FIFO, in both tie-break
+orders), and extending it to all four clusters under both schedulers needs 24
+more replays.
+
+\paragraph{Single-metro scheduling only.}
+There is one scheduling stage over one metro. Two-stage scheduling across metros
+--- the MAST shape \cite{mast2024}, where a first stage decides which region a job
+belongs in --- is schema-present and rejected as not implemented, as are TPU
+optical-switch predicates, multi-gang jobs and autoscaling inference. The quota
+model is also simpler than the systems that inspired it: \texttt{fleetsim}
+commits quota at admission against queued demand and demotes irreversibly,
+whereas MAST and comparable systems evaluate against running usage at scheduling
+time and treat over-quota work as borrowed capacity that can be handed back. The
+quota scenario shipped as \texttt{examples/06\_economics/} is not among the case
+studies of \S\ref{sec:cases}; its demotion counts are partly an artefact of that
+admission-time choice, which is why we do not quote them here.
+
+\paragraph{Smaller ones, stated plainly.}
+The backfill scheduler implements the conservative one-rule form of EASY, so
+measured backfill rates undershoot published EASY reproductions. Byte-identical
+output holds only within a platform, since the floating-point samplers differ in
+the last bit across operating systems. And the performance envelope in the design
+document --- six simulated months of a 100{,}000-GPU fleet --- is a target, not a
+measurement: what has been measured is six months of a 2{,}048-chip fleet in
+about nine minutes, and two days of a 524{,}288-chip fleet in about eighty
+seconds, on a laptop.
+
+\paragraph{Future work.}
+Five items, in priority order. \emph{Fractional GPUs}, the single
+change that unlocks a whole trace family's published results. \emph{Per-job
+delay-cause attribution}, which would reproduce Philly's split and turn the
+stranding metric into a per-job account of where a wait came from. \emph{More
+trace families} --- the Philly artefact, then Alibaba PAI --- because one
+validated family is the weakest part of Section~\ref{sec:validation}. \emph{TPU
+torus geometry}: TPU pods wire their chips into a three-dimensional torus --- a
+grid whose edges wrap around --- and a job is given a rectangular sub-block of
+it, a \emph{slice}. Feasibility then depends on which free \emph{cubes}
+(contiguous $4 \times 4 \times 4$ blocks) exist rather than on how many chips are
+free, and the published optical-switch result removes contiguity constraints for
+cube-multiple slices \cite{tpuv4isca2023}. And a
+\emph{throughput matrix for heterogeneous chips}, replacing the hook that returns
+1.0, so a fleet mixing chip generations can be modelled rather than approximated
+as uniform.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We built an open-source discrete-event simulator that operates at fleet altitude:
+a hierarchy of clusters, pods, racks and nodes; gang scheduling with atomic,
+immutable allocations; priority preemption priced in lost work; node failures,
+repair and maintenance drains; and a generative traffic model drawn from
+published trace characterisations.
+
+We then tried to break it. Against the four Helios clusters \cite{helios2021},
+\texttt{fleetsim} reproduces the published ratio between FIFO and
+shortest-job-first mean completion times with a mean absolute error of 3.4\,\%,
+and lands within $\pm 14$\,\% of the published absolute completion times --- a
+weaker, reported-not-asserted result the repository deliberately calls ``right
+ballpark'' rather than reproduction. Both hold only under three modelling
+choices we name every time we state the result, and inside tolerance bands wide
+enough that a deliberately bad placement policy passes them too. The engine also
+reproduces four textbook queueing results it could have failed --- Erlang-C,
+Pollaczek--Khinchine, two-class preemptive-resume priority and
+shortest-processing-time optimality --- plus a behavioural property test of EASY
+backfill. And we have written down what it does not reproduce, and why.
+
+If one sentence survives: matching a published table was not the useful part ---
+the useful part was that matching it forced three modelling choices into the
+open, and that occupancy, the metric everyone reports, was bit-for-bit identical
+across placement policies whose queueing behaviour was not.

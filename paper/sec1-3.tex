@@ -1,0 +1,340 @@
+\section{Introduction}
+\label{sec:intro}
+
+A fleet of machine-learning accelerators is a large capital asset that behaves
+like a queueing system. The chips are bought in bulk, wired into a fixed
+hierarchy, and handed out --- minute by minute, for months --- by one program:
+the scheduler, which decides which queued job runs now and which waits.
+
+That decision has more leverage than it looks. On a 2{,}048-chip fleet --- the
+shipped \texttt{examples/01\_minimal} scenario, not one of the case studies in
+\S\ref{sec:cases} --- replacing strict first-in-first-out (FIFO) queueing with a
+preempting tiered-priority policy cuts the mean number of waiting evaluation
+jobs from about 11 to about 1.3, and their 99th-percentile queue wait from about
+5\,h to about 31\,min. Same hardware, same arrivals, same seed; a different
+ordering rule. (Those are the figures the example's own README records, to the
+precision it records them.)
+
+You cannot run that experiment on the production fleet: an A/B test costs weeks
+of accelerator time, and traces record what one scheduler did, never what another
+would have done.
+
+\texttt{fleetsim} is an open-source discrete-event simulator that answers such
+questions at \emph{fleet altitude}. Altitude here means what one simulated run
+represents. One \texttt{fleetsim} run is weeks of a whole fleet: thousands of
+jobs arriving, queueing, running, being preempted and occasionally dying with
+their nodes. A network simulator's run, by contrast, is one already-placed job
+executing a single training step. Given a fleet in YAML, arriving jobs and a
+failure model, \texttt{fleetsim} reports the occupancy, queue waits, preemption
+rates and goodput a policy delivers --- four quantities
+\S\ref{sec:threenumbers} and \S\ref{sec:failures} define, and whose differences
+turn out to matter more than any one of them alone. It models no packets,
+collectives or kernels --- per-job speed is one analytical multiplier ---
+because its questions concern thousands of jobs contending for one machine, not
+one job's step time.
+
+We claim three contributions, in ascending order of importance.
+
+\begin{enumerate}
+\item \textbf{A fleet-altitude model} (\S\ref{sec:models}): one capacity tree
+from metro down to node, spanning NVIDIA-style clusters and TPU-style pods, with
+gang scheduling, locality constraints, preemption cost, quota, failures and
+drains in one engine; the simulators we surveyed each model a subset
+(\S\ref{sec:related}).
+\item \textbf{A generative traffic model} (\S\ref{sec:traffic}): arrivals, job
+sizes and durations from published cluster characterizations rather than a single
+Poisson assumption, each parameter recorded with its source --- including those
+that are order-of-magnitude priors rather than fitted constants.
+\item \textbf{A validation suite} (\S\ref{sec:validation}) that replays a real
+production trace --- the four Helios clusters~\cite{helios2021} --- and
+reproduces the published FIFO-versus-shortest-job-first completion-time ratios to
+a mean absolute error of 3.4\,\%, under three stated modelling choices we restate
+wherever the result appears. It adds closed-form queueing checks, a list of
+published numbers \texttt{fleetsim} deliberately does \emph{not} reproduce, and
+one mechanism we had misdiagnosed (\S\ref{sec:replay-found}).
+\end{enumerate}
+
+\S\ref{sec:background} primes readers new to this infrastructure;
+\S\ref{sec:models}--\ref{sec:traffic} give the model and traffic generator,
+\S\ref{sec:validation} the validation, \S\ref{sec:cases}--\ref{sec:limitations}
+the case studies, implementation, related work and limitations.
+
+\section{Background: what a fleet is, and why scheduling it is hard}
+\label{sec:background}
+
+\subsection{The physical machine}
+
+The unit of capacity is a \emph{chip}: one GPU or one TPU. Eight typically share
+a server chassis and a fast internal switch --- a \emph{node}. Tens of nodes make
+a rack or scalable unit, and tens of those a \emph{pod}: 4{,}096 GPUs in the H100
+configurations we model, and 4{,}096 chips in a TPU v4 pod~\cite{tpuv4isca2023}.
+Pods join into \emph{clusters}, then datacenters and \emph{metros}.
+
+Every level is a bandwidth cliff, which is why locality matters. Llama~3's
+cluster was eight pods of 3{,}072 GPUs at 1:7 oversubscription, and the 405B run
+took 16{,}384 of those GPUs~\cite{llama3}. The 1:7 figure means seven times less
+bandwidth between pods than within one, and a job straddling such a boundary
+runs slower for its whole life.
+
+\subsection{Gang scheduling and fragmentation}
+
+A distributed training job is not a web service: its chips run one computation in
+lockstep, synchronizing every step, so it needs \emph{all} of them \emph{at once}
+for its whole life. Half a training job does not do half
+the work; it does none. Allocation is therefore all-or-nothing --- \emph{gang
+scheduling}. The analogy is a restaurant booking for twelve: a table for eight
+plus a table for four across the street does not seat twelve.
+
+The gang is also the unit of failure: if any node holding part of it dies, the
+whole job dies. And gangs create \emph{fragmentation}, free capacity that cannot
+be used: a fleet can have 200 chips free and still not start a 64-chip job,
+because those chips sit in ones and twos across many nodes. Philly
+measurements attribute 59--98\,\% of multi-GPU queueing delay to fragmentation
+rather than fair-share policy~\cite{philly2019}; reproducing that attribution is
+itself an explicit non-goal (\S\ref{sec:anti-goals}).
+
+Three kinds of job share the machine, and they are not variations on a theme.
+A \emph{pretraining} run trains a model from scratch: thousands of chips held in
+lockstep for weeks. A \emph{finetune} adapts an already-trained model to a
+narrower task: tens of chips for hours. An \emph{evaluation} scores an existing
+model on a test set: one or two chips for minutes. All three arrive into the
+same queue, and they differ by about four orders of magnitude in both size and
+duration.
+
+That disparity shows up in every trace. Over 82\,\% of Philly's jobs use one
+GPU~\cite{philly2019}, and 70.8\,\% of jobs on the busiest Helios cluster we
+replay are single-GPU. Acme measured evaluations at about 93\,\% of job
+\emph{count} and under 1\,\% of GPU-\emph{time}, with pretraining at 1--3\,\% of
+count and 70--94\,\% of GPU-time~\cite{acme2024}. The tiny jobs strand exactly
+the capacity the enormous ones need.
+
+This is the \emph{mice-and-hogs} shape: a swarm of one- and two-chip jobs (the
+mice) that dominate the job count, and a handful of thousand-chip jobs (the
+hogs) that dominate the chip-hours. Almost every metric in this paper has to be
+reported twice because of it. Count one job as one job and you are describing
+the mice; weight by chip-hours and you are describing the hogs.
+
+A fleet is also shared. Each \emph{tenant} --- a team or project with its own
+budget --- is granted a \emph{quota}, a promised share of the chips the
+scheduler is expected to honour before it hands anything to anyone else. Quota
+is a promise about capacity, not a physical partition: the chips themselves stay
+in one pool.
+
+\subsection{Three numbers that are not the same number}
+\label{sec:threenumbers}
+
+One term first, because the third definition below depends on it. A long
+training job periodically writes its entire state to storage --- a
+\emph{checkpoint} --- so that a job killed by a failure or a preemption resumes
+from the last saved state rather than from the beginning. Saving costs the job
+real time (about a minute, on \texttt{fleetsim}'s default one-hour interval),
+and everything computed since the last checkpoint is lost when the job dies. The
+analogy is a document editor that autosaves every hour: a crash costs you at
+most an hour, and the autosaves themselves cost you a little throughput.
+
+Conflating utilization metrics is the classic error here, so \texttt{fleetsim}
+defines three and always reports all three. \emph{Allocation rate} is allocated
+chip-time over \emph{total} chip-time, including chips that are broken or
+drained. \emph{Occupancy} is allocated chip-time over \emph{healthy} chip-time.
+\emph{Goodput} is the fraction of allocated chip-time that produced surviving
+work, excluding work lost back to the last checkpoint, restart latency and
+checkpoint-save overhead.
+
+A worked example. Of 1{,}000 chips, fifty are down for repair, so 950 are
+healthy, and all 950 are allocated. Allocation rate is $950/1000 = 0.95$;
+occupancy is $950/950 = 1.00$, and the gap is exactly the capacity lost to
+failures --- which is why occupancy alone makes a fleet with broken hardware look
+perfect. Now suppose a third of the allocated chip-time goes on redoing work lost
+at the last interruption and on restarts: goodput is $0.67$, and the share of the
+machine doing useful work is $0.95 \times 0.67 \approx 0.64$. Fully occupied, a
+third of its work wasted. Philly clusters were in fact measured at roughly
+100\,\% allocation with about 52\,\% hardware utilization~\cite{philly2019}.
+
+\subsection{Failures and preemption}
+\label{sec:failures}
+
+At small scale hardware failure is a nuisance; at fleet scale it is a design
+constraint, because a gang fails when \emph{any} of its nodes fails. A gang of
+$N$ nodes therefore breaks $N$ times as often as one node does.
+
+Two published anchors bracket the numbers. Meta measured node mean time between
+failures (MTBF) at about 42 node-days~\cite{metareliability2024}: one node in
+the fleet breaks about every 42 days. Llama~3's 405B run, 16{,}384 GPUs and so
+about 2{,}048 nodes, saw roughly one unplanned interruption every 3.1
+hours~\cite{llama3}. Scaling that measurement, a gang eight times larger ---
+16{,}384 nodes, the size our frontier case study uses --- would be interrupted
+eight times as often, about every 23 minutes.
+
+The two anchors do not agree with each other, and we say so rather than picking
+the convenient one. Applying the 42-node-day MTBF directly to Llama~3's 2{,}048
+nodes predicts an interruption every 30 minutes, roughly six times more often
+than Llama~3 actually reported. The MTBF checks out against Meta's own smaller
+figure (42 node-days over the 128 nodes of a 1{,}024-GPU job gives 7.9 hours,
+which is what Meta measured) and not against Llama~3's. \texttt{fleetsim}
+therefore ships 42 node-days as a configurable default, not as a fitted
+constant, and the 23-minute figure quoted later comes from scaling Llama~3's
+measurement, not from the MTBF.
+
+Preemption --- stopping a running job to give its chips to a more important one
+--- costs the same way: a preempted training job does not pause, it loses
+everything since its last checkpoint and pays about 15 minutes of restart
+overhead~\cite{metareliability2024}. Under a one-hour checkpoint interval that is
+up to an hour of work per chip in the gang. This is how aggressive
+preemption raises occupancy while destroying goodput.
+
+\section{What fleetsim models}
+\label{sec:models}
+
+\subsection{One tree for two ecosystems}
+
+Capacity is a tree of \emph{domains} from metro down to node, all one
+\texttt{Domain} class. Leaves are nodes carrying a chip count, a chip type, a
+health state (\texttt{HEALTHY}, \texttt{DRAINING}, \texttt{FAILED},
+\texttt{MAINTENANCE}) and a failure-rate multiplier. Interior domains carry chip
+counters maintained incrementally, making ``how much free capacity is under this
+domain'' an $O(1)$ query.
+
+One tree covers both ecosystems because \emph{level names are configuration, not
+code}: a cluster declares \texttt{[cluster, pod, su, node]} for an H100 SuperPOD
+or \texttt{[cluster, pod, cube, host]} for a TPU v5p pod. The scheduler sees
+domains, capacities and constraints, never vendors.
+
+\subsection{The allocation rule, and why it is the hardest call}
+
+Jobs are allocated chip-granularly \emph{within} a single node and in whole-node
+multiples \emph{above} one node: a 2-chip evaluation may share a node, a 64-chip
+job asks for eight entire nodes. The reason is workload shape ---
+\texttt{fleetsim}'s shipped class mix puts about 90\,\% of arrivals in 1--8-chip
+evaluations, following the Acme characterization~\cite{acme2024}, which measured
+the corresponding share at about 93\,\%. Were the node atomic,
+a 1-chip evaluation would strand seven GPUs and corrupt both occupancy and the
+mice-and-hogs story; rounding those jobs up would falsify the workload.
+
+The rule has one load-bearing consequence, the mechanism behind our main
+validation finding: \emph{a leaf with any owner at all is invisible to every
+whole-node request}. A node with one chip in use has seven free chips no
+multi-node gang can claim, so free capacity accumulates as 1--7-chip remainders.
+That whole-node rule is an approximation we measured: in the Helios September
+window the
+trace's own node count satisfies $\texttt{node\_num} = \lceil
+\texttt{gpu\_num}/8 \rceil$ for 99.66\,\% of multi-GPU jobs, and all 225
+exceptions used \emph{more} nodes than the ceiling, never fewer --- the half the
+model depends on.
+
+An allocation is atomic, immutable once granted, and the unit of failure. A gang
+may name a level it must fit \texttt{within}, and may be \emph{segmented} into
+whole-node blocks that each sit inside one domain at that level.
+
+\subsection{The engine}
+
+Time is an \texttt{int64} count of microseconds, which makes tie-breaking exact.
+The engine is event-driven rather than tick-driven because
+state changes are sparse and unevenly spaced: a fleet can go minutes without one,
+then process hundreds of preemptions at a single instant.
+
+Events sit in a heap keyed by \texttt{(time, type, seq)}. The event type is not
+decoration --- its integer value \emph{is} the same-timestamp ordering rank,
+arranged so every repair, completion, failure and preemption at time $t$ is
+processed before the scheduler wakes at $t$, so it always sees settled state.
+Scheduler wakes are then
+\emph{coalesced}: events set a dirty flag and ensure at most one pending wake at
+the next round boundary, so the scheduler runs once per round (60\,s by default)
+rather than once per event.
+
+\subsection{Schedulers and placement}
+
+Ordering and placement are separate axes~\cite{blox2024}: a scheduler sees an
+immutable view of the cluster and returns \texttt{Place} and \texttt{Preempt}
+intents, which the engine validates and applies~\cite{batsim2016}.
+
+Four schedulers ship. \texttt{fifo} serves the queue in arrival order, with
+strict head-of-line blocking by default: the head of the queue holds up
+everything behind it until it can run. \texttt{tiered\_priority} implements
+Borg-style priority bands~\cite{borg2015,borgtng2020} with requeue preemption.
+\texttt{sjf} runs the shortest job first. \texttt{easy\_backfill} adds
+\emph{backfilling}~\cite{easybackfill1995}: letting a small job at the back of
+the queue jump ahead into a hole the head job cannot use, on the condition that
+doing so provably does not delay the head. That condition is computed from each
+job's declared runtime estimate, and users routinely over-estimate, so a
+backfill scheduler must behave sanely when the estimate is wrong. Plugins
+register through a Python entry point.
+
+Orthogonally, four placement policies choose \emph{which} fitting nodes to take.
+\texttt{first\_fit} (the default) takes the first nodes that fit, scanning by
+ascending node identifier. \texttt{best\_fit} takes the nodes with the least
+free space that still fits, so partly-used nodes fill up before empty ones are
+opened --- \emph{tightest-fit} packing, a term used throughout the rest of the
+paper. \texttt{consolidate} does the same at the sub-node level and additionally
+minimises how many parent domains a multi-node gang touches; on a single-level
+fleet it is bit-identical to \texttt{best\_fit}. \texttt{spread} takes the
+emptiest nodes (worst fit) --- a deliberate anti-policy, our control arm.
+
+\subsection{Failures, repair and maintenance}
+
+Failures are sampled by \emph{aggregate} rate --- one exponential draw at the
+fleet-wide rate, then a victim node --- not by per-node timers, so a job's mean
+time to interruption scales inversely with its size for free.
+
+Defaults are sourced, not invented: node MTBF 42 node-days, automatic repair
+uniform on 60--180 minutes, 10\,\% of failures needing manual repair over 1--3
+days, one maintenance drain per node-month, a one-hour drain grace window, and a
+failure-cause mix of $\sim$60\,\% GPU/HBM, $\sim$10\,\% network and
+$\sim$13\,\% software, with the remaining 17\,\% a residual ``other'' bucket
+\texttt{fleetsim} adds so the mix sums to one. The MTBF comes from Meta's
+measurements~\cite{metareliability2024}, the three approximate cause shares from
+Llama~3~\cite{llama3}, and the drain rate from Borg~\cite{borg2015}. The repair
+distributions are the weakest-sourced of the set: the repository attributes them
+to AIReSim~\cite{aireesim}, a reliability simulator it names but does not pin to
+a citable artefact, so a reader cannot check them the way the others can. All
+are configuration values, none universal. Maintenance is a separate stream: a
+\texttt{DRAINING} node takes no new placements, and its residents are requeued
+when the grace window expires.
+
+\subsection{Metrics}
+
+Table~\ref{tab:metrics} states the definitions. State metrics are time-weighted
+integrals updated on every state change --- exact, not sampled --- and
+accumulated as integer chip-microseconds; discrete outcomes are event-sourced.
+
+\begin{table}[t]
+\centering
+\caption{Metric definitions. ``Allocated'' means chips held by a running job;
+``healthy'' excludes nodes that are failed, draining or under maintenance.
+Integrals are exact integer chip-microseconds internally, reported as
+chip-seconds.}
+\label{tab:metrics}
+\small
+\begin{tabular}{@{}lp{0.36\linewidth}p{0.30\linewidth}@{}}
+\toprule
+Metric & Definition & What it tells you \\
+\midrule
+Allocation rate & $\int \text{allocated}\,dt \,/\, \int \text{total}\,dt$ &
+Share of the purchased fleet handed out \\
+Occupancy & $\int \text{allocated}\,dt \,/\, \int \text{healthy}\,dt$ &
+Occupancy minus allocation rate is capacity lost to failures and drains \\
+Goodput & $\sum \text{productive chip-s} \,/\, \int \text{allocated}\,dt$ &
+Excludes work lost since the last checkpoint, restart latency and
+checkpoint-save overhead \\
+ETTR (per job) & Effective training time ratio: productive seconds / wall
+seconds holding an allocation &
+Goodput seen from one job's side; counts restart overhead and preemption grace
+in the denominator \\
+Fragmentation index & $1 - \text{largest placeable} / \text{total free}$ at a
+level & $0$ when all free capacity is usable by one job \\
+Stranded whole nodes & healthy leaves with $0 < \text{free} < \text{chips}$ &
+Free capacity no whole-node gang can claim \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two conventions matter. Metrics are given over the full run and over a
+steady-state window (the middle 80\,\% of the horizon by default), and every
+distributional metric is reported job-weighted \emph{and} chip-hour-weighted ---
+a job-weighted mean over a mice-dominated workload describes the mice.
+Best-effort jobs are excluded from wait distributions. \emph{Best-effort} is the
+lowest, always-preemptible priority band, and \texttt{fleetsim} submits it from
+a \emph{closed loop}: a source that keeps a fixed number of jobs in flight and
+launches a replacement the instant one finishes. A closed loop by construction
+always has work queued, so its queue length says nothing about the fleet and its
+mean waiting time is undefined. Best-effort work is therefore reported by its
+goodput instead.
