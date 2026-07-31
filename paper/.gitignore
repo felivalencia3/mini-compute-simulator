@@ -1,0 +1,15 @@
+# LaTeX build intermediates.
+#
+# main.pdf is deliberately NOT ignored: the rendered paper is committed so a
+# reader gets it without installing a TeX distribution.
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.toc
+*.lof
+*.lot
+*.synctex.gz

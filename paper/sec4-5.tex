@@ -1,0 +1,479 @@
+\section{Modelling the traffic}
+\label{sec:traffic}
+
+Much of what a fleet simulator tells you depends on what arrives at it. The
+textbook default is Poisson arrivals: jobs appearing independently of one another
+at a constant average rate, with exponentially distributed gaps. Poisson traffic
+is smooth in a specific sense --- average it over a longer window and its
+relative variability shrinks predictably. Measured computer traffic does not do
+that. It is bursty at every timescale you look at, and averaging does not smooth
+it out \cite{paxsonfloyd1995}. A study built on Poisson arrivals understates
+queue variance, and understates it most exactly where the answer matters, near
+saturation. fleetsim therefore runs one arrival process per class and superposes
+them (Table~\ref{tab:arrivals}).
+
+\begin{table}[t]
+\centering\small
+\caption{Arrival process per job class, with shipped defaults. Pretraining is
+the one surviving Poisson case: rare planned launches really are independent,
+human-initiated events.}
+\label{tab:arrivals}
+\begin{tabular}{lll}
+\toprule
+Class & Process & Defaults \\
+\midrule
+Pretrain    & homogeneous Poisson              & \texttt{rate\_per\_week: 2} \\
+Finetune    & MMPP-2 $\times$ diurnal envelope & \texttt{rate\_ratio: 4}, \texttt{burst\_frac: 0.25}, \texttt{switch\_tau: 2d} \\
+Eval        & Hawkes on an NHPP baseline       & \texttt{branching: 0.4}, \texttt{kernel\_tau: 15m} \\
+Inference   & service replica curve            & --- \\
+Best-effort & closed-loop backlog              & \texttt{concurrency: 4}, \texttt{think\_time: fixed[0s]} \\
+Retry storm & near-critical Hawkes (preset)    & \texttt{branching: 0.9}, \texttt{kernel\_tau: 2m} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The shared day-and-week machinery is a non-homogeneous Poisson process whose log
+rate is a sum of harmonics at 24\,h and 168\,h. The exponential keeps the rate
+positive, and the constant term is derived rather than configured, so changing
+the shape of a day does not change the amount of work. The shipped daily preset
+is a two-harmonic least-squares fit to \texttt{fleetsim}'s own v0.1 step curve,
+which was itself built from the Helios description of a night trough with dips
+at 12:00 and 18:00 \cite{helios2021}. The provenance matters because the fit
+loses something: two harmonics smooth those two dips away, leaving a trough near
+$0.59\times$ at 03:00 and a single peak near $1.27\times$ at 10:15. The shipped
+preset is therefore continuous with the previous release's behaviour rather than
+a fit to a published curve, and it no longer reproduces the midday and evening
+dips Helios reports. It is sampled by Lewis--Shedler thinning --- propose
+arrivals at a constant upper-bound rate, then keep each with probability equal
+to the true rate over that bound.
+
+Finetuning sits on a two-state Markov-modulated Poisson process: a hidden switch
+between a quiet and a busy regime, reproducing crunch weeks that a single rate
+curve cannot. It is configured in observable terms --- mean rate, burst fraction,
+switch correlation time, rate ratio --- and solved to state rates in closed form.
+Those rates must be scaled to the \emph{peak} of the diurnal envelope before
+thinning; left unscaled they silently generate about 60\,\% of the configured
+load.
+
+Evaluation traffic uses a Hawkes process. Self-exciting means one submission
+makes further submissions more likely for a while afterwards: a failed eval is
+re-run, a user iterates. Configuration exposes the branching ratio --- mean
+children per arrival, stationary below 1 --- and the kernel decay time; sampling
+uses Ogata thinning, sequential but $O(1)$ per event because the excitation term
+decays exponentially.
+
+Sizes are per-class distributions over powers of two. Evals are 55\,\%
+single-chip: inside the 50--90\,\% single-GPU range Helios reports, and
+deliberately below Philly's finding that over 82\,\% of jobs are single-GPU
+\cite{philly2019}. TPU clusters use the published histogram of \emph{slice}
+sizes \cite{tpuv4isca2023} --- a TPU slice being a contiguous geometric block of
+chips carved out of a pod, a different thing from the quota slices of
+\S\ref{sec:helios}. Uniform-over-exponents sizing remains available but is not
+the default, since it overweights giants by 5--10$\times$ and fabricates
+queueing.
+
+Job durations are drawn from a lognormal shape, configured by naming its
+quantiles (median and 90th percentile) rather than its abstract parameters.
+Pretraining additionally gets a \emph{heavy tail}: a small probability of a run
+lasting far longer than the median, decaying as a power law rather than dying
+off exponentially. How heavy a tail is, is summarised by its \emph{tail index};
+a smaller index means a heavier tail. Pretraining gets the only heavy tail
+because resource-hours are size $\times$ duration, and a product of two
+quantities is as heavy-tailed as the heavier of them --- it inherits the
+\emph{smaller} of the two indices. Attaching the tail to the one class with
+genuinely open-ended runs is therefore intended to suffice for the Borg-like
+resource-hour tail \cite{borgtng2020}, without fabricating implausibly long
+evaluation jobs. Intended, not confirmed: the distributional self-check that
+would measure the generated chip-hour tail is a documented target in the traffic
+specification, not a shipped test.
+
+Tenants come from a \emph{finite} Zipf over ranks. An exponent of 1.19
+reproduces Alibaba PAI's top 5\,\% of users submitting about 77\,\% of
+instances \cite{alibabapai2022}, at a population of 1{,}300 tenants; the shipped
+default is 1.2. The class mix follows Acme \cite{acme2024}.
+
+These parameters are sourced but not all fitted, and the repository says so: the
+Markov-modulated and Hawkes defaults are order-of-magnitude priors borrowed from
+grid and LLM-serving analogies, not constants fitted to an ML fleet. There is no
+explicit long-range-dependence generator, tenants are marks on jobs rather than
+agents, and within a class size and duration are drawn independently.
+
+\section{Validation}
+\label{sec:validation}
+
+\subsection{What ``validated'' means here, and the two kinds of check}
+\label{sec:val-kinds}
+
+A simulator can be internally consistent and still be wrong about the world.
+Validation here means comparing fleetsim's output against numbers a published
+study measured on a real cluster, and two kinds of comparison are possible. A
+\textbf{policy-effect check} runs two scheduling policies over the same trace and
+compares the \emph{ratio} between them against the ratio the paper reported. A
+\textbf{distribution-match check} asks whether a converted trace reproduces a
+published shape, such as the fraction of jobs that ended successfully; that
+mostly tests the converter rather than the scheduler, and in the Philly case
+involves no simulation at all.
+
+The ratio is the more robust test, and the reason deserves two extra sentences.
+Suppose the fleet we reconstructed is 10\,\% smaller than the real one. Both
+policies then run on a fleet 10\,\% too small, both produce waits that are too
+long, and much of that shared error divides out when one is taken over the other.
+An absolute number has nothing to divide it out; it carries every reconstruction
+error straight through.
+
+Replays never match exactly, for structural reasons. Take our own replay first.
+Helios publishes its analysis window --- 2020-09-01 to 2020-09-26 --- and we
+replay exactly that, so the window is not a source of error here. Two others
+remain. Timestamps carry no timezone, so a daily cycle cannot be aligned with
+confidence. And the original scheduler made placement decisions nobody recorded,
+which is the residual \S\ref{sec:replay-found} spends most of its length on.
+
+Where a released trace and its paper's analysis window differ, the problem is
+worse. Philly released 117{,}325 jobs over 137 days while the paper analysed
+96{,}260 over roughly 75, and that window is not precisely published, so no
+reconstruction of it can be checked. The tolerance bands below are sized to
+absorb all of those residuals; they are not calibrated uncertainty intervals.
+
+\subsection{Replaying a real trace: the Helios experiment}
+\label{sec:helios}
+
+The flagship replay targets Hu et al.'s Helios study \cite{helios2021}, which
+characterizes four production GPU clusters --- Venus, Earth, Saturn and Uranus
+--- over 2020-09-01 to 2020-09-26, GPU jobs only. The trace is a
+36{,}437{,}672-byte archive (343{,}069{,}364 bytes uncompressed) under CC-BY-4.0;
+fleetsim fetches it, verifies it by size, and replays all four clusters in about
+four minutes.
+
+Each cluster is partitioned into \emph{virtual clusters}: quota slices, each a
+group's private share of the machines, scheduled independently. The reference
+simulator runs one scheduler per slice, whereas fleetsim schedules a single
+global pool, so the replay is a harness rather than an engine change --- one
+simulation per slice, on a fleet sized to that slice's node count at 8 GPUs per
+node, aggregated job-weighted to cluster totals. The converter writes each job's
+recorded duration into both its duration and its runtime estimate, making
+shortest-job-first an \emph{oracle}: a perfect estimate, and so a strict upper
+bound on what a duration-\emph{predicting} policy could achieve.
+
+Every claim below holds only under three modelling choices, all options a reader
+could disagree with: a strict blocking scan, September-max per-slice sizing, and
+\texttt{consolidate} placement. Two of them were not chosen but forced ---
+Table~\ref{tab:corrections} records the assumptions the real data disproved. A
+strict scan means the queue head blocks everyone behind it until it can run,
+which is what head-of-line blocking means; both policies share the scan mode, so
+shortest-job-first's advantage remains purely its ordering. September-max sizing
+drops zero jobs, and the test asserts that, but it is not unambiguously more
+faithful and the repository says so: peak quota available from day one
+over-provisions early in the month and under-counts early-month queueing. The
+converter's own default remains the snapshot.
+
+\begin{table}[t]
+\centering\small
+\caption{Two modelling assumptions the validation plan made before the data was
+touched, and what the real trace showed.}
+\label{tab:corrections}
+\begin{tabular}{p{0.14\textwidth}p{0.30\textwidth}p{0.46\textwidth}}
+\toprule
+Choice & The plan assumed & What the trace showed \\
+\midrule
+Scan mode &
+Non-blocking: a job the scheduler cannot place is skipped and later jobs
+proceed. &
+The reference blocks. Non-blocking collapses FIFO's queueing --- ratios near
+$1.4\times$ with the wrong cross-cluster ordering. A strict scan flips the
+result from non-reproducing to reproducing. \\
+Per-slice capacity &
+A fixed quota snapshot taken on 1 September. &
+Quota drifts mid-month: one Uranus slice grows 208 $\to$ 328 GPUs, another
+spins up 0 $\to$ 416, and 3{,}117 jobs sit in slices with no 1 September quota
+at all, which a snapshot silently drops. It also over-congests Uranus (ratio
+$3.41\times$), breaking the rank and the queuing-share ordering. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:helios-ratios} gives the result: all eight ratios in band. The
+quantity being compared is the job completion time, or JCT --- the wall-clock
+time from when a job was submitted to when it finished, so queue wait plus run
+time. The test also asserts that no job was dropped, that every job reached a
+terminal state, that Saturn has the highest and Uranus the lowest JCT ratio, and
+that the queuing share of JCT orders Saturn $>$ Venus $>$ Earth $>$ Uranus in
+fleetsim (90.1, 79.1, 73.0, 42.2\,\%) as in the published table (89.7, 81.8,
+69.3, 42.5\,\%). It runs in roughly four minutes on a laptop against the cached
+trace: the repository's own timings are 250\,s, ``about 260\,s'' and 266\,s in
+three different files, which is the accuracy a wall-clock number of this kind
+deserves. The bands are wide on purpose, and were deliberately \emph{not}
+tightened even though every JCT ratio now lands within 5\,\% of published, for
+the two reasons in \S\ref{sec:val-kinds}. Nor is the queuing column an exact
+reproduction: Earth measures $10.67\times$ against a published $16.4\times$,
+about 35\,\% low, and passes only because the band runs to $25\times$. The band
+does have teeth --- SJF replayed against itself gives 1.0 and fails it.
+
+\begin{table}[t]
+\centering\small
+\caption{Helios replay, four clusters, real trace, shipped configuration (strict
+scan, September-max sizing, \texttt{consolidate} placement). The
+\texttt{fleetsim} column is the claim. The \texttt{first\_fit} column is the same
+replay under the engine's \emph{default} placer, shown so the size of the
+placement effect is visible rather than asserted. The \emph{In band} columns
+judge the \texttt{fleetsim} column only. Bands are $[1.3, 8]\times$ on the
+completion-time ratio and $[3, 25]\times$ on the queuing ratio; $\dagger$ marks
+the one \texttt{first\_fit} value that falls outside its band, the deviation
+\S\ref{sec:replay-found} diagnoses. The mean absolute errors quoted in the text
+(3.4\,\% for \texttt{fleetsim}, 27.4\,\% for \texttt{first\_fit}) are computed on
+full-precision ratios; the rounded values shown here give 3.2\,\% and 27.5\,\%.}
+\label{tab:helios-ratios}
+\begin{tabular}{lrrcrrrcr}
+\toprule
+& \multicolumn{4}{c}{FIFO/SJF mean job-completion-time ratio} & \multicolumn{4}{c}{FIFO/SJF mean-queuing ratio} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+Cluster & Published & fleetsim & In band & \texttt{first\_fit} & Published & fleetsim & In band & \texttt{first\_fit} \\
+\midrule
+Saturn & 6.59 & 6.87 & yes & 8.75$^\dagger$ & 18.5 & 19.55 & yes & 22.91 \\
+Venus  & 3.07 & 3.21 & yes & 4.21           & 5.68 & 7.78  & yes & 9.97  \\
+Earth  & 2.87 & 2.95 & yes & 2.11           & 16.4 & 10.67 & yes & 5.73  \\
+Uranus & 1.49 & 1.51 & yes & 1.69           & 4.51 & 5.08  & yes & 6.10  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What the replay found}
+\label{sec:replay-found}
+
+\paragraph{The explanation we had was impossible.}
+The previous version of the suite had one out-of-band number: Saturn's JCT ratio
+at $8.75\times$ against a published $6.59\times$. It also had an explanation ---
+that first-fit placement fragments Saturn's large multi-node jobs more than the
+reference implementation's consolidating placer. That explanation was wrong, and
+provably rather than merely unsupported. The replay fleet is single-level: every
+node is a direct child of the cluster root, replay jobs carry no locality
+constraint and no segment structure, and no crossing penalty is configured, so
+\emph{which} free nodes a multi-node job takes cannot change any outcome at all.
+The sizes agree: Saturn's largest job is 200 GPUs, and the quota slice carrying
+84\,\% of the FIFO-minus-SJF gap tops out at 56 GPUs, with 0.7\,\% of its jobs
+larger than one node. It was never a large-job effect.
+
+\paragraph{The real mechanism: sub-node stranding.}
+One 1-GPU job landing on an empty 8-GPU node is enough. That node now has seven
+free GPUs and an owner, and the allocator treats any node with an owner as
+ineligible for a whole-node request --- so a 16-GPU gang cannot touch it. Do
+that on enough nodes and the fleet reports plenty of free chips while no gang
+can start.
+
+That is what first-fit does here. Saturn is 70.8\,\% single-GPU jobs, 97.1\,\%
+in its dominant quota slice. First-fit scans nodes by ascending identifier with
+no preference for nodes already partly used, so it opens a fully free node for a
+1-GPU job whenever the lower-numbered ones are full, and free capacity
+accumulates as 1--7-GPU remainders no job of 8 GPUs or more can claim. The
+whole-node rule itself is an approximation whose error was quantified rather
+than assumed: Helios's own node count equals $\lceil \mathit{gpus}/8 \rceil$ for
+99.66\,\% of windowed multi-GPU jobs, and every exception spreads a job over
+\emph{more} nodes than the ceiling, never fewer --- ``never fewer'' being the
+half the rule depends on.
+
+Instrumented runs confirmed the mechanism: 100\,\% of measured blocked-idle
+chip-seconds come from queue heads needing whole nodes, sub-node heads
+contribute 0.0\,\%, and 87.7\,\% of free chips during blocks sit on partly-used
+nodes. This happens at an \emph{offered load} of 94.4\,\% --- offered load being
+the arriving work as a fraction of the fleet's capacity to do it. Near 100\,\%
+queues become extremely sensitive: a few percent of capacity made unusable does
+not lengthen the queue by a few percent, it lengthens it by a multiple
+\cite{kingman1961}. Those instrumentation figures came from throwaway code not
+in the tree --- the diagnostic work that found the mechanism, not numbers the
+suite regenerates.
+
+\paragraph{What the fix did and did not buy.}
+Switching the sub-node rule to tightest-fit packing --- the \texttt{consolidate}
+policy, which fills partly-used nodes before opening empty ones --- closes most
+of the gap. The four-cluster mean absolute error against the published ratios
+falls from 27.4\,\% to 3.4\,\%, and Saturn's mean FIFO completion time moves
+from 75{,}329\,s to 55{,}978\,s against a published 55{,}984\,s. That 0.01\,\%
+is luck, not precision --- the tie-break probe below moves the same quantity by
+17\,\%. What is supported is the band across four clusters in
+Table~\ref{tab:helios-abs}, never a single cell.
+
+\begin{table}[t]
+\centering\small
+\caption{Absolute quantities: reported, \emph{not} asserted --- continuous
+integration does not fail if they move. \texttt{\#Queuing} counts jobs whose wait
+exceeds one 60\,s scheduler round. $\ast$ marks the two quantities that moved
+\emph{away} from published when the placement model was corrected.}
+\label{tab:helios-abs}
+\begin{tabular}{lrrrrrr}
+\toprule
+& \multicolumn{3}{c}{Mean FIFO job completion time (s)} & \multicolumn{3}{c}{\texttt{\#Queuing} jobs} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Cluster & Published & fleetsim & $\Delta$ & Published & fleetsim & $\Delta$ \\
+\midrule
+Saturn & 55{,}984 & 55{,}978 & $-0.01$\,\%       & 65{,}991 & 72{,}936 & $+10.5$\,\% \\
+Venus  & 64{,}702 & 55{,}714 & $-13.9$\,\%       & 15{,}336 & 13{,}624 & $-11.2$\,\%$^\ast$ \\
+Earth  & 19{,}754 & 22{,}463 & $+13.7$\,\%       & 30{,}030 & 32{,}232 & $+7.3$\,\% \\
+Uranus & 19{,}758 & 18{,}492 & $-6.4$\,\%$^\ast$ & 16{,}917 & 18{,}449 & $+9.1$\,\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three qualifications belong with that improvement. One change did not fix
+everything: Uranus's absolute FIFO JCT went from $+5$\,\% to $-6.4$\,\%,
+overshooting past published rather than approaching it; Venus's queued-job count
+drifted from $-9$\,\% to $-11.2$\,\%; and the published \emph{ranking} of
+absolute JCTs, which the earlier version happened to reproduce, no longer is ---
+though nobody can meaningfully reproduce it, since published Uranus
+(19{,}758\,s) and Earth (19{,}754\,s) differ by 0.02\,\%, a dead tie. Only the
+ranking of the \emph{ratios} is asserted. Nor are the eight absolute quantities
+eight independent confirmations: mean JCT is service plus mean queueing, the
+ratio is one mean JCT over another, and the queuing share is queueing over JCT,
+so all are functions of the same per-cluster wait distribution and together are
+close to one degree of freedom. And the new placer does not dominate the old ---
+of the five Saturn quota slices carrying 97\,\% of the gap, three get
+\emph{worse} under it, one by 18.5\,\%, the cluster-level win being carried by a
+single slice holding 41\,\% of Saturn's jobs. The supported claim is that the policy
+reproduces the reference placer's \emph{aggregate} behaviour, never that it is a
+better scheduler.
+
+\paragraph{The bands do not discriminate between placement policies.}
+\texttt{spread}, a deliberately bad control policy that scatters work onto the
+emptiest nodes, was measured across all four clusters and satisfies every
+published-facing check above --- both bands on all four, both rank invariants,
+the queuing-share ordering --- while being 45\,\% off Saturn's absolute FIFO JCT
+and 99\,\% off Earth's. Passing the bands is therefore not by itself evidence
+that the placement model is right, and ``in band'' must never be read as
+``reproduces the paper''. The four-cluster version of that result is a
+documented measurement; what the suite \emph{asserts} is the Saturn instance of
+it, so a placement regression fails loudly on one cluster rather than on four.
+The point of asserting it at all is that the misreading cannot then be made
+silently.
+
+What selects the placer instead, in descending weight, is: the four-cluster mean
+absolute ratio error, asserted below 10\,\% and measuring 3.4\,\% against
+27.4\,\% for first-fit and 29.5\,\% for the control, since aggregating four
+clusters stops any one cluster's ordering noise from deciding it; a mechanism
+metric --- the time-averaged count of partly-occupied healthy nodes, fleet state
+rather than a queue statistic --- which orders the three policies exactly as
+their FIFO completion times do; and Saturn's absolute number, which corroborates
+but cannot independently discriminate. It cannot because 35.5\,\% of Saturn's
+jobs share an exact submit second, and reversing the tie-break inside those
+seconds moves Saturn's FIFO JCT by 17\,\% under first-fit --- enough to invert
+which placer looks closer to published. That is a sensitivity probe under a
+deliberately wrong arrival order, not an error bar: ascending identifier is
+demonstrably the faithful one. Whether the four-cluster discriminator would
+survive that perturbation is unmeasured. The probe ran on one cluster under one
+scheduler --- Saturn under FIFO, in both tie-break orders --- and extending it
+to all four clusters under both schedulers needs 24 more replays. An open
+question, not a claim.
+
+\subsection{Closed-form checks}
+\label{sec:closed-form}
+
+Trace replay says whether the simulator matches one real cluster; closed-form
+checks say whether the engine underneath computes what queueing theory already
+knows. The checks form a ladder, from pure algebra at the bottom to a real trace
+at the top, and the repository calls each step a \emph{rung}; we keep its word.
+
+Two rungs need their notation unpacked. Queueing theory labels a system by its
+arrival process, its service-time distribution and its server count: M/M/c means
+memoryless arrivals, memoryless service times and $c$ servers, and M/G/1 means
+memoryless arrivals, a general service-time distribution and one server. For a
+handful of such systems the mean wait has an exact formula --- Erlang-C for
+M/M/c, Pollaczek--Khinchine for M/G/1 --- so we can build the same system in
+fleetsim, run it, and check the simulated mean wait against the algebra.
+
+Each rung in Table~\ref{tab:rungs} runs in continuous integration and is chosen
+for a specific failure it would catch. Not everything planned is shipped, and
+the unshipped items are close cousins of shipped ones, so they are worth naming
+precisely. The M/G/1 conservation-law identity --- a statement that a certain
+weighted sum of waits is the same under any non-anticipating discipline, and a
+different object from the chip-hour accounting invariant in the table --- is a
+documented target. So is the M/M/c generalisation of the two-tier priority rung,
+whose shipped form is single-server. So are most distributional self-checks on
+the traffic generator.
+
+\begin{table}[t]
+\centering\small
+\caption{Closed-form and invariant rungs, and what each would catch.}
+\label{tab:rungs}
+\begin{tabular}{p{0.34\textwidth}p{0.56\textwidth}}
+\toprule
+Rung & What it would catch \\
+\midrule
+Erlang-C (M/M/c): mean wait and occupancy within 10\,\% of analytic &
+A broken queue discipline, a mis-scaled arrival rate, or a double-counting
+occupancy integral. \\
+Pollaczek--Khinchine (M/G/1) under lognormal service &
+Duration-sampler bias the exponential-only rung structurally cannot see, since
+the formula depends on the second moment of service time (a distribution's
+spread, not just its average, drives the wait). \\
+Preemptive-resume priority, two tiers, \emph{one server} (M/M/1), plus a
+shielding test under a saturating backlog &
+Preemption-accounting errors and leakage of low-priority load into
+high-priority wait. Best-effort mean wait is asserted on nothing --- it is
+undefined under saturation. \\
+Shortest-processing-time optimality, requiring an identical makespan &
+A reordering policy that changes how much work is done rather than only when it
+is done. \\
+EASY backfill \cite{easybackfill1995}, carrying its documented negative case
+under honest over-estimates &
+An implementation that silently enforces runtime estimates, which real clusters
+do not. \\
+Invariants: gang atomicity, chip-hour conservation as a per-flush accounting
+identity, per-flush allocation
+accounting, quota caps with labelled demotions, reservation exclusivity, the
+exact-microsecond crossing-penalty identity, byte-identical output for one
+scenario and seed on one platform &
+The bug class that yields plausible numbers from an internally inconsistent
+fleet state. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What fleetsim deliberately does not reproduce}
+\label{sec:anti-goals}
+
+Table~\ref{tab:antigoals} lists the published numbers fleetsim does not try to
+match. They are stated so that nobody quotes this paper for something it did not
+test; none is asserted anywhere in the suite, so none can surface as a test
+failure, which is precisely why they must be written down. Two rows deserve a
+note: the fragmentation-delay split and fractional-GPU sharing were both targets
+for the release that then spent its budget on placement, and are recorded as
+still open rather than quietly re-dated. Separately, the Philly status-split
+rung, though written to specification, has never been run against the real
+one-gigabyte trace in this build --- the artifact is stored with Git LFS and a
+plain fetch returns a pointer file. Published targets, tolerances and structural
+assertions on a small synthetic slice exist, but there is no measured Philly
+number here, and the suite marks those rows as unmeasured rather than as
+agreement.
+
+\begin{table}[t]
+\centering\small
+\caption{Anti-goals: published results fleetsim deliberately does not
+reproduce.}
+\label{tab:antigoals}
+\begin{tabular}{p{0.31\textwidth}p{0.42\textwidth}l}
+\toprule
+Published number & Why not & Disposition \\
+\midrule
+Philly $\sim$52.3\,\% GPU utilization \cite{philly2019} &
+A hardware cycle counter, not scheduler occupancy. A discrete-event simulator
+produces \emph{allocation} occupancy: a different and higher quantity. &
+Out of scope \\
+Philly fair-share vs.\ fragmentation-delay split \cite{philly2019} &
+Needs per-job delay-cause attribution, which fleetsim does not compute. &
+Still deferred \\
+Helios QSSF column \cite{helios2021} &
+Needs a job-name column absent from the public CSV plus a learned duration
+predictor; the SJF-oracle is the reproducible upper-bound proxy. &
+Out of scope \\
+Alibaba 50\,\% GPU-sharing saving, median 0.042 GPU per instance
+\cite{alibabapai2022} &
+Needs fractional, sub-chip GPU allocation; fleetsim shares only whole chips
+within a node. &
+Still deferred \\
+Borg absolute occupancy and JCT \cite{borg2015} &
+Resources are normalized to $[0,1]$, the data is query-only, and it covers eight
+independent 12{,}000-machine cells. &
+Never a replay target \\
+CPU contention, co-location interference &
+Not modelled: an analytical speed model with no memory-bandwidth contention. &
+Out of scope \\
+\bottomrule
+\end{tabular}
+\end{table}
